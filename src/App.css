@@ -1,0 +1,246 @@
+.app {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 1rem;
+  gap: 1rem;
+}
+
+header h1 {
+  margin: 0;
+  font-family: 'Cinzel', 'Georgia', serif;
+  letter-spacing: 0.04em;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ghost {
+  padding: 0.35rem 0.8rem;
+  font: inherit;
+  font-size: 0.85rem;
+  background: transparent;
+  color: #c9a959;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ghost:hover {
+  border-color: #c9a959;
+}
+
+.log {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 1rem;
+  background: #121212;
+}
+
+.msg {
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.msg p {
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
+}
+
+.who {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+.msg-dm .who {
+  color: #c9a959;
+}
+
+.msg-player .who {
+  color: #6fa8dc;
+}
+
+.thinking {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.empty-log {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  text-align: center;
+  color: #9a9a9a;
+}
+
+.empty-log p {
+  margin: 0;
+}
+
+.empty-log .hint {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  max-width: 32ch;
+}
+
+.empty-log button {
+  padding: 0.5rem 1.2rem;
+  font: inherit;
+  background: #c9a959;
+  color: #1a1a1a;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+  padding: 0.5rem;
+  font: inherit;
+  background: #1a1a1a;
+  color: inherit;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
+.composer button {
+  padding: 0 1.2rem;
+  font: inherit;
+  background: #c9a959;
+  color: #1a1a1a;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 10;
+}
+
+.modal {
+  width: min(640px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #161616;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 1.25rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.modal h2 {
+  margin: 0;
+  font-family: 'Cinzel', 'Georgia', serif;
+  letter-spacing: 0.04em;
+  font-size: 1.3rem;
+}
+
+.modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #c9a959;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.modal textarea {
+  font: inherit;
+  padding: 0.6rem;
+  background: #1a1a1a;
+  color: #e6e6e6;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  resize: vertical;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.modal .hint {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+.modal .hint code {
+  background: #222;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+.state-json {
+  margin: 0;
+  padding: 0.75rem;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  font: 0.8rem/1.45 ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  color: #d6d6d6;
+  max-height: 55vh;
+  overflow: auto;
+  white-space: pre;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.modal-actions .spacer {
+  flex: 1;
+}
+
+.modal-actions > button:not(.ghost) {
+  padding: 0.45rem 1rem;
+  font: inherit;
+  background: #c9a959;
+  color: #1a1a1a;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
