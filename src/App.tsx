@@ -68,6 +68,13 @@ handholds or a slip. Substantive choices — fight or flee, what to say, which p
 whether to trust — belong to the player. When in doubt, stop before the choice and
 let the situation demand it.
 
+NPCs must never enumerate the player's choices. No "do X or Y?", no "will you help
+or run?", no "fight or flee?" — those are the narrator's option list dressed as
+dialogue. NPC questions come from the NPC's own perspective and are either
+open-ended ("Who sent you?", "What did you see?") or pressing but singular ("Can I
+trust you?"). The player picks what to do; the NPC doesn't offer a multiple-choice
+menu.
+
 # Continuity
 Remember locations, characters, items, injuries, and ongoing threats. When an outcome
 depends on chance or skill, resolve it yourself and state the result.
@@ -186,7 +193,7 @@ interface SamplingParams {
 }
 
 const DEFAULT_SAMPLING: SamplingParams = {
-  temperature: 1.1,
+  temperature: 0.75,
   frequencyPenalty: 0,
   presencePenalty: 0,
 }
@@ -840,7 +847,8 @@ function SettingsPanel({
               onChange={(e) => setContextField('prefixChars', Number(e.target.value))}
             />
             <small>
-              How many chars of the oldest messages get folded into the summary. Default{' '}
+              Upper bound on chars folded into the summary per compaction — never
+              more than half the remaining messages by count. Default{' '}
               {DEFAULT_CONTEXT.prefixChars.toLocaleString()}.
             </small>
           </label>
@@ -1123,14 +1131,16 @@ function findCompactionCutoff(
   startIndex: number,
   targetChars: number,
 ): number {
+  const remaining = messages.length - startIndex
+  if (remaining <= 1) return startIndex
+  const halfCount = Math.max(1, Math.floor(remaining / 2))
   let acc = 0
   let cut = startIndex
-  for (let i = startIndex; i < messages.length; i++) {
+  for (let i = startIndex; i < startIndex + halfCount; i++) {
     acc += messages[i].text.length
     cut = i + 1
     if (acc >= targetChars) break
   }
-  if (cut >= messages.length) cut = Math.max(startIndex + 1, messages.length - 1)
   return cut
 }
 
