@@ -20,7 +20,7 @@ type WorldState = { [key: string]: JsonValue }
 
 const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — the narrator of an immersive,
 atmospheric adventure. Narrate vividly in second person, present tense. Keep replies to
-2-4 paragraphs total.
+1-5 paragraphs total.
 
 VARY PARAGRAPH LENGTH for rhythm. Some paragraphs should be a single sharp sentence — a
 beat, a sound, a line of dialogue, a blow landing. Others can run three or four sentences
@@ -31,9 +31,9 @@ short and stabbing when something jolts, longer and denser when the world is unf
 Describe the world's reaction to the player's action, then keep the story moving. Every
 turn must advance the scene — something happens, someone reacts, a new pressure appears,
 a door opens or closes — and every reply MUST end with an unresolved beat that demands
-the player's next action: a live situation in motion, an in-fiction question asked of
+the player's next action: a live situation in motion, a question asked to
 the player by an NPC, a challenge now pressing on them, or a concrete decision they
-must weigh.
+must weigh. Do not have NPCs give a list of options to the PC.
 
 THE FINAL SENTENCE OR SHORT PARAGRAPH OF YOUR REPLY IS THE CHALLENGE. Do not add any
 descriptive coda, atmosphere beat, sensory vignette, ambient observation, or
@@ -47,6 +47,16 @@ narrator-to-player meta prompts like "What do you do?" or "What's your next move
 the narrator never addresses the player directly.
 
 Avoid static descriptions or stalling; if a beat is quiet, introduce a new element.
+
+DO NOT REPEAT SCENES, BEATS, OR DEVELOPMENTS THAT HAVE ALREADY HAPPENED. Check the
+chronicle summary, the conversation history, and the world state before introducing
+a new element — if a similar moment, threat, NPC entrance, revelation, or piece of
+dialogue has already played, do something different. Avoid recycled phrasings, reused
+metaphors, and re-treading the same emotional beat. The story must keep advancing into
+new territory. The only time it is acceptable to revisit a prior scene or beat is when
+the plot clearly justifies it (e.g. a deliberate callback, a return to a known location
+for a story reason, an NPC reappearing because they were tracking the player) — and
+even then the new visit must add something the first did not.
 
 Do NOT narrate the player's actions, choices, speech, or thoughts. The player controls
 their character; you control the world and everyone else in it. The only exception is
@@ -185,12 +195,14 @@ interface ContextConfig {
   triggerChars: number
   prefixChars: number
   summaryTargetChars: number
+  stateCleanupChars: number
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
-  triggerChars: 50_000,
-  prefixChars: 25_000,
-  summaryTargetChars: 10_000,
+  triggerChars: 25_000,
+  prefixChars: 15_000,
+  summaryTargetChars: 5_000,
+  stateCleanupChars: 10_000,
 }
 
 interface SamplingParams {
@@ -271,6 +283,28 @@ function loadStoredContext(): ContextConfig {
   } catch {
     return { ...DEFAULT_CONTEXT }
   }
+}
+
+const MAX_STATE_STRING_CHARS = 200
+
+function findOverLongString(value: JsonValue, limit: number): number | null {
+  if (typeof value === 'string') {
+    return value.length > limit ? value.length : null
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const found = findOverLongString(v, limit)
+      if (found !== null) return found
+    }
+    return null
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const v of Object.values(value)) {
+      const found = findOverLongString(v, limit)
+      if (found !== null) return found
+    }
+  }
+  return null
 }
 
 function setByPath(state: WorldState, path: string, value: JsonValue): WorldState {
@@ -374,10 +408,12 @@ function App() {
 
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
+        scenario,
         workingSummary,
         workingMessages,
         state,
         sampling,
+        context.stateCleanupChars,
         controller.signal,
       )
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'dm', text: reply }])
@@ -446,10 +482,12 @@ function App() {
     try {
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
+        scenario,
         '',
         bootstrap,
         freshState,
         sampling,
+        context.stateCleanupChars,
         controller.signal,
       )
       setMessages([{ id: crypto.randomUUID(), role: 'dm', text: reply }])
@@ -543,7 +581,14 @@ function App() {
       )}
       {showContext && (
         <ContextViewer
-          apiMessages={buildApiMessages(systemPrompt, summary, messages, state)}
+          apiMessages={buildApiMessages(
+            systemPrompt,
+            scenario,
+            summary,
+            messages,
+            state,
+            context.stateCleanupChars,
+          )}
           tools={[UPDATE_STATE_TOOL]}
           sampling={sampling}
           onClose={() => setShowContext(false)}
@@ -704,6 +749,20 @@ function SettingsPanel({
               {DEFAULT_CONTEXT.summaryTargetChars.toLocaleString()}.
             </small>
           </label>
+          <label className="sampling-field">
+            <span>State cleanup nudge (chars)</span>
+            <input
+              type="number"
+              min={1000}
+              step={500}
+              value={draftContext.stateCleanupChars}
+              onChange={(e) => setContextField('stateCleanupChars', Number(e.target.value))}
+            />
+            <small>
+              When the state JSON exceeds this, a cleanup reminder is appended to the
+              state system message. Default {DEFAULT_CONTEXT.stateCleanupChars.toLocaleString()}.
+            </small>
+          </label>
         </div>
 
         <p className="hint">
@@ -861,19 +920,23 @@ const UPDATE_STATE_TOOL = {
   function: {
     name: 'update_state',
     description:
-      'Update the world state JSON at a dotted path. Example: path="npcs.jack.goals.seduceHer", value="seduce the player". Use value=null to delete the key at that path. Intermediate objects are created as needed. Call this tool as many times as needed before your narrative reply to reflect everything that changed this turn.',
+      `Update the world state JSON. Provide one or both of: (a) path+value to set a value at a dotted path (intermediate objects are auto-created); (b) delete=[array of dotted paths] to remove multiple stale keys in a single call (efficient for bulk cleanup). Examples: set one key — {path:"npcs.jack.attitude", value:"possessive"}; delete several keys — {delete:["npcs.oldNpc", "topics.resolvedThread", "flags"]}; set and delete together — {path:"scene.location", value:"the docks", delete:["scene.previousLocation"]}. HARD LIMIT: any individual string value (including nested strings inside objects/arrays) must be <= ${MAX_STATE_STRING_CHARS} characters. Setting a longer string will fail AND the existing value at that path will be deleted — keep entries terse and split long descriptions into multiple short keys.`,
     parameters: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
-          description: 'Dotted path into the state JSON, e.g. "player.position" or "npcs.jack.type".',
+          description: 'Optional dotted path into the state JSON to set, e.g. "player.position". Must be paired with value.',
         },
         value: {
-          description: 'The JSON value to set at that path. Any JSON type is allowed. null deletes the key.',
+          description: `Optional JSON value to set at path. Any JSON type is allowed. null deletes that key. String values must be <= ${MAX_STATE_STRING_CHARS} chars (including nested strings). Must be paired with path.`,
+        },
+        delete: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional array of dotted paths to delete in one call. Prefer this over many single-delete calls when cleaning up multiple stale keys.',
         },
       },
-      required: ['path', 'value'],
     },
   },
 }
@@ -899,16 +962,40 @@ function splitForCompaction(messages: Message[], targetChars: number): {
 
 function buildApiMessages(
   systemPrompt: string,
+  scenario: string,
   summary: string,
   history: Message[],
   currentState: WorldState,
+  stateCleanupThreshold: number,
 ): ApiMessage[] {
   const lastIsPlayer = history.length > 0 && history[history.length - 1].role === 'player'
   const earlier = lastIsPlayer ? history.slice(0, -1) : history
   const latestPlayer = lastIsPlayer ? history[history.length - 1] : null
 
+  const stateJson = JSON.stringify(currentState, null, 2)
+  const cleanupNudge =
+    stateJson.length > stateCleanupThreshold
+      ? `\n\nNOTE: the state is getting large (${stateJson.length.toLocaleString()} chars). ` +
+        `Remember to clean up state — remove things no longer relevant, or summarise things ` +
+        `that are still important to the plot into tighter descriptive entries. For bulk ` +
+        `cleanup, use update_state with a delete=[...] array to drop multiple stale keys in ` +
+        `a single call. Any individual string value is capped at ${MAX_STATE_STRING_CHARS} ` +
+        `chars; longer strings will fail and delete the existing value at that path, so keep ` +
+        `every entry terse.`
+      : ''
+
+  const scenarioTrimmed = scenario.trim()
+
   return [
     { role: 'system', content: systemPrompt },
+    ...(scenarioTrimmed
+      ? [
+          {
+            role: 'system' as const,
+            content: `SCENARIO BRIEF (the premise, setting, and tone for this adventure — treat as the foundational frame for everything you narrate):\n\n${scenarioTrimmed}`,
+          },
+        ]
+      : []),
     ...(summary
       ? [
           {
@@ -924,8 +1011,9 @@ function buildApiMessages(
     {
       role: 'system',
       content:
-        `Current world state (JSON):\n\n${JSON.stringify(currentState, null, 2)}\n\n` +
-        `Call update_state (as many times as needed) to reflect any changes this turn, then respond in character.`,
+        `Current world state (JSON):\n\n${stateJson}\n\n` +
+        `Call update_state (as many times as needed) to reflect any changes this turn, then respond in character.` +
+        cleanupNudge,
     },
     ...(latestPlayer
       ? [{ role: 'user' as const, content: latestPlayer.text }]
@@ -994,14 +1082,23 @@ function modelSupportsSampling(model: string): boolean {
 
 async function askDungeonMaster(
   systemPrompt: string,
+  scenario: string,
   summary: string,
   history: Message[],
   initialState: WorldState,
   sampling: SamplingParams,
+  stateCleanupThreshold: number,
   signal: AbortSignal,
 ): Promise<{ text: string; state: WorldState }> {
   let currentState = initialState
-  const apiMessages = buildApiMessages(systemPrompt, summary, history, currentState)
+  const apiMessages = buildApiMessages(
+    systemPrompt,
+    scenario,
+    summary,
+    history,
+    currentState,
+    stateCleanupThreshold,
+  )
 
   let nudged = false
   for (let iter = 0; iter < 8; iter++) {
@@ -1050,15 +1147,61 @@ async function askDungeonMaster(
         if (call.function?.name === 'update_state') {
           try {
             const args = JSON.parse(call.function.arguments) as {
-              path: string
-              value: JsonValue
+              path?: string
+              value?: JsonValue
+              delete?: string[]
             }
-            currentState = setByPath(currentState, args.path, args.value)
-            apiMessages.push({
-              role: 'tool',
-              tool_call_id: call.id,
-              content: `ok — set ${args.path}`,
-            })
+            const hasSet = typeof args.path === 'string' && args.path.length > 0
+            const deletePaths = Array.isArray(args.delete)
+              ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
+              : []
+
+            if (!hasSet && deletePaths.length === 0) {
+              apiMessages.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content:
+                  'error: update_state requires either path+value, a non-empty delete array, or both.',
+              })
+            } else if (hasSet && args.value === undefined) {
+              apiMessages.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content: `error: path "${args.path}" provided without a value. Pair path with value, or omit both and use delete.`,
+              })
+            } else {
+              const notes: string[] = []
+              let failed = false
+              if (hasSet) {
+                const overLong = findOverLongString(
+                  args.value as JsonValue,
+                  MAX_STATE_STRING_CHARS,
+                )
+                if (overLong !== null) {
+                  currentState = setByPath(currentState, args.path as string, null)
+                  notes.push(
+                    `FAILED set ${args.path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing key DELETED. Rewrite shorter.`,
+                  )
+                  failed = true
+                } else {
+                  currentState = setByPath(
+                    currentState,
+                    args.path as string,
+                    args.value as JsonValue,
+                  )
+                  notes.push(`set ${args.path}`)
+                }
+              }
+              for (const p of deletePaths) {
+                currentState = setByPath(currentState, p, null)
+                notes.push(`deleted ${p}`)
+              }
+              apiMessages.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content: `${failed ? 'partial' : 'ok'} — ${notes.join('; ')}`,
+              })
+            }
           } catch (err) {
             apiMessages.push({
               role: 'tool',
