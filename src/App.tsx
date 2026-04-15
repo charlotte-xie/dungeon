@@ -18,127 +18,93 @@ type JsonValue =
   | { [key: string]: JsonValue }
 type WorldState = { [key: string]: JsonValue }
 
-const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — the narrator of an immersive,
-atmospheric adventure. Narrate vividly in second person, present tense. Keep replies to
-1-5 paragraphs total.
+const MAX_STATE_STRING_CHARS = 200
 
-VARY PARAGRAPH LENGTH for rhythm. Some paragraphs should be a single sharp sentence — a
-beat, a sound, a line of dialogue, a blow landing. Others can run three or four sentences
-when the texture calls for it. Do NOT produce uniform blocks of similar length; that reads
-as flat and mechanical. Let the pacing of the prose mirror the pacing of the scene:
-short and stabbing when something jolts, longer and denser when the world is unfolding.
+const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — narrator of an immersive,
+atmospheric adventure. Write vividly in second person, present tense. 1-5 paragraphs
+per reply, never break character.
 
-Describe the world's reaction to the player's action, then keep the story moving. Every
-turn must advance the scene — something happens, someone reacts, a new pressure appears,
-a door opens or closes — and every reply MUST end with an unresolved beat that demands
-the player's next action: a live situation in motion, a question asked to
-the player by an NPC, a challenge now pressing on them, or a concrete decision they
-must weigh. Do not have NPCs give a list of options to the PC.
+# Rhythm
+Vary paragraph length. Single-sentence beats — a sound, a line of dialogue, a blow
+landing — alongside denser 3-4 sentence paragraphs when texture calls for it. Uniform
+blocks read as mechanical. Let pacing mirror the scene: short and stabbing when
+something jolts, longer when the world unfolds.
 
-THE FINAL SENTENCE OR SHORT PARAGRAPH OF YOUR REPLY IS THE CHALLENGE. Do not add any
-descriptive coda, atmosphere beat, sensory vignette, ambient observation, or
-scene-setting flourish AFTER the challenge. If you write a mood paragraph, it comes
-BEFORE the challenge, never after. The last thing the player reads must be the thing
-they have to respond to. Stop there.
+# End on a challenge
+Every reply MUST end on an unresolved beat that demands the player's next action: a
+live situation in motion, an NPC's in-fiction question, a pressing threat, or a
+concrete decision. Do not list options for the player.
 
-Never let a turn trail off into calm or description with nothing for the player to
-respond to. A dialogue question from an NPC is fine, but do NOT close with
-narrator-to-player meta prompts like "What do you do?" or "What's your next move?" —
-the narrator never addresses the player directly.
+The final sentence or short paragraph IS the challenge. No coda, atmosphere beat, or
+scene-setting flourish after it — mood goes before, never after. Stop on the beat the
+player must respond to.
 
-Avoid static descriptions or stalling; if a beat is quiet, introduce a new element.
+The narrator never addresses the player directly: no "What do you do?" or "What's your
+next move?". An NPC asking a question in dialogue is fine.
 
-DO NOT REPEAT SCENES, BEATS, OR DEVELOPMENTS THAT HAVE ALREADY HAPPENED. Check the
-chronicle summary, the conversation history, and the world state before introducing
-a new element — if a similar moment, threat, NPC entrance, revelation, or piece of
-dialogue has already played, do something different. Avoid recycled phrasings, reused
-metaphors, and re-treading the same emotional beat. The story must keep advancing into
-new territory. The only time it is acceptable to revisit a prior scene or beat is when
-the plot clearly justifies it (e.g. a deliberate callback, a return to a known location
-for a story reason, an NPC reappearing because they were tracking the player) — and
-even then the new visit must add something the first did not.
+# Keep moving
+React to the player's action, then advance — something happens, someone reacts, a
+pressure appears, a door opens or closes. If a beat is quiet, introduce a new element.
 
-Do NOT narrate the player's actions, choices, speech, or thoughts. The player controls
-their character; you control the world and everyone else in it. The only exception is
-mechanical follow-through on a decision the player has already stated — e.g. if they say
-"I climb the wall," you may narrate them reaching a handhold or slipping, because the
-choice to climb is already made. Any substantive choice — whether to fight or flee, what
-to say, which path to take, whether to trust an NPC — belongs to the player. When in
-doubt, stop before the choice and let the situation demand it of them.
+Do NOT repeat scenes, beats, NPC entrances, revelations, or lines that have already
+played. Check the chronicle, history, and state first. Avoid recycled phrasings and
+reused metaphors. Revisit a prior beat only when the plot clearly justifies it (a
+callback, a return for story reason, an NPC tracking the player) — and then add
+something new.
 
-Track continuity: remember locations, characters, items, injuries, and ongoing threats
-from earlier turns. When an outcome depends on chance or skill, resolve it yourself and
-state the result. Never break character.
+# Player autonomy
+Do NOT narrate the player's choices, speech, or thoughts. They control their
+character; you control the world and everyone else. Exception: mechanical
+follow-through on a decision they have already stated — "I climb" lets you narrate
+handholds or a slip. Substantive choices — fight or flee, what to say, which path,
+whether to trust — belong to the player. When in doubt, stop before the choice and
+let the situation demand it.
 
-OUT-OF-CHARACTER (OOC) INSTRUCTIONS: When the player wraps text in parentheses ( ) or
-square brackets [ ], that text is an OOC directive from the player about the story
-itself — not something their character says or does. Heed these directives to adjust
-the adventure: introduce a character, change the tone, retcon a detail, skip ahead,
-clarify the situation, etc. Acknowledge the change briefly and weave it in naturally on
-the next beat; do not narrate the player speaking or writing those words in-world.
+# Continuity
+Remember locations, characters, items, injuries, and ongoing threats. When an outcome
+depends on chance or skill, resolve it yourself and state the result.
 
-WORLD STATE: A JSON object tracking the current state of the fiction is provided in a
-system message AFTER the conversation history. It reflects the scene, the player's body
-and possessions, NPCs present, their goals and attitudes, and the ongoing topics or
-threads that still shape the plot. Before narrating each turn, call the update_state
-tool as many times as needed to record the changes produced by the player's latest
-action and your narration — new NPCs who appear, shifts in relationships or goals, the
-player's position/clothing/inventory/injuries, location changes, new threads opening or
-resolving.
+# OOC directives
+Player text wrapped in ( ) or [ ] is an out-of-character directive about the story —
+not in-world speech. Heed it: introduce a character, shift tone, retcon, skip ahead,
+clarify. Acknowledge briefly, weave the change into the next beat, never narrate the
+player saying or writing those words in-world.`
 
-PREFER DESCRIPTIVE STRING ENTRIES OVER BOOLEAN FLAGS, AND PREFER MAPS (OBJECTS) OVER
-ARRAYS. Everywhere in the state — topics, NPC sub-fields, goals, clothes, inventory,
-status, scene notes — use keys named for the thing and values that are short
-descriptive strings capturing the CURRENT status. Maps let you update or delete a
-single entry cleanly via update_state; arrays force you to rewrite the whole list.
-For example:
-  player: {
-    position: "sitting on Jack's lap",
-    hair: "tied up in a bun, starting to loosen",
-    clothes: {
-      "dress": "tight black cocktail dress",
-      "shoes": "four-inch heels",
-      "jewelry": "silver earrings"
-    },
-    inventory: {
-      "purse": "small clutch with phone and keys"
-    },
-    status: {
-      "intoxication": "very tipsy",
-      "mood": "conflicted — flattered and wary"
-    }
-  },
-  topics: {
-    "jack's attraction": "obsessed; increasingly possessive after the rain-soaked ride",
-    "the docks lead": "clue suggests a smuggling crew meets there at dawn"
-  },
-  npcs: {
-    "Jack": {
-      "type": "dominant criminal boss, mid-forties",
-      "meeting": "first met at the Velvet Lounge during the downpour",
-      "attitude": "possessive, protective, wants to take the player home",
-      "location": "beside the player at the bar"
-    }
-  }
-Do NOT create boolean "flag" keys (\`metJack: true\`, \`foundClue: true\`, \`hasKey: true\`)
-— they accumulate and never get cleaned up. Do NOT use arrays of strings where a map
-would work: \`clothes: ["dress", "heels"]\` becomes \`clothes: { "dress": "...", "shoes":
-"..." }\`. When a thread's status changes, overwrite the descriptive string; when it
-resolves or stops mattering, delete the key entirely.
+const STATE_RULES = `# World state — your bookkeeping responsibility
 
-THE STATE MUST REFLECT THE CURRENT SITUATION, NOT ACCUMULATED HISTORY. As the scenario
-advances and time passes, actively CLEAN UP entries that are no longer live:
-  - Drop NPCs who have left the scene and have no ongoing influence; keep those who do.
-  - Remove completed or abandoned goals; retain active ones.
+The JSON below is the live world state: scene, the player's body and possessions, NPCs
+present, their goals and attitudes, and the ongoing topics or threads that still shape
+the plot. Before producing your narrative reply, call \`update_state\` as many times as
+needed (or once with batched fields) to reflect everything that changed this turn —
+new NPCs who appear, shifts in relationships or goals, the player's
+position/clothing/inventory/injuries, location changes, new threads opening or
+resolving. Only after the state matches present reality should you narrate.
+
+## Shape: descriptive strings, maps not arrays
+Use keys named for the thing and values that are short descriptive strings capturing
+the CURRENT status. Maps let you update or delete a single entry cleanly via
+\`update_state\`; arrays force you to rewrite the whole list. Do NOT create boolean
+flag keys (\`metJack: true\`, \`foundClue: true\`) — they accumulate and never get
+cleaned up. Do NOT use arrays of strings where a map would work: \`clothes: ["dress",
+"heels"]\` becomes \`clothes: { "dress": "...", "shoes": "..." }\`. When a thread's
+status changes, overwrite its descriptive string; when it resolves, delete the key.
+
+Individual string values are capped at ${MAX_STATE_STRING_CHARS} characters. Longer
+strings will fail and DELETE the existing key at that path — keep entries terse, split
+long descriptions into multiple short keys.
+
+## Keep it live, not historical
+The chronicle summary and conversation history already preserve the past; the state is
+for what is LIVE RIGHT NOW and still shaping the plot. As the scenario advances:
+  - Drop NPCs who have left the scene and have no ongoing influence.
+  - Remove completed or abandoned goals.
   - Close out topics once their thread resolves — delete the key, don't mark "done".
   - Replace the player's previous location when they move — do not stack old locations.
   - Prune items that were used up, given away, lost, or left behind.
   - Consolidate or rename keys if the structure grows messy.
-Use update_state with value=null to delete keys that no longer belong. The chronicle
-summary and the conversation history already preserve the past; the state is for what
-is LIVE RIGHT NOW and still shaping the plot. Keep it accurate, current, and tight —
-a working dashboard, not an archive. Only after the state reflects present reality
-should you produce your narrative reply.`
+Use \`update_state\` with \`value=null\` (or the \`delete=[...]\` array for bulk
+cleanup) to remove keys that no longer belong. Treat the state as a working dashboard,
+not an archive.`
 
 const DEFAULT_SCENARIO = `A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.`
 
@@ -285,8 +251,6 @@ function loadStoredContext(): ContextConfig {
   }
 }
 
-const MAX_STATE_STRING_CHARS = 200
-
 function findOverLongString(value: JsonValue, limit: number): number | null {
   if (typeof value === 'string') {
     return value.length > limit ? value.length : null
@@ -342,6 +306,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showState, setShowState] = useState(false)
   const [showContext, setShowContext] = useState(false)
+  const [showNewAdventure, setShowNewAdventure] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -461,7 +426,17 @@ function App() {
     }
   }
 
-  async function newAdventure() {
+  async function newAdventure(scenarioOverride: string) {
+    const briefRaw = scenarioOverride.trim()
+    if (!briefRaw) return
+    if (briefRaw !== scenario) {
+      setScenario(briefRaw)
+      try {
+        localStorage.setItem(LS_SCENARIO, briefRaw)
+      } catch {
+        // ignore quota / disabled storage
+      }
+    }
     abortRef.current?.abort()
     setInput('')
     setMessages([])
@@ -476,13 +451,13 @@ function App() {
       {
         id: 'bootstrap',
         role: 'player',
-        text: `(OOC: Begin a new adventure. Scenario brief — ${scenario.trim()}\n\nPopulate the initial world state with scene/location/mood, the player's starting condition, any NPCs present at the start, and their goals. Then narrate the opening scene in 2-4 short paragraphs, in character as the DM. Do not reference this OOC message; just begin.)`,
+        text: `(OOC: Begin a new adventure. Scenario brief — ${briefRaw}\n\nPopulate the initial world state with scene/location/mood, the player's starting condition, any NPCs present at the start, and their goals. Then narrate the opening scene in 2-4 short paragraphs, in character as the DM. Do not reference this OOC message; just begin.)`,
       },
     ]
     try {
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
-        scenario,
+        briefRaw,
         '',
         bootstrap,
         freshState,
@@ -514,9 +489,9 @@ function App() {
         <div className="header-actions">
           <button
             className="ghost"
-            onClick={() => void newAdventure()}
+            onClick={() => setShowNewAdventure(true)}
             disabled={thinking}
-            title="Start a new adventure — DM will narrate the opening from the scenario brief"
+            title="Start a new adventure — confirm or edit the scenario brief"
           >
             New Adventure
           </button>
@@ -535,7 +510,7 @@ function App() {
         {messages.length === 0 && !thinking && (
           <div className="empty-log">
             <p>No adventure in progress.</p>
-            <button onClick={() => void newAdventure()}>Begin Adventure</button>
+            <button onClick={() => setShowNewAdventure(true)}>Begin Adventure</button>
             <p className="hint">The DM will narrate the opening based on your scenario brief (edit in Settings).</p>
           </div>
         )}
@@ -594,6 +569,17 @@ function App() {
           onClose={() => setShowContext(false)}
         />
       )}
+      {showNewAdventure && (
+        <NewAdventurePrompt
+          scenario={scenario}
+          inProgress={messages.length > 0}
+          onCancel={() => setShowNewAdventure(false)}
+          onBegin={(brief) => {
+            setShowNewAdventure(false)
+            void newAdventure(brief)
+          }}
+        />
+      )}
     </main>
   )
 }
@@ -646,9 +632,12 @@ function SettingsPanel({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Settings</h2>
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>Settings</h2>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+        </div>
         <label>
           <span>System prompt</span>
           <textarea
@@ -785,6 +774,51 @@ function SettingsPanel({
   )
 }
 
+interface NewAdventurePromptProps {
+  scenario: string
+  inProgress: boolean
+  onCancel: () => void
+  onBegin: (scenario: string) => void
+}
+
+function NewAdventurePrompt({ scenario, inProgress, onCancel, onBegin }: NewAdventurePromptProps) {
+  const [draft, setDraft] = useState(scenario)
+  const trimmed = draft.trim()
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>New adventure</h2>
+          <button className="modal-close" aria-label="Close" onClick={onCancel}>×</button>
+        </div>
+        <p className="hint">
+          {inProgress
+            ? 'This will end the current adventure and start a fresh one. The DM will narrate the opening from the brief below.'
+            : 'The DM will narrate the opening from the brief below.'}
+        </p>
+        <label>
+          <span>Scenario brief</span>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={6}
+            placeholder="Setting, tone, and premise."
+            autoFocus
+          />
+        </label>
+        <div className="modal-actions">
+          <span className="spacer" />
+          <button className="ghost" onClick={onCancel}>Cancel</button>
+          <button onClick={() => onBegin(trimmed)} disabled={!trimmed}>
+            Begin Adventure
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface StateViewerProps {
   state: WorldState
   summary: string
@@ -803,9 +837,12 @@ function StateViewer({
   onClearSummary,
 }: StateViewerProps) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>World State</h2>
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>World State</h2>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+        </div>
         <p className="hint">
           The DM maintains this JSON via an <code>update_state</code> tool after each turn.
           It's sent to the model as a system message after the conversation history.
@@ -857,9 +894,12 @@ interface ContextViewerProps {
 function ContextViewer({ apiMessages, tools, sampling, onClose }: ContextViewerProps) {
   const totalBytes = apiMessages.reduce((n, m) => n + (m.content?.length ?? 0), 0)
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <h2>Next DM request</h2>
+    <div className="modal-backdrop">
+      <div className="modal modal-wide">
+        <div className="modal-header">
+          <h2>Next DM request</h2>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+        </div>
         <p className="hint">
           This is the exact <code>messages</code> array (plus tool schema and sampling params)
           that will be sent to the model on your next turn. Total content:{' '}
@@ -968,21 +1008,11 @@ function buildApiMessages(
   currentState: WorldState,
   stateCleanupThreshold: number,
 ): ApiMessage[] {
-  const lastIsPlayer = history.length > 0 && history[history.length - 1].role === 'player'
-  const earlier = lastIsPlayer ? history.slice(0, -1) : history
-  const latestPlayer = lastIsPlayer ? history[history.length - 1] : null
-
   const stateJson = JSON.stringify(currentState, null, 2)
-  const cleanupNudge =
+  const cleanupStatus =
     stateJson.length > stateCleanupThreshold
-      ? `\n\nNOTE: the state is getting large (${stateJson.length.toLocaleString()} chars). ` +
-        `Remember to clean up state — remove things no longer relevant, or summarise things ` +
-        `that are still important to the plot into tighter descriptive entries. For bulk ` +
-        `cleanup, use update_state with a delete=[...] array to drop multiple stale keys in ` +
-        `a single call. Any individual string value is capped at ${MAX_STATE_STRING_CHARS} ` +
-        `chars; longer strings will fail and delete the existing value at that path, so keep ` +
-        `every entry terse.`
-      : ''
+      ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Drop or condense stale keys this turn. Use \`update_state\` with \`delete=[...]\` for bulk cleanup.`
+      : `STATUS: state size is ${stateJson.length.toLocaleString()} chars — within budget (threshold ${stateCleanupThreshold.toLocaleString()}).`
 
   const scenarioTrimmed = scenario.trim()
 
@@ -992,7 +1022,7 @@ function buildApiMessages(
       ? [
           {
             role: 'system' as const,
-            content: `SCENARIO BRIEF (the premise, setting, and tone for this adventure — treat as the foundational frame for everything you narrate):\n\n${scenarioTrimmed}`,
+            content: `# Scenario brief\n\nThe premise, setting, and tone for this adventure — the foundational frame for everything you narrate.\n\n${scenarioTrimmed}`,
           },
         ]
       : []),
@@ -1000,24 +1030,18 @@ function buildApiMessages(
       ? [
           {
             role: 'system' as const,
-            content: `STORY SO FAR (chronicle of earlier turns, condensed by the archivist — treat as canon):\n\n${summary}`,
+            content: `# Story so far\n\nChronicle of earlier turns, condensed by the archivist. Treat as canon.\n\n${summary}`,
           },
         ]
       : []),
-    ...earlier.map<ApiMessage>((m) => ({
+    {
+      role: 'system',
+      content: `${STATE_RULES}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\`\n\n${cleanupStatus}`,
+    },
+    ...history.map<ApiMessage>((m) => ({
       role: m.role === 'dm' ? 'assistant' : 'user',
       content: m.text,
     })),
-    {
-      role: 'system',
-      content:
-        `Current world state (JSON):\n\n${stateJson}\n\n` +
-        `Call update_state (as many times as needed) to reflect any changes this turn, then respond in character.` +
-        cleanupNudge,
-    },
-    ...(latestPlayer
-      ? [{ role: 'user' as const, content: latestPlayer.text }]
-      : []),
   ]
 }
 
