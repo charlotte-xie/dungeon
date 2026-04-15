@@ -81,6 +81,32 @@ header h1 {
   font-style: italic;
 }
 
+.msg-folded {
+  opacity: 0.55;
+}
+
+.compact-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.25rem 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+}
+
+.compact-divider::before,
+.compact-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed currentColor;
+  opacity: 0.4;
+}
+
+.compact-divider span {
+  padding: 0 0.75rem;
+}
+
 .empty-log {
   height: 100%;
   display: flex;
@@ -127,6 +153,33 @@ header h1 {
   color: inherit;
   border: 1px solid #3a3a3a;
   border-radius: 4px;
+}
+
+.composer-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  justify-content: stretch;
+}
+
+.composer-buttons .ghost {
+  padding: 0 0.8rem;
+  min-height: 1.9rem;
+  font-size: 0.8rem;
+  background: transparent;
+  color: #c9a959;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
+.composer-buttons .ghost:hover:not(:disabled) {
+  border-color: #c9a959;
+}
+
+.composer-buttons > button:last-child {
+  flex: 1;
+  min-height: 2.4rem;
+  font-size: 1rem;
 }
 
 .composer button {

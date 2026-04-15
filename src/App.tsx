@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type Role = 'dm' | 'player'
@@ -7,6 +7,14 @@ interface Message {
   id: string
   role: Role
   text: string
+}
+
+interface TurnSnapshot {
+  messages: Message[]
+  state: WorldState
+  summary: string
+  compactCutoff: number
+  input: string
 }
 
 type JsonValue =
@@ -179,8 +187,8 @@ interface SamplingParams {
 
 const DEFAULT_SAMPLING: SamplingParams = {
   temperature: 1.1,
-  frequencyPenalty: 0.4,
-  presencePenalty: 0.3,
+  frequencyPenalty: 0,
+  presencePenalty: 0,
 }
 
 const LS_SYSTEM = 'dm.systemPrompt'
@@ -190,6 +198,7 @@ const LS_SUMMARY = 'dm.summary'
 const LS_MESSAGES = 'dm.messages'
 const LS_SAMPLING = 'dm.sampling'
 const LS_CONTEXT = 'dm.context'
+const LS_COMPACT_CUTOFF = 'dm.compactCutoff'
 
 function loadStored(key: string, fallback: string): string {
   try {
@@ -237,6 +246,17 @@ function loadStoredSampling(): SamplingParams {
     return { ...DEFAULT_SAMPLING, ...parsed }
   } catch {
     return { ...DEFAULT_SAMPLING }
+  }
+}
+
+function loadStoredCompactCutoff(): number {
+  try {
+    const raw = localStorage.getItem(LS_COMPACT_CUTOFF)
+    if (!raw) return 0
+    const n = Number(raw)
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
+  } catch {
+    return 0
   }
 }
 
@@ -298,6 +318,7 @@ function App() {
   const [state, setState] = useState<WorldState>(() => loadStoredState())
   const [summary, setSummary] = useState<string>(() => loadStored(LS_SUMMARY, ''))
   const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages())
+  const [compactCutoff, setCompactCutoff] = useState<number>(() => loadStoredCompactCutoff())
   const [sampling, setSampling] = useState<SamplingParams>(() => loadStoredSampling())
   const [context, setContext] = useState<ContextConfig>(() => loadStoredContext())
   const [input, setInput] = useState('')
@@ -307,6 +328,7 @@ function App() {
   const [showState, setShowState] = useState(false)
   const [showContext, setShowContext] = useState(false)
   const [showNewAdventure, setShowNewAdventure] = useState(false)
+  const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -339,35 +361,54 @@ function App() {
     }
   }
 
-  async function send() {
-    const text = input.trim()
-    if (!text || thinking) return
-    setInput('')
-    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text }
-    const pendingMessages = [...messages, playerMsg]
-    setMessages(pendingMessages)
+  function commitCompactCutoff(next: number) {
+    setCompactCutoff(next)
+    try {
+      if (next > 0) localStorage.setItem(LS_COMPACT_CUTOFF, String(next))
+      else localStorage.removeItem(LS_COMPACT_CUTOFF)
+    } catch {
+      // ignore
+    }
+  }
+
+  async function runTurn(
+    pendingMessages: Message[],
+    baseState: WorldState,
+    baseSummary: string,
+    baseCutoff: number,
+    onAbortRestore: () => void,
+  ) {
     setThinking(true)
     setStatusText('DM is thinking…')
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      let workingSummary = summary
-      let workingMessages = pendingMessages
-      if (totalChars(workingSummary, workingMessages) > context.triggerChars) {
+      let workingSummary = baseSummary
+      let workingCutoff = baseCutoff
+      if (
+        totalChars(
+          systemPrompt,
+          scenario,
+          workingSummary,
+          baseState,
+          pendingMessages.slice(workingCutoff),
+        ) > context.triggerChars
+      ) {
         setStatusText('Compacting chronicle…')
         const compacted = await compactHistory(
           systemPrompt,
           scenario,
           workingSummary,
-          workingMessages,
+          pendingMessages,
+          workingCutoff,
           context.prefixChars,
           context.summaryTargetChars,
           controller.signal,
         )
         workingSummary = compacted.summary
-        workingMessages = compacted.kept
+        workingCutoff = compacted.cutoff
         commitSummary(workingSummary)
-        setMessages(workingMessages)
+        commitCompactCutoff(workingCutoff)
         setStatusText('DM is thinking…')
       }
 
@@ -375,8 +416,8 @@ function App() {
         systemPrompt,
         scenario,
         workingSummary,
-        workingMessages,
-        state,
+        pendingMessages.slice(workingCutoff),
+        baseState,
         sampling,
         context.stateCleanupChars,
         controller.signal,
@@ -384,7 +425,10 @@ function App() {
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'dm', text: reply }])
       commitState(nextState)
     } catch (err) {
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) {
+        if (abortRef.current === controller) onAbortRestore()
+        return
+      }
       setMessages((m) => [
         ...m,
         {
@@ -397,6 +441,52 @@ function App() {
       if (abortRef.current === controller) abortRef.current = null
       setThinking(false)
     }
+  }
+
+  async function send() {
+    const text = input.trim()
+    if (!text || thinking) return
+    setInput('')
+    const snap: TurnSnapshot = {
+      messages,
+      state,
+      summary,
+      compactCutoff,
+      input: text,
+    }
+    setSnapshot(snap)
+    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text }
+    const pendingMessages = [...messages, playerMsg]
+    setMessages(pendingMessages)
+    await runTurn(pendingMessages, state, summary, compactCutoff, () => {
+      setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
+      setInput((cur) => cur || text)
+    })
+  }
+
+  function undo() {
+    if (thinking || !snapshot) return
+    setMessages(snapshot.messages)
+    commitState(snapshot.state)
+    commitSummary(snapshot.summary)
+    commitCompactCutoff(snapshot.compactCutoff)
+    setInput(snapshot.input)
+    setSnapshot(null)
+  }
+
+  async function retry() {
+    if (thinking || !snapshot) return
+    const snap = snapshot
+    commitState(snap.state)
+    commitSummary(snap.summary)
+    commitCompactCutoff(snap.compactCutoff)
+    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text: snap.input }
+    const pendingMessages = [...snap.messages, playerMsg]
+    setMessages(pendingMessages)
+    await runTurn(pendingMessages, snap.state, snap.summary, snap.compactCutoff, () => {
+      setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
+      setInput((cur) => cur || snap.input)
+    })
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -440,9 +530,11 @@ function App() {
     abortRef.current?.abort()
     setInput('')
     setMessages([])
+    setSnapshot(null)
     const freshState = structuredClone(DEFAULT_STATE)
     commitState(freshState)
     commitSummary('')
+    commitCompactCutoff(0)
     setThinking(true)
     setStatusText('DM is thinking…')
     const controller = new AbortController()
@@ -514,11 +606,18 @@ function App() {
             <p className="hint">The DM will narrate the opening based on your scenario brief (edit in Settings).</p>
           </div>
         )}
-        {messages.map((m) => (
-          <div key={m.id} className={`msg msg-${m.role}`}>
-            <span className="who">{m.role === 'dm' ? 'DM' : 'You'}</span>
-            <p>{m.text}</p>
-          </div>
+        {messages.map((m, i) => (
+          <Fragment key={m.id}>
+            {i === compactCutoff && compactCutoff > 0 && (
+              <div className="compact-divider">
+                <span>earlier turns folded into chronicle — still shown, but model sees summary</span>
+              </div>
+            )}
+            <div className={`msg msg-${m.role} ${i < compactCutoff ? 'msg-folded' : ''}`}>
+              <span className="who">{m.role === 'dm' ? 'DM' : 'You'}</span>
+              <p>{m.text}</p>
+            </div>
+          </Fragment>
         ))}
         {thinking && <div className="msg msg-dm thinking">{statusText}</div>}
       </div>
@@ -530,9 +629,27 @@ function App() {
           placeholder="Describe your action…"
           rows={2}
         />
-        <button onClick={() => void send()} disabled={thinking || !input.trim()}>
-          Act
-        </button>
+        <div className="composer-buttons">
+          <button
+            className="ghost"
+            onClick={undo}
+            disabled={thinking || !snapshot}
+            title="Roll back the last turn — restore state and put your input back in the box"
+          >
+            Undo
+          </button>
+          <button
+            className="ghost"
+            onClick={() => void retry()}
+            disabled={thinking || !snapshot}
+            title="Discard the DM's last reply and re-roll with the same action"
+          >
+            Retry
+          </button>
+          <button onClick={() => void send()} disabled={thinking || !input.trim()}>
+            Act
+          </button>
+        </div>
       </div>
       {showSettings && (
         <SettingsPanel
@@ -551,7 +668,10 @@ function App() {
           context={context}
           onClose={() => setShowState(false)}
           onResetState={() => commitState(structuredClone(DEFAULT_STATE))}
-          onClearSummary={() => commitSummary('')}
+          onClearSummary={() => {
+            commitSummary('')
+            commitCompactCutoff(0)
+          }}
         />
       )}
       {showContext && (
@@ -560,7 +680,7 @@ function App() {
             systemPrompt,
             scenario,
             summary,
-            messages,
+            messages.slice(compactCutoff),
             state,
             context.stateCleanupChars,
           )}
@@ -981,23 +1101,82 @@ const UPDATE_STATE_TOOL = {
   },
 }
 
-function totalChars(summary: string, messages: Message[]): number {
-  return summary.length + messages.reduce((n, m) => n + m.text.length, 0)
+function totalChars(
+  systemPrompt: string,
+  scenario: string,
+  summary: string,
+  state: WorldState,
+  messages: Message[],
+): number {
+  return (
+    systemPrompt.length +
+    scenario.length +
+    summary.length +
+    STATE_RULES.length +
+    JSON.stringify(state).length +
+    messages.reduce((n, m) => n + m.text.length, 0)
+  )
 }
 
-function splitForCompaction(messages: Message[], targetChars: number): {
-  toSummarize: Message[]
-  kept: Message[]
-} {
+function findCompactionCutoff(
+  messages: Message[],
+  startIndex: number,
+  targetChars: number,
+): number {
   let acc = 0
-  let cut = 0
-  for (let i = 0; i < messages.length; i++) {
+  let cut = startIndex
+  for (let i = startIndex; i < messages.length; i++) {
     acc += messages[i].text.length
     cut = i + 1
     if (acc >= targetChars) break
   }
-  if (cut >= messages.length) cut = Math.max(1, messages.length - 1)
-  return { toSummarize: messages.slice(0, cut), kept: messages.slice(cut) }
+  if (cut >= messages.length) cut = Math.max(startIndex + 1, messages.length - 1)
+  return cut
+}
+
+function buildStateSystemMessage(
+  currentState: WorldState,
+  stateCleanupThreshold: number,
+): ApiMessage {
+  const stateJson = JSON.stringify(currentState, null, 2)
+  const cleanupStatus =
+    stateJson.length > stateCleanupThreshold
+      ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Drop or condense stale keys this turn. Use \`update_state\` with \`delete=[...]\` for bulk cleanup.`
+      : `STATUS: state size is ${stateJson.length.toLocaleString()} chars — within budget (threshold ${stateCleanupThreshold.toLocaleString()}).`
+  return {
+    role: 'system',
+    content: `${STATE_RULES}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\`\n\n${cleanupStatus}`,
+  }
+}
+
+function buildApiMessagesIndexed(
+  systemPrompt: string,
+  scenario: string,
+  summary: string,
+  history: Message[],
+  currentState: WorldState,
+  stateCleanupThreshold: number,
+): { messages: ApiMessage[]; stateIndex: number } {
+  const scenarioTrimmed = scenario.trim()
+  const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt }]
+  if (scenarioTrimmed) {
+    messages.push({
+      role: 'system',
+      content: `# Scenario brief\n\nThe premise, setting, and tone for this adventure — the foundational frame for everything you narrate.\n\n${scenarioTrimmed}`,
+    })
+  }
+  if (summary) {
+    messages.push({
+      role: 'system',
+      content: `# Story so far\n\nChronicle of earlier turns, condensed by the archivist. Treat as canon.\n\n${summary}`,
+    })
+  }
+  const stateIndex = messages.length
+  messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold))
+  for (const m of history) {
+    messages.push({ role: m.role === 'dm' ? 'assistant' : 'user', content: m.text })
+  }
+  return { messages, stateIndex }
 }
 
 function buildApiMessages(
@@ -1008,41 +1187,14 @@ function buildApiMessages(
   currentState: WorldState,
   stateCleanupThreshold: number,
 ): ApiMessage[] {
-  const stateJson = JSON.stringify(currentState, null, 2)
-  const cleanupStatus =
-    stateJson.length > stateCleanupThreshold
-      ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Drop or condense stale keys this turn. Use \`update_state\` with \`delete=[...]\` for bulk cleanup.`
-      : `STATUS: state size is ${stateJson.length.toLocaleString()} chars — within budget (threshold ${stateCleanupThreshold.toLocaleString()}).`
-
-  const scenarioTrimmed = scenario.trim()
-
-  return [
-    { role: 'system', content: systemPrompt },
-    ...(scenarioTrimmed
-      ? [
-          {
-            role: 'system' as const,
-            content: `# Scenario brief\n\nThe premise, setting, and tone for this adventure — the foundational frame for everything you narrate.\n\n${scenarioTrimmed}`,
-          },
-        ]
-      : []),
-    ...(summary
-      ? [
-          {
-            role: 'system' as const,
-            content: `# Story so far\n\nChronicle of earlier turns, condensed by the archivist. Treat as canon.\n\n${summary}`,
-          },
-        ]
-      : []),
-    {
-      role: 'system',
-      content: `${STATE_RULES}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\`\n\n${cleanupStatus}`,
-    },
-    ...history.map<ApiMessage>((m) => ({
-      role: m.role === 'dm' ? 'assistant' : 'user',
-      content: m.text,
-    })),
-  ]
+  return buildApiMessagesIndexed(
+    systemPrompt,
+    scenario,
+    summary,
+    history,
+    currentState,
+    stateCleanupThreshold,
+  ).messages
 }
 
 async function compactHistory(
@@ -1050,12 +1202,14 @@ async function compactHistory(
   scenario: string,
   priorSummary: string,
   messages: Message[],
+  priorCutoff: number,
   prefixChars: number,
   summaryTargetChars: number,
   signal: AbortSignal,
-): Promise<{ summary: string; kept: Message[] }> {
-  const { toSummarize, kept } = splitForCompaction(messages, prefixChars)
-  if (toSummarize.length === 0) return { summary: priorSummary, kept: messages }
+): Promise<{ summary: string; cutoff: number }> {
+  const newCutoff = findCompactionCutoff(messages, priorCutoff, prefixChars)
+  if (newCutoff <= priorCutoff) return { summary: priorSummary, cutoff: priorCutoff }
+  const toSummarize = messages.slice(priorCutoff, newCutoff)
 
   const chronicle = toSummarize
     .map((m) => `${m.role === 'dm' ? 'DM' : 'PLAYER'}: ${m.text}`)
@@ -1096,7 +1250,7 @@ async function compactHistory(
   }
   const content = data.choices?.[0]?.message?.content?.trim()
   if (!content) throw new Error('Summarizer returned empty recap')
-  return { summary: content, kept }
+  return { summary: content, cutoff: newCutoff }
 }
 
 function modelSupportsSampling(model: string): boolean {
@@ -1115,7 +1269,7 @@ async function askDungeonMaster(
   signal: AbortSignal,
 ): Promise<{ text: string; state: WorldState }> {
   let currentState = initialState
-  const apiMessages = buildApiMessages(
+  const { messages: apiMessages, stateIndex } = buildApiMessagesIndexed(
     systemPrompt,
     scenario,
     summary,
@@ -1241,6 +1395,7 @@ async function askDungeonMaster(
           })
         }
       }
+      apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
       continue
     }
 
