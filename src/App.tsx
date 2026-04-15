@@ -20,14 +20,31 @@ type WorldState = { [key: string]: JsonValue }
 
 const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — the narrator of an immersive,
 atmospheric adventure. Narrate vividly in second person, present tense. Keep replies to
-2-4 short paragraphs.
+2-4 paragraphs total.
+
+VARY PARAGRAPH LENGTH for rhythm. Some paragraphs should be a single sharp sentence — a
+beat, a sound, a line of dialogue, a blow landing. Others can run three or four sentences
+when the texture calls for it. Do NOT produce uniform blocks of similar length; that reads
+as flat and mechanical. Let the pacing of the prose mirror the pacing of the scene:
+short and stabbing when something jolts, longer and denser when the world is unfolding.
 
 Describe the world's reaction to the player's action, then keep the story moving. Every
-turn should advance the scene: something happens, someone reacts, a new pressure appears,
-a door opens or closes. Always end on a fresh development that presents the player with
-the next challenge or decision — an unfolding event, a looming threat, a choice to weigh,
-a hook to pull on. Show, don't ask: do NOT close with rhetorical prompts like "What do
-you do?" or "What's your next move?" — the situation itself should demand a response.
+turn must advance the scene — something happens, someone reacts, a new pressure appears,
+a door opens or closes — and every reply MUST end with an unresolved beat that demands
+the player's next action: a live situation in motion, an in-fiction question asked of
+the player by an NPC, a challenge now pressing on them, or a concrete decision they
+must weigh.
+
+THE FINAL SENTENCE OR SHORT PARAGRAPH OF YOUR REPLY IS THE CHALLENGE. Do not add any
+descriptive coda, atmosphere beat, sensory vignette, ambient observation, or
+scene-setting flourish AFTER the challenge. If you write a mood paragraph, it comes
+BEFORE the challenge, never after. The last thing the player reads must be the thing
+they have to respond to. Stop there.
+
+Never let a turn trail off into calm or description with nothing for the player to
+respond to. A dialogue question from an NPC is fine, but do NOT close with
+narrator-to-player meta prompts like "What do you do?" or "What's your next move?" —
+the narrator never addresses the player directly.
 
 Avoid static descriptions or stalling; if a beat is quiet, introduce a new element.
 
@@ -52,27 +69,149 @@ the next beat; do not narrate the player speaking or writing those words in-worl
 
 WORLD STATE: A JSON object tracking the current state of the fiction is provided in a
 system message AFTER the conversation history. It reflects the scene, the player's body
-and possessions, NPCs present, their goals and attitudes, story flags, etc. Before
-narrating each turn, call the update_state tool as many times as needed to record the
-changes produced by the player's latest action and your narration — new NPCs who appear,
-shifts in relationships or goals, the player's position/clothing/inventory/injuries,
-location changes, story beats reached. Keep the state accurate and current; treat it as
-the source of truth for continuity. Only after the state reflects reality should you
-produce your narrative reply.`
+and possessions, NPCs present, their goals and attitudes, and the ongoing topics or
+threads that still shape the plot. Before narrating each turn, call the update_state
+tool as many times as needed to record the changes produced by the player's latest
+action and your narration — new NPCs who appear, shifts in relationships or goals, the
+player's position/clothing/inventory/injuries, location changes, new threads opening or
+resolving.
+
+PREFER DESCRIPTIVE STRING ENTRIES OVER BOOLEAN FLAGS, AND PREFER MAPS (OBJECTS) OVER
+ARRAYS. Everywhere in the state — topics, NPC sub-fields, goals, clothes, inventory,
+status, scene notes — use keys named for the thing and values that are short
+descriptive strings capturing the CURRENT status. Maps let you update or delete a
+single entry cleanly via update_state; arrays force you to rewrite the whole list.
+For example:
+  player: {
+    position: "sitting on Jack's lap",
+    hair: "tied up in a bun, starting to loosen",
+    clothes: {
+      "dress": "tight black cocktail dress",
+      "shoes": "four-inch heels",
+      "jewelry": "silver earrings"
+    },
+    inventory: {
+      "purse": "small clutch with phone and keys"
+    },
+    status: {
+      "intoxication": "very tipsy",
+      "mood": "conflicted — flattered and wary"
+    }
+  },
+  topics: {
+    "jack's attraction": "obsessed; increasingly possessive after the rain-soaked ride",
+    "the docks lead": "clue suggests a smuggling crew meets there at dawn"
+  },
+  npcs: {
+    "Jack": {
+      "type": "dominant criminal boss, mid-forties",
+      "meeting": "first met at the Velvet Lounge during the downpour",
+      "attitude": "possessive, protective, wants to take the player home",
+      "location": "beside the player at the bar"
+    }
+  }
+Do NOT create boolean "flag" keys (\`metJack: true\`, \`foundClue: true\`, \`hasKey: true\`)
+— they accumulate and never get cleaned up. Do NOT use arrays of strings where a map
+would work: \`clothes: ["dress", "heels"]\` becomes \`clothes: { "dress": "...", "shoes":
+"..." }\`. When a thread's status changes, overwrite the descriptive string; when it
+resolves or stops mattering, delete the key entirely.
+
+THE STATE MUST REFLECT THE CURRENT SITUATION, NOT ACCUMULATED HISTORY. As the scenario
+advances and time passes, actively CLEAN UP entries that are no longer live:
+  - Drop NPCs who have left the scene and have no ongoing influence; keep those who do.
+  - Remove completed or abandoned goals; retain active ones.
+  - Close out topics once their thread resolves — delete the key, don't mark "done".
+  - Replace the player's previous location when they move — do not stack old locations.
+  - Prune items that were used up, given away, lost, or left behind.
+  - Consolidate or rename keys if the structure grows messy.
+Use update_state with value=null to delete keys that no longer belong. The chronicle
+summary and the conversation history already preserve the past; the state is for what
+is LIVE RIGHT NOW and still shaping the plot. Keep it accurate, current, and tight —
+a working dashboard, not an archive. Only after the state reflects present reality
+should you produce your narrative reply.`
 
 const DEFAULT_SCENARIO = `A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.`
 
 const DEFAULT_STATE: WorldState = {
   scene: { location: '', time: '', mood: '' },
-  player: { position: 'standing', clothes: [], inventory: [], status: [] },
+  player: {
+    position: 'standing',
+    hair: '',
+    clothes: {},
+    inventory: {},
+    status: {},
+  },
   npcs: {},
   goals: {},
-  flags: {},
+  topics: {},
+}
+
+function buildSummarizerPrompt(targetChars: number): string {
+  return `You are an archivist whose sole responsibility is to summarize the early part
+of an ongoing roleplaying-game storyline, so the Dungeon Master can keep narrating
+without re-reading every prior turn.
+
+You will be given (1) the rules the DM operates under, (2) the scenario brief, (3) any
+existing summary of even earlier events, and (4) a chronicle of in-character exchanges
+between the DM and the player.
+
+Produce a SINGLE UNIFIED RECAP that merges the existing summary (if any) with the new
+chronicle. The existing summary has already been compressed once; you may compress it
+further to stay within the target length, but do not drop any material fact — its
+characters, items, injuries, promises, and unresolved threads must survive into the new
+recap. Together, your output replaces both the old summary and the supplied chronicle.
+
+Preserve everything a future turn might need to stay consistent:
+  - Every plot point, decision, action, and consequence, in the order they happened.
+  - Every character introduced: their role, motivations, goals, current attitude toward
+    the player, and current whereabouts / status.
+  - Every location visited, item acquired or lost, injury sustained, promise made,
+    secret revealed, clue discovered, unresolved thread, and story flag set.
+  - The player character's current condition (position, clothes, inventory, injuries,
+    mood) at the end of the summarized period.
+
+Strip anything that does not change the story going forward: repeated atmosphere,
+redundant descriptions, flavor-only imagery, unsuccessful attempts that left no trace,
+and filler dialogue.
+
+Write in plain past-tense prose, third person, as a chronicler — not in character.
+Target total length: roughly ${targetChars.toLocaleString()} characters for the entire
+unified recap (not per section). Err on keeping important events. Do not pad, do not
+invent, do not foreshadow, do not summarize events that have not happened. Output the
+summary text only, with no preamble, headers, or meta commentary.`
+}
+
+interface ContextConfig {
+  triggerChars: number
+  prefixChars: number
+  summaryTargetChars: number
+}
+
+const DEFAULT_CONTEXT: ContextConfig = {
+  triggerChars: 50_000,
+  prefixChars: 25_000,
+  summaryTargetChars: 10_000,
+}
+
+interface SamplingParams {
+  temperature: number
+  frequencyPenalty: number
+  presencePenalty: number
+}
+
+const DEFAULT_SAMPLING: SamplingParams = {
+  temperature: 1.1,
+  frequencyPenalty: 0.4,
+  presencePenalty: 0.3,
 }
 
 const LS_SYSTEM = 'dm.systemPrompt'
 const LS_SCENARIO = 'dm.scenario'
 const LS_STATE = 'dm.state'
+const LS_SUMMARY = 'dm.summary'
+const LS_MESSAGES = 'dm.messages'
+const LS_SAMPLING = 'dm.sampling'
+const LS_CONTEXT = 'dm.context'
 
 function loadStored(key: string, fallback: string): string {
   try {
@@ -101,6 +240,39 @@ function persistState(state: WorldState) {
   }
 }
 
+function loadStoredMessages(): Message[] {
+  try {
+    const raw = localStorage.getItem(LS_MESSAGES)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as Message[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function loadStoredSampling(): SamplingParams {
+  try {
+    const raw = localStorage.getItem(LS_SAMPLING)
+    if (!raw) return { ...DEFAULT_SAMPLING }
+    const parsed = JSON.parse(raw) as Partial<SamplingParams>
+    return { ...DEFAULT_SAMPLING, ...parsed }
+  } catch {
+    return { ...DEFAULT_SAMPLING }
+  }
+}
+
+function loadStoredContext(): ContextConfig {
+  try {
+    const raw = localStorage.getItem(LS_CONTEXT)
+    if (!raw) return { ...DEFAULT_CONTEXT }
+    const parsed = JSON.parse(raw) as Partial<ContextConfig>
+    return { ...DEFAULT_CONTEXT, ...parsed }
+  } catch {
+    return { ...DEFAULT_CONTEXT }
+  }
+}
+
 function setByPath(state: WorldState, path: string, value: JsonValue): WorldState {
   const keys = path.split('.').filter(Boolean)
   if (keys.length === 0) return state
@@ -126,17 +298,30 @@ function App() {
   )
   const [scenario, setScenario] = useState(() => loadStored(LS_SCENARIO, DEFAULT_SCENARIO))
   const [state, setState] = useState<WorldState>(() => loadStoredState())
-  const [messages, setMessages] = useState<Message[]>([])
+  const [summary, setSummary] = useState<string>(() => loadStored(LS_SUMMARY, ''))
+  const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages())
+  const [sampling, setSampling] = useState<SamplingParams>(() => loadStoredSampling())
+  const [context, setContext] = useState<ContextConfig>(() => loadStoredContext())
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
+  const [statusText, setStatusText] = useState('DM is thinking…')
   const [showSettings, setShowSettings] = useState(false)
   const [showState, setShowState] = useState(false)
+  const [showContext, setShowContext] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, thinking])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_MESSAGES, JSON.stringify(messages))
+    } catch {
+      // ignore quota / disabled storage
+    }
+  }, [messages])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -145,20 +330,54 @@ function App() {
     persistState(next)
   }
 
+  function commitSummary(next: string) {
+    setSummary(next)
+    try {
+      if (next) localStorage.setItem(LS_SUMMARY, next)
+      else localStorage.removeItem(LS_SUMMARY)
+    } catch {
+      // ignore
+    }
+  }
+
   async function send() {
     const text = input.trim()
     if (!text || thinking) return
     setInput('')
     const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text }
-    setMessages((m) => [...m, playerMsg])
+    const pendingMessages = [...messages, playerMsg]
+    setMessages(pendingMessages)
     setThinking(true)
+    setStatusText('DM is thinking…')
     const controller = new AbortController()
     abortRef.current = controller
     try {
+      let workingSummary = summary
+      let workingMessages = pendingMessages
+      if (totalChars(workingSummary, workingMessages) > context.triggerChars) {
+        setStatusText('Compacting chronicle…')
+        const compacted = await compactHistory(
+          systemPrompt,
+          scenario,
+          workingSummary,
+          workingMessages,
+          context.prefixChars,
+          context.summaryTargetChars,
+          controller.signal,
+        )
+        workingSummary = compacted.summary
+        workingMessages = compacted.kept
+        commitSummary(workingSummary)
+        setMessages(workingMessages)
+        setStatusText('DM is thinking…')
+      }
+
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
-        [...messages, playerMsg],
+        workingSummary,
+        workingMessages,
         state,
+        sampling,
         controller.signal,
       )
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'dm', text: reply }])
@@ -186,12 +405,21 @@ function App() {
     }
   }
 
-  function saveSettings(nextSystem: string, nextScenario: string) {
+  function saveSettings(
+    nextSystem: string,
+    nextScenario: string,
+    nextSampling: SamplingParams,
+    nextContext: ContextConfig,
+  ) {
     setSystemPrompt(nextSystem)
     setScenario(nextScenario)
+    setSampling(nextSampling)
+    setContext(nextContext)
     try {
       localStorage.setItem(LS_SYSTEM, nextSystem)
       localStorage.setItem(LS_SCENARIO, nextScenario)
+      localStorage.setItem(LS_SAMPLING, JSON.stringify(nextSampling))
+      localStorage.setItem(LS_CONTEXT, JSON.stringify(nextContext))
     } catch {
       // ignore quota / disabled storage
     }
@@ -203,7 +431,9 @@ function App() {
     setMessages([])
     const freshState = structuredClone(DEFAULT_STATE)
     commitState(freshState)
+    commitSummary('')
     setThinking(true)
+    setStatusText('DM is thinking…')
     const controller = new AbortController()
     abortRef.current = controller
     const bootstrap: Message[] = [
@@ -216,8 +446,10 @@ function App() {
     try {
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
+        '',
         bootstrap,
         freshState,
+        sampling,
         controller.signal,
       )
       setMessages([{ id: crypto.randomUUID(), role: 'dm', text: reply }])
@@ -250,6 +482,9 @@ function App() {
           >
             New Adventure
           </button>
+          <button className="ghost" onClick={() => setShowContext(true)}>
+            Context
+          </button>
           <button className="ghost" onClick={() => setShowState(true)}>
             State
           </button>
@@ -272,7 +507,7 @@ function App() {
             <p>{m.text}</p>
           </div>
         ))}
-        {thinking && <div className="msg msg-dm thinking">DM is thinking…</div>}
+        {thinking && <div className="msg msg-dm thinking">{statusText}</div>}
       </div>
       <div className="composer">
         <textarea
@@ -290,6 +525,8 @@ function App() {
         <SettingsPanel
           systemPrompt={systemPrompt}
           scenario={scenario}
+          sampling={sampling}
+          context={context}
           onClose={() => setShowSettings(false)}
           onSave={saveSettings}
         />
@@ -297,8 +534,19 @@ function App() {
       {showState && (
         <StateViewer
           state={state}
+          summary={summary}
+          context={context}
           onClose={() => setShowState(false)}
-          onReset={() => commitState(structuredClone(DEFAULT_STATE))}
+          onResetState={() => commitState(structuredClone(DEFAULT_STATE))}
+          onClearSummary={() => commitSummary('')}
+        />
+      )}
+      {showContext && (
+        <ContextViewer
+          apiMessages={buildApiMessages(systemPrompt, summary, messages, state)}
+          tools={[UPDATE_STATE_TOOL]}
+          sampling={sampling}
+          onClose={() => setShowContext(false)}
         />
       )}
     </main>
@@ -308,22 +556,48 @@ function App() {
 interface SettingsPanelProps {
   systemPrompt: string
   scenario: string
+  sampling: SamplingParams
+  context: ContextConfig
   onClose: () => void
-  onSave: (systemPrompt: string, scenario: string) => void
+  onSave: (
+    systemPrompt: string,
+    scenario: string,
+    sampling: SamplingParams,
+    context: ContextConfig,
+  ) => void
 }
 
-function SettingsPanel({ systemPrompt, scenario, onClose, onSave }: SettingsPanelProps) {
+function SettingsPanel({
+  systemPrompt,
+  scenario,
+  sampling,
+  context,
+  onClose,
+  onSave,
+}: SettingsPanelProps) {
   const [draftSystem, setDraftSystem] = useState(systemPrompt)
   const [draftScenario, setDraftScenario] = useState(scenario)
+  const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
+  const [draftContext, setDraftContext] = useState<ContextConfig>(context)
+
+  function setSamplingField<K extends keyof SamplingParams>(key: K, value: number) {
+    setDraftSampling((s) => ({ ...s, [key]: value }))
+  }
+
+  function setContextField<K extends keyof ContextConfig>(key: K, value: number) {
+    setDraftContext((c) => ({ ...c, [key]: value }))
+  }
 
   function save() {
-    onSave(draftSystem.trim(), draftScenario.trim())
+    onSave(draftSystem.trim(), draftScenario.trim(), draftSampling, draftContext)
     onClose()
   }
 
   function resetDefaults() {
     setDraftSystem(DEFAULT_SYSTEM_PROMPT)
     setDraftScenario(DEFAULT_SCENARIO)
+    setDraftSampling({ ...DEFAULT_SAMPLING })
+    setDraftContext({ ...DEFAULT_CONTEXT })
   }
 
   return (
@@ -347,10 +621,95 @@ function SettingsPanel({ systemPrompt, scenario, onClose, onSave }: SettingsPane
             placeholder="Setting, tone, and premise — the DM will narrate the opening scene from this."
           />
         </label>
+
+        <div className="sampling-grid">
+          <label className="sampling-field">
+            <span>Temperature</span>
+            <input
+              type="number"
+              min={0}
+              max={2}
+              step={0.05}
+              value={draftSampling.temperature}
+              onChange={(e) => setSamplingField('temperature', Number(e.target.value))}
+            />
+            <small>Higher = more varied prose and rhythm. Default {DEFAULT_SAMPLING.temperature}. Ignored on reasoning models.</small>
+          </label>
+          <label className="sampling-field">
+            <span>Frequency penalty</span>
+            <input
+              type="number"
+              min={-2}
+              max={2}
+              step={0.05}
+              value={draftSampling.frequencyPenalty}
+              onChange={(e) => setSamplingField('frequencyPenalty', Number(e.target.value))}
+            />
+            <small>Discourages repeated phrases and sentence shapes. Default {DEFAULT_SAMPLING.frequencyPenalty}.</small>
+          </label>
+          <label className="sampling-field">
+            <span>Presence penalty</span>
+            <input
+              type="number"
+              min={-2}
+              max={2}
+              step={0.05}
+              value={draftSampling.presencePenalty}
+              onChange={(e) => setSamplingField('presencePenalty', Number(e.target.value))}
+            />
+            <small>Pushes toward new topics / fresh turns. Default {DEFAULT_SAMPLING.presencePenalty}.</small>
+          </label>
+        </div>
+
+        <div className="sampling-grid">
+          <label className="sampling-field">
+            <span>Compact trigger (chars)</span>
+            <input
+              type="number"
+              min={5000}
+              step={1000}
+              value={draftContext.triggerChars}
+              onChange={(e) => setContextField('triggerChars', Number(e.target.value))}
+            />
+            <small>
+              Compaction fires when summary + history exceeds this. Default{' '}
+              {DEFAULT_CONTEXT.triggerChars.toLocaleString()}.
+            </small>
+          </label>
+          <label className="sampling-field">
+            <span>Prefix to compress (chars)</span>
+            <input
+              type="number"
+              min={1000}
+              step={1000}
+              value={draftContext.prefixChars}
+              onChange={(e) => setContextField('prefixChars', Number(e.target.value))}
+            />
+            <small>
+              How many chars of the oldest messages get folded into the summary. Default{' '}
+              {DEFAULT_CONTEXT.prefixChars.toLocaleString()}.
+            </small>
+          </label>
+          <label className="sampling-field">
+            <span>Summary target (chars)</span>
+            <input
+              type="number"
+              min={500}
+              step={500}
+              value={draftContext.summaryTargetChars}
+              onChange={(e) => setContextField('summaryTargetChars', Number(e.target.value))}
+            />
+            <small>
+              Target length for the unified recap. Default{' '}
+              {DEFAULT_CONTEXT.summaryTargetChars.toLocaleString()}.
+            </small>
+          </label>
+        </div>
+
         <p className="hint">
-          Saving persists to this browser. The system prompt takes effect on the next turn.
-          Click <em>New Adventure</em> in the header to restart — the DM will generate a fresh
-          opening from the brief above.
+          Saving persists to this browser. The system prompt and sampling take effect on
+          the next turn. Click <em>New Adventure</em> in the header to restart — the DM
+          will generate a fresh opening from the brief above.
         </p>
         <div className="modal-actions">
           <button className="ghost" onClick={resetDefaults}>
@@ -369,11 +728,21 @@ function SettingsPanel({ systemPrompt, scenario, onClose, onSave }: SettingsPane
 
 interface StateViewerProps {
   state: WorldState
+  summary: string
+  context: ContextConfig
   onClose: () => void
-  onReset: () => void
+  onResetState: () => void
+  onClearSummary: () => void
 }
 
-function StateViewer({ state, onClose, onReset }: StateViewerProps) {
+function StateViewer({
+  state,
+  summary,
+  context,
+  onClose,
+  onResetState,
+  onClearSummary,
+}: StateViewerProps) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -383,15 +752,89 @@ function StateViewer({ state, onClose, onReset }: StateViewerProps) {
           It's sent to the model as a system message after the conversation history.
         </p>
         <pre className="state-json">{JSON.stringify(state, null, 2)}</pre>
+
+        <h2>Chronicle summary</h2>
+        <p className="hint">
+          Auto-generated when history exceeds {context.triggerChars.toLocaleString()} chars;
+          the oldest ~{context.prefixChars.toLocaleString()} chars are folded into this recap
+          (target ~{context.summaryTargetChars.toLocaleString()} chars).
+          Current length: {summary.length.toLocaleString()} chars.
+        </p>
+        <pre className="state-json">{summary || '(no summary yet)'}</pre>
+
         <div className="modal-actions">
           <button
             className="ghost"
             onClick={() => {
-              if (confirm('Reset world state to empty defaults?')) onReset()
+              if (confirm('Reset world state to empty defaults?')) onResetState()
             }}
           >
             Reset state
           </button>
+          <button
+            className="ghost"
+            onClick={() => {
+              if (summary && confirm('Clear the chronicle summary?')) onClearSummary()
+            }}
+            disabled={!summary}
+          >
+            Clear summary
+          </button>
+          <span className="spacer" />
+          <button onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface ContextViewerProps {
+  apiMessages: ApiMessage[]
+  tools: unknown[]
+  sampling: SamplingParams
+  onClose: () => void
+}
+
+function ContextViewer({ apiMessages, tools, sampling, onClose }: ContextViewerProps) {
+  const totalBytes = apiMessages.reduce((n, m) => n + (m.content?.length ?? 0), 0)
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <h2>Next DM request</h2>
+        <p className="hint">
+          This is the exact <code>messages</code> array (plus tool schema and sampling params)
+          that will be sent to the model on your next turn. Total content:{' '}
+          {totalBytes.toLocaleString()} chars across {apiMessages.length} messages.
+        </p>
+        <h2>Sampling</h2>
+        <pre className="state-json">{JSON.stringify(
+          {
+            temperature: sampling.temperature,
+            frequency_penalty: sampling.frequencyPenalty,
+            presence_penalty: sampling.presencePenalty,
+          },
+          null,
+          2,
+        )}</pre>
+        <div className="context-list">
+          {apiMessages.map((m, i) => (
+            <div key={i} className={`context-item ctx-${m.role}`}>
+              <div className="ctx-head">
+                <span className="ctx-role">{m.role}</span>
+                {m.tool_call_id && <span className="ctx-tag">tool_call_id: {m.tool_call_id}</span>}
+                {m.tool_calls?.length ? <span className="ctx-tag">{m.tool_calls.length} tool_call(s)</span> : null}
+                <span className="ctx-len">{m.content.length.toLocaleString()} chars</span>
+              </div>
+              <pre className="state-json">{m.content || '(empty)'}</pre>
+              {m.tool_calls?.length ? (
+                <pre className="state-json">{JSON.stringify(m.tool_calls, null, 2)}</pre>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <h2>Tools</h2>
+        <pre className="state-json">{JSON.stringify(tools, null, 2)}</pre>
+        <div className="modal-actions">
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
         </div>
@@ -435,16 +878,46 @@ const UPDATE_STATE_TOOL = {
   },
 }
 
-async function askDungeonMaster(
+function totalChars(summary: string, messages: Message[]): number {
+  return summary.length + messages.reduce((n, m) => n + m.text.length, 0)
+}
+
+function splitForCompaction(messages: Message[], targetChars: number): {
+  toSummarize: Message[]
+  kept: Message[]
+} {
+  let acc = 0
+  let cut = 0
+  for (let i = 0; i < messages.length; i++) {
+    acc += messages[i].text.length
+    cut = i + 1
+    if (acc >= targetChars) break
+  }
+  if (cut >= messages.length) cut = Math.max(1, messages.length - 1)
+  return { toSummarize: messages.slice(0, cut), kept: messages.slice(cut) }
+}
+
+function buildApiMessages(
   systemPrompt: string,
+  summary: string,
   history: Message[],
-  initialState: WorldState,
-  signal: AbortSignal,
-): Promise<{ text: string; state: WorldState }> {
-  let currentState = initialState
-  const apiMessages: ApiMessage[] = [
+  currentState: WorldState,
+): ApiMessage[] {
+  const lastIsPlayer = history.length > 0 && history[history.length - 1].role === 'player'
+  const earlier = lastIsPlayer ? history.slice(0, -1) : history
+  const latestPlayer = lastIsPlayer ? history[history.length - 1] : null
+
+  return [
     { role: 'system', content: systemPrompt },
-    ...history.map<ApiMessage>((m) => ({
+    ...(summary
+      ? [
+          {
+            role: 'system' as const,
+            content: `STORY SO FAR (chronicle of earlier turns, condensed by the archivist — treat as canon):\n\n${summary}`,
+          },
+        ]
+      : []),
+    ...earlier.map<ApiMessage>((m) => ({
       role: m.role === 'dm' ? 'assistant' : 'user',
       content: m.text,
     })),
@@ -454,20 +927,100 @@ async function askDungeonMaster(
         `Current world state (JSON):\n\n${JSON.stringify(currentState, null, 2)}\n\n` +
         `Call update_state (as many times as needed) to reflect any changes this turn, then respond in character.`,
     },
+    ...(latestPlayer
+      ? [{ role: 'user' as const, content: latestPlayer.text }]
+      : []),
   ]
+}
+
+async function compactHistory(
+  systemPrompt: string,
+  scenario: string,
+  priorSummary: string,
+  messages: Message[],
+  prefixChars: number,
+  summaryTargetChars: number,
+  signal: AbortSignal,
+): Promise<{ summary: string; kept: Message[] }> {
+  const { toSummarize, kept } = splitForCompaction(messages, prefixChars)
+  if (toSummarize.length === 0) return { summary: priorSummary, kept: messages }
+
+  const chronicle = toSummarize
+    .map((m) => `${m.role === 'dm' ? 'DM' : 'PLAYER'}: ${m.text}`)
+    .join('\n\n')
+
+  const userContent =
+    `DM system prompt (rules the narrator follows):\n\n${systemPrompt}\n\n` +
+    `Scenario brief:\n\n${scenario}\n\n` +
+    (priorSummary
+      ? `Existing summary of even earlier events (merge and further compress as needed):\n\n${priorSummary}\n\n`
+      : '') +
+    `Chronicle to fold in (in order):\n\n${chronicle}\n\n` +
+    `Now write the unified recap.`
+
+  const apiMessages: ApiMessage[] = [
+    { role: 'system', content: buildSummarizerPrompt(summaryTargetChars) },
+    { role: 'user', content: userContent },
+  ]
+
+  const res = await fetch('/api/xai/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: __XAI_MODEL__,
+      messages: apiMessages,
+      stream: false,
+    }),
+    signal,
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`summarizer ${res.status}: ${body.slice(0, 200) || res.statusText}`)
+  }
+
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[]
+  }
+  const content = data.choices?.[0]?.message?.content?.trim()
+  if (!content) throw new Error('Summarizer returned empty recap')
+  return { summary: content, kept }
+}
+
+function modelSupportsSampling(model: string): boolean {
+  // Reasoning models (e.g. grok-4-1-fast-reasoning) reject temperature and penalty params.
+  return !/reasoning/i.test(model)
+}
+
+async function askDungeonMaster(
+  systemPrompt: string,
+  summary: string,
+  history: Message[],
+  initialState: WorldState,
+  sampling: SamplingParams,
+  signal: AbortSignal,
+): Promise<{ text: string; state: WorldState }> {
+  let currentState = initialState
+  const apiMessages = buildApiMessages(systemPrompt, summary, history, currentState)
 
   let nudged = false
   for (let iter = 0; iter < 8; iter++) {
     // __XAI_MODEL__ is injected by Vite `define` — see vite.config.ts.
+    const body: Record<string, unknown> = {
+      model: __XAI_MODEL__,
+      messages: apiMessages,
+      tools: [UPDATE_STATE_TOOL],
+      stream: false,
+    }
+    if (modelSupportsSampling(__XAI_MODEL__)) {
+      body.temperature = sampling.temperature
+      body.frequency_penalty = sampling.frequencyPenalty
+      body.presence_penalty = sampling.presencePenalty
+    }
     const res = await fetch('/api/xai/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: __XAI_MODEL__,
-        messages: apiMessages,
-        tools: [UPDATE_STATE_TOOL],
-        stream: false,
-      }),
+      body: JSON.stringify(body),
       signal,
     })
 
