@@ -134,41 +134,31 @@ player saying or writing those words in-world.`
 
 const STATE_RULES = `# World state — your bookkeeping responsibility
 
-The JSON below is the live world state: scene, the player's body and possessions, NPCs
-present, their goals and attitudes, and the ongoing topics or threads that still shape
-the plot. Before producing your narrative reply, call \`update_state\` as many times as
-needed (or once with batched fields) to reflect everything that changed this turn —
-new NPCs who appear, shifts in relationships or goals, the player's
-position/clothing/inventory/injuries, location changes, new threads opening or
-resolving. Only after the state matches present reality should you narrate.
+The JSON below is the LIVE world state: scene, the player's body and possessions,
+NPCs present, their goals and attitudes, ongoing threads. Before narrating, call
+\`update_state\` once with all changes batched into the \`set\` map and
+\`delete\` array — new NPCs, shifted goals, location/inventory/injury changes,
+threads opening or resolving. Only narrate after the state matches present reality.
 
-## Shape: descriptive strings, maps not arrays
-Use keys named for the thing and values that are short descriptive strings capturing
-the CURRENT status. Maps let you update or delete a single entry cleanly via
-\`update_state\`; arrays force you to rewrite the whole list. Do NOT create boolean
-flag keys (\`metJack: true\`, \`foundClue: true\`) — they accumulate and never get
-cleaned up. Do NOT use arrays of strings where a map would work: \`clothes: ["dress",
-"heels"]\` becomes \`clothes: { "dress": "...", "shoes": "..." }\`. When a thread's
-status changes, overwrite its descriptive string; when it resolves, delete the key.
+## Shape
+Keys are named for the thing; values are short descriptive strings of the CURRENT
+status. Use maps, not arrays — \`clothes: { dress: "...", shoes: "..." }\`, not
+\`clothes: ["dress","heels"]\`. Never use boolean flags (\`metJack: true\`); they
+accumulate and never clean up. When status changes, overwrite the string; when a
+thread resolves, delete the key.
 
-Individual string values are capped at ${MAX_STATE_STRING_CHARS} characters. Longer
-strings will fail and DELETE the existing key at that path — keep entries terse, split
+Individual string values cap at ${MAX_STATE_STRING_CHARS} characters. Over-long
+values fail and DELETE the existing key at that path — keep entries terse, split
 long descriptions into multiple short keys.
 
 ## Keep it live, not historical
-The chronicle summary and conversation history already preserve the past; the state is
-for what is LIVE RIGHT NOW and still shaping the plot. As the scenario advances:
-  - Drop NPCs who have left the scene and have no ongoing influence.
-  - Remove completed or abandoned goals.
-  - Close out topics once their thread resolves — delete the key, don't mark "done".
-  - Replace the player's previous location when they move — do not stack old locations.
-  - Prune items that were used up, given away, lost, or left behind.
-  - Consolidate or rename keys if the structure grows messy.
-Use \`update_state\` with \`value=null\` (or the \`delete=[...]\` array for bulk
-cleanup) to remove keys that no longer belong. Treat the state as a working dashboard,
-not an archive.`
+History and the chronicle preserve the past; the state is for what still shapes the
+plot RIGHT NOW. Each turn, prune what no longer matters: NPCs who have left and
+have no ongoing influence, completed or abandoned goals, resolved threads, the
+player's previous location once they move, items used up or left behind. Treat the
+state as a working dashboard, not an archive.`
 
-const TURN_REMINDER = `(OOC: For your next reply — 1-5 paragraphs of clear, grammatical prose, complete sentences. You author NPCs, animals, and the world. End on a narrated stimulus that fits the present scene: something said, done, discovered, revealed, or shifting that makes the player's next action urgent and obvious they must take one. The decision is the player's — never present it as a choice to pick from, in any voice. NPC questions, if any, must be things the NPC genuinely wants answered for their own reasons — not disguised option lists aimed at the player.)`
+const TURN_REMINDER = `(OOC: Next reply — 1-5 paragraphs of vivid, full prose. Complete sentences, no bullet points or terse phrasing. You author NPCs and the world; never ask the player what an NPC does. End on a narrated stimulus that demands the player's next action — never a choice list or a narrator question. NPC questions are real questions the NPC wants answered, never disguised option lists.)`
 
 const DEFAULT_SCENARIO = `A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.`
 
@@ -267,11 +257,14 @@ in at finer detail, a few sentences per beat. By the end the reader should feel 
 have been told the whole tale, with the early acts in summary and the recent acts
 nearly in scene.
 
-Nothing important is dropped. Every character, thread, promise, injury, and decision
-that still shapes the plot survives into the new retelling. What changes between
-passes is the WORDS used to recount old events: with each compaction you re-tell the
-older material more tightly than it appeared in the previous summary, choosing
-phrasing that compresses without losing material consequence.
+Be selective. Keep only what STILL MATTERS for the plot going forward — characters
+who remain influential, unresolved threads, promises and debts, injuries that still
+constrain the player, decisions whose consequences are live. Minor NPCs who
+served their scene and exited, atmospheric beats, one-off encounters, and
+revelations that have since been overtaken by events can be dropped or collapsed
+into a passing phrase. Each compaction is also a chance to prune: ask "does this
+still matter?" and let the answer guide whether a beat survives, shrinks, or
+disappears.
 
 When merging the existing summary with new chronicle: the existing summary is already
 shaped this way. Re-write its earlier sections more economically to make room; absorb
@@ -292,26 +285,27 @@ Notice how weeks of travel collapse into one sentence while the recent confronta
 gets three. That is the shape.
 
 # Coverage at the right resolution
-Preserve everything a future turn might need to stay consistent — but at the
-resolution appropriate to its age:
-  - Plot points, decisions, actions, and consequences, in chronological order.
-  - Each character introduced: their role, motivations, current attitude toward the
-    player, and current whereabouts.
-  - Locations visited, items acquired or lost, injuries sustained, promises made,
-    secrets revealed, clues discovered, unresolved threads, and story flags set.
+Cover what a future turn needs to stay consistent — at the resolution appropriate
+to its age, and only if it still matters:
+  - Plot points and consequences that are still in motion or shape what comes next.
+  - Characters still active or still influencing the story: their role, current
+    attitude toward the player, and current whereabouts.
+  - Currently-held items, present injuries, unresolved threads, live secrets,
+    open promises and debts.
   - The player character's current condition (position, clothes, inventory,
     injuries, mood) at the end of the retelling.
 
-Older background may live in a single dependent clause ("after the abbey-priest's
-errand, …"); recent state should be precise.
+Drop or collapse what no longer shapes the plot: NPCs who have left and won't
+return, items used or lost, threads that have resolved, atmosphere and scene
+detail that did not lead anywhere. Older background may live in a single
+dependent clause; recent live state should be precise.
 
 # Constraints
 Target total length: roughly ${targetChars.toLocaleString()} characters for the entire
 retelling. HARD MAXIMUM: ${maxChars.toLocaleString()} characters. If the merged content
-would exceed the maximum, COMPRESS THE OLDER SECTIONS FURTHER — re-tell early events
-in fewer words, condense multiple old beats into one summary sentence, prefer summary
-clauses over scene re-creation for distant material. Do not delete characters, threads,
-or material facts; re-tell them more tightly.
+would exceed the maximum, prune ruthlessly: drop minor old material entirely,
+collapse multiple old beats into one summary sentence, prefer summary clauses over
+scene re-creation for distant material. Keep what still matters; let the rest go.
 
 Do not pad, invent, foreshadow, or summarize events that have not happened. Output
 the retelling text only — no preamble, headers, bullet markers, or meta commentary.`
@@ -1692,21 +1686,19 @@ const UPDATE_STATE_TOOL = {
   function: {
     name: 'update_state',
     description:
-      `Update the world state JSON. Provide one or both of: (a) path+value to set a value at a dotted path (intermediate objects are auto-created); (b) delete=[array of dotted paths] to remove multiple stale keys in a single call (efficient for bulk cleanup). Examples: set one key — {path:"npcs.jack.attitude", value:"possessive"}; delete several keys — {delete:["npcs.oldNpc", "topics.resolvedThread", "flags"]}; set and delete together — {path:"scene.location", value:"the docks", delete:["scene.previousLocation"]}. HARD LIMIT: any individual string value (including nested strings inside objects/arrays) must be <= ${MAX_STATE_STRING_CHARS} characters. Setting a longer string will fail AND the existing value at that path will be deleted — keep entries terse and split long descriptions into multiple short keys.`,
+      `Update the world state JSON in one batched call. Provide \`set\` (a map of dotted-path → value to assign), \`delete\` (an array of dotted paths to remove), or both. Deletes apply first, then sets — so a path that appears in both ends up with the set value. Intermediate objects on a set path are auto-created. Example: {set:{"scene.location":"the docks","npcs.jack.attitude":"possessive"}, delete:["npcs.oldGuard","topics.resolved"]}. HARD LIMIT: any individual string value (including nested strings) must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value fails and DELETES the existing key at that path. Keep entries terse; split long descriptions into multiple short keys.`,
     parameters: {
       type: 'object',
       properties: {
-        path: {
-          type: 'string',
-          description: 'Optional dotted path into the state JSON to set, e.g. "player.position". Must be paired with value.',
-        },
-        value: {
-          description: `Optional JSON value to set at path. Any JSON type is allowed. null deletes that key. String values must be <= ${MAX_STATE_STRING_CHARS} chars (including nested strings). Must be paired with path.`,
+        set: {
+          type: 'object',
+          description: `Map of dotted paths to values to assign, e.g. {"npcs.jack.attitude":"possessive","scene.mood":"tense"}. Any JSON value type. String values must be <= ${MAX_STATE_STRING_CHARS} chars (including nested strings).`,
+          additionalProperties: true,
         },
         delete: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional array of dotted paths to delete in one call. Prefer this over many single-delete calls when cleaning up multiple stale keys.',
+          description: 'Array of dotted paths to remove. Applied before sets.',
         },
       },
     },
@@ -1821,18 +1813,25 @@ async function compactHistory(
     .map((m) => `${m.role === 'dm' ? 'DM' : 'PLAYER'}: ${m.text}`)
     .join('\n\n')
 
+  const closing =
+    `Now write the ${hasNew ? 'unified' : 're-compressed'} retelling in proper grammatical English. ` +
+    `Everything between the BEGIN/END markers above is RAW INPUT MATERIAL to digest — NOT a style template. ` +
+    `Your output is polished narrative prose: complete sentences, all articles and auxiliaries in place, decreasing resolution as it recedes into the past. ` +
+    `Do NOT echo the register, telegraphic phrasing, or fragmentary style of the input regardless of how rough it reads.`
+
   const userContent = hasNew
     ? `DM system prompt (rules the narrator follows):\n\n${systemPrompt}\n\n` +
       `${slotsBlock}\n\n` +
       (priorSummary
-        ? `Existing retelling of earlier events (merge in and re-tell more tightly as needed):\n\n${priorSummary}\n\n`
+        ? `--- BEGIN EXISTING RETELLING (raw input — merge in and re-tell more tightly) ---\n\n${priorSummary}\n\n--- END EXISTING RETELLING ---\n\n`
         : '') +
-      `Chronicle to fold in (in order):\n\n${chronicle}\n\n` +
-      `Now write the unified retelling.`
+      `--- BEGIN CHRONICLE (raw transcript to fold in, in order) ---\n\n${chronicle}\n\n--- END CHRONICLE ---\n\n` +
+      closing
     : `DM system prompt (rules the narrator follows):\n\n${systemPrompt}\n\n` +
       `${slotsBlock}\n\n` +
-      `Existing retelling to RE-COMPRESS — there is no new chronicle to fold in this pass. Re-tell the same material more tightly so the result fits within the target length. Preserve every character, thread, and material fact; the early sections in particular should collapse further.\n\n${priorSummary}\n\n` +
-      `Now write the re-compressed retelling.`
+      `No new chronicle this pass — re-tell the existing retelling more tightly so the result fits within target length. Be selective: keep only what still matters for the plot going forward; drop or collapse anything stale, atmospheric, or already overtaken by events. Older sections in particular should collapse hard.\n\n` +
+      `--- BEGIN EXISTING RETELLING (raw input — re-compress) ---\n\n${priorSummary}\n\n--- END EXISTING RETELLING ---\n\n` +
+      closing
 
   const apiMessages: ApiMessage[] = [
     { role: 'system', content: buildSummarizerPrompt(summaryTargetChars) },
@@ -1935,54 +1934,45 @@ async function askDungeonMaster(
         if (call.function?.name === 'update_state') {
           try {
             const args = JSON.parse(call.function.arguments) as {
-              path?: string
-              value?: JsonValue
+              set?: Record<string, JsonValue>
               delete?: string[]
             }
-            const hasSet = typeof args.path === 'string' && args.path.length > 0
+            const setEntries: [string, JsonValue][] =
+              args.set && typeof args.set === 'object' && !Array.isArray(args.set)
+                ? Object.entries(args.set).filter(
+                    (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
+                  )
+                : []
             const deletePaths = Array.isArray(args.delete)
               ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
               : []
 
-            if (!hasSet && deletePaths.length === 0) {
+            if (setEntries.length === 0 && deletePaths.length === 0) {
               apiMessages.push({
                 role: 'tool',
                 tool_call_id: call.id,
                 content:
-                  'error: update_state requires either path+value, a non-empty delete array, or both.',
-              })
-            } else if (hasSet && args.value === undefined) {
-              apiMessages.push({
-                role: 'tool',
-                tool_call_id: call.id,
-                content: `error: path "${args.path}" provided without a value. Pair path with value, or omit both and use delete.`,
+                  'error: update_state requires a non-empty `set` map, a non-empty `delete` array, or both.',
               })
             } else {
               const notes: string[] = []
               let failed = false
-              if (hasSet) {
-                const overLong = findOverLongString(
-                  args.value as JsonValue,
-                  MAX_STATE_STRING_CHARS,
-                )
-                if (overLong !== null) {
-                  currentState = setByPath(currentState, args.path as string, null)
-                  notes.push(
-                    `FAILED set ${args.path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing key DELETED. Rewrite shorter.`,
-                  )
-                  failed = true
-                } else {
-                  currentState = setByPath(
-                    currentState,
-                    args.path as string,
-                    args.value as JsonValue,
-                  )
-                  notes.push(`set ${args.path}`)
-                }
-              }
               for (const p of deletePaths) {
                 currentState = setByPath(currentState, p, null)
                 notes.push(`deleted ${p}`)
+              }
+              for (const [path, value] of setEntries) {
+                const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
+                if (overLong !== null) {
+                  currentState = setByPath(currentState, path, null)
+                  notes.push(
+                    `FAILED set ${path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing key DELETED. Rewrite shorter.`,
+                  )
+                  failed = true
+                } else {
+                  currentState = setByPath(currentState, path, value)
+                  notes.push(`set ${path}`)
+                }
               }
               apiMessages.push({
                 role: 'tool',
