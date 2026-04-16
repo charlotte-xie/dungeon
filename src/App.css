@@ -398,6 +398,21 @@ header h1 {
   white-space: pre;
 }
 
+textarea.state-json-editor {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 16vh;
+  max-height: 45vh;
+  resize: vertical;
+}
+
+.error-text {
+  margin: 0.35rem 0 0;
+  color: #d87070;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}
+
 .modal-actions {
   display: flex;
   align-items: center;

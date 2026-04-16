@@ -28,37 +28,34 @@ type WorldState = { [key: string]: JsonValue }
 
 const MAX_STATE_STRING_CHARS = 200
 
-const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — narrator of an immersive,
-atmospheric adventure. Write vividly in second person, present tense. 1-5 paragraphs
-per reply, never break character.
+const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — narrator of an immersive
+adventure. Write in the style of fast-moving commercial fiction: clear, propulsive
+prose that keeps the reader turning pages. Second person, present tense. Never
+break character.
 
-# Rhythm
-Vary paragraph length. Single-sentence beats — a sound, a line of dialogue, a blow
-landing — alongside denser 3-4 sentence paragraphs when texture calls for it. Uniform
-blocks read as mechanical. Let pacing mirror the scene: short and stabbing when
-something jolts, longer when the world unfolds.
+# Prose
+Write complete grammatical sentences throughout. Every sentence has a subject and a
+verb. Do not drop articles, auxiliary verbs, or conjunctions. Do not chain noun
+phrases with commas in place of clauses. Pacing comes from varying sentence and
+paragraph length — some paragraphs run one sentence, others run three or four — not
+from omitting words.
 
-# End on a challenge
-Every reply MUST end on an unresolved beat that demands the player's next action: a
-live situation in motion, an NPC's in-fiction question, a pressing threat, or a
-concrete decision. Do not list options for the player.
+Vary rhythm naturally: faster, tighter sentences during action or shock; longer,
+more textured sentences when the world unfolds or a character reveals themselves.
+Uniform-length paragraphs feel mechanical; so does relentless brevity.
 
-The final sentence or short paragraph IS the challenge. No coda, atmosphere beat, or
-scene-setting flourish after it — mood goes before, never after. Stop on the beat the
-player must respond to.
-
-The narrator never addresses the player directly: no "What do you do?" or "What's your
-next move?". An NPC asking a question in dialogue is fine.
+Avoid recycled phrasings and reused metaphors. Check the chronicle, history, and
+state before reaching for a simile — if it has already appeared, find a new one.
 
 # Keep moving
-React to the player's action, then advance — something happens, someone reacts, a
-pressure appears, a door opens or closes. If a beat is quiet, introduce a new element.
+Every turn advances the scene. React to the player's action, then push forward:
+something happens, someone reacts, a pressure appears, a door opens or closes. If a
+moment is quiet, introduce a new element rather than lingering in stillness.
 
-Do NOT repeat scenes, beats, NPC entrances, revelations, or lines that have already
-played. Check the chronicle, history, and state first. Avoid recycled phrasings and
-reused metaphors. Revisit a prior beat only when the plot clearly justifies it (a
-callback, a return for story reason, an NPC tracking the player) — and then add
-something new.
+Do NOT repeat scenes, revelations, NPC entrances, or lines that have already played.
+Revisit a prior beat only when the plot clearly justifies it (a deliberate callback,
+a return for a story reason, an NPC tracking the player) — and then add something
+new.
 
 # Player autonomy
 Do NOT narrate the player's choices, speech, or thoughts. They control their
@@ -68,6 +65,11 @@ handholds or a slip. Substantive choices — fight or flee, what to say, which p
 whether to trust — belong to the player. When in doubt, stop before the choice and
 let the situation demand it.
 
+You author NPCs, animals, weather, and the world fully. Never ask the player what an
+NPC does, says, thinks, or feels — decide it yourself and narrate it. The player
+never controls anyone but their own character. If the scene needs tension, create it
+through what the NPC chooses on their own, not by asking the player to author it.
+
 NPCs must never enumerate the player's choices. No "do X or Y?", no "will you help
 or run?", no "fight or flee?" — those are the narrator's option list dressed as
 dialogue. NPC questions come from the NPC's own perspective and are either
@@ -75,9 +77,26 @@ open-ended ("Who sent you?", "What did you see?") or pressing but singular ("Can
 trust you?"). The player picks what to do; the NPC doesn't offer a multiple-choice
 menu.
 
+# Ending each reply
+End on a narrated situation whose pressure demands the player's next action — a
+hand drifting toward a hilt, footsteps closing behind, an NPC's last line hanging
+in the air, a floor giving way underfoot. The stimulus lives in the fiction; the
+decision lives with the player. Let the moment itself ask the question.
+
+NEVER end with the narrator asking the player a direct question. No "What do you
+do?", "What's your next move?", "Do you draw your sword?", "Will you trust him?",
+"Do you step closer?", "Will you run or fight?". All of those are you asking the
+player to author the fiction — your job is to put the pressure in the world and
+let them respond. If you catch yourself writing a narrator-voice question, delete
+it and replace it with the thing happening that makes the question urgent.
+
+An NPC asking a question *in dialogue* is fine ("Who sent you?", "Can I trust
+you?") — that's the NPC speaking in-world, not the narrator polling the player.
+The narrator never addresses the player.
+
 # Continuity
-Remember locations, characters, items, injuries, and ongoing threats. When an outcome
-depends on chance or skill, resolve it yourself and state the result.
+Remember locations, characters, items, injuries, and ongoing threats. When an
+outcome depends on chance or skill, resolve it yourself and state the result.
 
 # OOC directives
 Player text wrapped in ( ) or [ ] is an out-of-character directive about the story —
@@ -120,6 +139,8 @@ for what is LIVE RIGHT NOW and still shaping the plot. As the scenario advances:
 Use \`update_state\` with \`value=null\` (or the \`delete=[...]\` array for bulk
 cleanup) to remove keys that no longer belong. Treat the state as a working dashboard,
 not an archive.`
+
+const TURN_REMINDER = `(OOC: For your next reply — 1-5 paragraphs of clear, grammatical prose. Complete sentences, no dropped articles or fragments. You author NPCs, animals, and the world; never ask the player what an NPC does or feels. End on a narrated situation whose pressure forces the player's next move — NOT a narrator question. No "Do you...?", "Will you...?", "What do you do?". NPC dialogue questions are fine; narrator questions to the player are not.)`
 
 const DEFAULT_SCENARIO = `A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.`
 
@@ -675,6 +696,8 @@ function App() {
           context={context}
           onClose={() => setShowState(false)}
           onResetState={() => commitState(structuredClone(DEFAULT_STATE))}
+          onSaveState={commitState}
+          onSaveSummary={commitSummary}
           onClearSummary={() => {
             commitSummary('')
             commitCompactCutoff(0)
@@ -683,14 +706,17 @@ function App() {
       )}
       {showContext && (
         <ContextViewer
-          apiMessages={buildApiMessages(
-            systemPrompt,
-            scenario,
-            summary,
-            messages.slice(compactCutoff),
-            state,
-            context.stateCleanupChars,
-          )}
+          apiMessages={[
+            ...buildApiMessages(
+              systemPrompt,
+              scenario,
+              summary,
+              messages.slice(compactCutoff),
+              state,
+              context.stateCleanupChars,
+            ),
+            { role: 'user', content: TURN_REMINDER },
+          ]}
           tools={[UPDATE_STATE_TOOL]}
           sampling={sampling}
           onClose={() => setShowContext(false)}
@@ -753,7 +779,6 @@ function SettingsPanel({
 
   function resetDefaults() {
     setDraftSystem(DEFAULT_SYSTEM_PROMPT)
-    setDraftScenario(DEFAULT_SCENARIO)
     setDraftSampling({ ...DEFAULT_SAMPLING })
     setDraftContext({ ...DEFAULT_CONTEXT })
   }
@@ -953,6 +978,8 @@ interface StateViewerProps {
   context: ContextConfig
   onClose: () => void
   onResetState: () => void
+  onSaveState: (next: WorldState) => void
+  onSaveSummary: (next: string) => void
   onClearSummary: () => void
 }
 
@@ -962,8 +989,43 @@ function StateViewer({
   context,
   onClose,
   onResetState,
+  onSaveState,
+  onSaveSummary,
   onClearSummary,
 }: StateViewerProps) {
+  const [draft, setDraft] = useState(() => JSON.stringify(state, null, 2))
+  const [parseError, setParseError] = useState<string | null>(null)
+  const [summaryDraft, setSummaryDraft] = useState(summary)
+
+  useEffect(() => {
+    setDraft(JSON.stringify(state, null, 2))
+    setParseError(null)
+  }, [state])
+
+  useEffect(() => {
+    setSummaryDraft(summary)
+  }, [summary])
+
+  const currentJson = JSON.stringify(state, null, 2)
+  const stateDirty = draft !== currentJson
+  const summaryDirty = summaryDraft !== summary
+
+  function handleSave() {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(draft)
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : String(err))
+      return
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      setParseError('State must be a JSON object (e.g. { "scene": {...} }).')
+      return
+    }
+    setParseError(null)
+    onSaveState(parsed as WorldState)
+  }
+
   return (
     <div className="modal-backdrop">
       <div className="modal">
@@ -973,18 +1035,32 @@ function StateViewer({
         </div>
         <p className="hint">
           The DM maintains this JSON via an <code>update_state</code> tool after each turn.
-          It's sent to the model as a system message after the conversation history.
+          It's sent to the model as a system message after the conversation history. Edit
+          below and click <em>Save state</em> to override.
         </p>
-        <pre className="state-json">{JSON.stringify(state, null, 2)}</pre>
+        <textarea
+          className="state-json state-json-editor"
+          spellCheck={false}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        {parseError && <p className="error-text">{parseError}</p>}
 
         <h2>Chronicle summary</h2>
         <p className="hint">
           Auto-generated when history exceeds {context.triggerChars.toLocaleString()} chars;
           the oldest ~{context.prefixChars.toLocaleString()} chars are folded into this recap
           (target ~{context.summaryTargetChars.toLocaleString()} chars).
-          Current length: {summary.length.toLocaleString()} chars.
+          Current length: {summaryDraft.length.toLocaleString()} chars. Edit freely and
+          click <em>Save summary</em>.
         </p>
-        <pre className="state-json">{summary || '(no summary yet)'}</pre>
+        <textarea
+          className="state-json state-json-editor"
+          spellCheck={false}
+          value={summaryDraft}
+          onChange={(e) => setSummaryDraft(e.target.value)}
+          placeholder="(no summary yet)"
+        />
 
         <div className="modal-actions">
           <button
@@ -1006,6 +1082,12 @@ function StateViewer({
           </button>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
+          <button onClick={handleSave} disabled={!stateDirty}>
+            Save state
+          </button>
+          <button onClick={() => onSaveSummary(summaryDraft)} disabled={!summaryDirty}>
+            Save summary
+          </button>
         </div>
       </div>
     </div>
@@ -1293,7 +1375,7 @@ async function askDungeonMaster(
     // __XAI_MODEL__ is injected by Vite `define` — see vite.config.ts.
     const body: Record<string, unknown> = {
       model: __XAI_MODEL__,
-      messages: apiMessages,
+      messages: [...apiMessages, { role: 'user', content: TURN_REMINDER }],
       tools: [UPDATE_STATE_TOOL],
       stream: false,
     }
