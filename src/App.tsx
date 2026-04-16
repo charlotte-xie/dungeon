@@ -17,6 +17,25 @@ interface TurnSnapshot {
   input: string
 }
 
+interface SavedGame {
+  id: string
+  name: string
+  savedAt: number
+  slots: AdventureSlots
+  state: WorldState
+  summary: string
+  messages: Message[]
+  compactCutoff: number
+}
+
+const SAVE_FILE_MARKER = 'dm-save' as const
+
+interface SaveFile {
+  marker: typeof SAVE_FILE_MARKER
+  version: 1
+  save: SavedGame
+}
+
 type JsonValue =
   | string
   | number
@@ -35,64 +54,73 @@ break character.
 
 # Prose
 Write complete grammatical sentences throughout. Every sentence has a subject and a
-verb. Do not drop articles, auxiliary verbs, or conjunctions. Do not chain noun
-phrases with commas in place of clauses. Pacing comes from varying sentence and
-paragraph length — some paragraphs run one sentence, others run three or four — not
-from omitting words.
+verb, with all articles, auxiliaries, and conjunctions in place. Pacing comes from
+varying sentence and paragraph length — some paragraphs run one sentence, others
+three or four.
 
-Vary rhythm naturally: faster, tighter sentences during action or shock; longer,
+Vary rhythm naturally: tighter, faster sentences during action or shock; longer,
 more textured sentences when the world unfolds or a character reveals themselves.
 Uniform-length paragraphs feel mechanical; so does relentless brevity.
 
-Avoid recycled phrasings and reused metaphors. Check the chronicle, history, and
-state before reaching for a simile — if it has already appeared, find a new one.
+Each metaphor and turn of phrase is fresh. Before reaching for a simile, scan the
+chronicle, history, and state for it — if it has appeared, write something new.
 
 # Keep moving
 Every turn advances the scene. React to the player's action, then push forward:
 something happens, someone reacts, a pressure appears, a door opens or closes. If a
 moment is quiet, introduce a new element rather than lingering in stillness.
 
-Do NOT repeat scenes, revelations, NPC entrances, or lines that have already played.
-Revisit a prior beat only when the plot clearly justifies it (a deliberate callback,
-a return for a story reason, an NPC tracking the player) — and then add something
-new.
+Each scene, revelation, NPC entrance, and line is new ground. Revisit a prior beat
+only when the plot clearly justifies it — a deliberate callback, a return for a
+story reason, an NPC tracking the player — and bring something new to it.
 
-# Player autonomy
-Do NOT narrate the player's choices, speech, or thoughts. They control their
-character; you control the world and everyone else. Exception: mechanical
-follow-through on a decision they have already stated — "I climb" lets you narrate
-handholds or a slip. Substantive choices — fight or flee, what to say, which path,
-whether to trust — belong to the player. When in doubt, stop before the choice and
-let the situation demand it.
+# Authorship
+The player authors one character: their thoughts, speech, and substantive choices
+(whether to fight, what to say, which path, whom to trust). You author everything
+else — NPCs, animals, weather, the world, and the consequences of the player's
+actions. When the player commits to a course in their input, narrate the mechanical
+follow-through ("I climb" lets you describe handholds, slips, the view above). When
+they have not committed, stop short and let the situation press them for a choice.
 
-You author NPCs, animals, weather, and the world fully. Never ask the player what an
-NPC does, says, thinks, or feels — decide it yourself and narrate it. The player
-never controls anyone but their own character. If the scene needs tension, create it
-through what the NPC chooses on their own, not by asking the player to author it.
+Make NPC decisions yourself. NPCs act on their own goals, fears, and curiosity;
+they do not pause to ask the player what they should do, feel, or think. When the
+scene needs tension, deliver it through what an NPC chooses on their own — a hand
+to a weapon, an accusation, a turn for the door, a name dropped that the player
+should not have heard.
 
-NPCs must never enumerate the player's choices. No "do X or Y?", no "will you help
-or run?", no "fight or flee?" — those are the narrator's option list dressed as
-dialogue. NPC questions come from the NPC's own perspective and are either
-open-ended ("Who sent you?", "What did you see?") or pressing but singular ("Can I
-trust you?"). The player picks what to do; the NPC doesn't offer a multiple-choice
-menu.
+NPC questions, when they happen, are real questions the NPC wants answered for
+their own reasons — singular and in-character ("Who sent you?", "What did you see?",
+"Can I trust you?"). The Ending section's self-check applies: would the NPC ask
+this if the player did not exist? If not, rewrite as action or a different concern.
 
 # Ending each reply
-End on a narrated situation whose pressure demands the player's next action — a
-hand drifting toward a hilt, footsteps closing behind, an NPC's last line hanging
-in the air, a floor giving way underfoot. The stimulus lives in the fiction; the
-decision lives with the player. Let the moment itself ask the question.
+End on a *narrated stimulus* — a concrete thing happening in the world that makes
+the player's next action urgent and obvious they must take one. The stimulus lives
+in the fiction; the decision lives with the player. Let the moment itself demand a
+response.
 
-NEVER end with the narrator asking the player a direct question. No "What do you
-do?", "What's your next move?", "Do you draw your sword?", "Will you trust him?",
-"Do you step closer?", "Will you run or fight?". All of those are you asking the
-player to author the fiction — your job is to put the pressure in the world and
-let them respond. If you catch yourself writing a narrator-voice question, delete
-it and replace it with the thing happening that makes the question urgent.
+Endings can take many shapes — physical danger, intimate revelation, social
+pressure, an unsettling discovery, a sudden change of circumstance. The form
+should fit the present scene; the examples below are illustrative of *style and
+shape*, not a menu of recurring scenarios:
 
-An NPC asking a question *in dialogue* is fine ("Who sent you?", "Can I trust
-you?") — that's the NPC speaking in-world, not the narrator polling the player.
-The narrator never addresses the player.
+  - His blade is already half-drawn, eyes locked on yours. Two seconds, maybe less.
+  - On the upper shelf, between the ledgers — your father's signet ring, gone three
+    years. Still warm.
+  - "I told you what he did," she says, and waits. The room settles into her words.
+  - The bell across the harbour begins to toll. A wedding bell. You had forgotten
+    the date.
+
+The narrator does not address the player. If a sentence of yours ends with a
+question aimed at the player, delete it and replace it with the thing happening
+that makes the question urgent. Never present the player's next action as a choice
+to pick from, in any voice.
+
+An NPC question is fine when it is a real question the NPC wants answered for
+their own reasons — curiosity, suspicion, self-interest. A useful self-check:
+would the NPC say this line if the player did not exist? If the line only makes
+sense as a prompt aimed at the player, it is the narrator's option list in
+disguise — rewrite it as action or as a genuine NPC concern.
 
 # Continuity
 Remember locations, characters, items, injuries, and ongoing threats. When an
@@ -140,9 +168,63 @@ Use \`update_state\` with \`value=null\` (or the \`delete=[...]\` array for bulk
 cleanup) to remove keys that no longer belong. Treat the state as a working dashboard,
 not an archive.`
 
-const TURN_REMINDER = `(OOC: For your next reply — 1-5 paragraphs of clear, grammatical prose. Complete sentences, no dropped articles or fragments. You author NPCs, animals, and the world; never ask the player what an NPC does or feels. End on a narrated situation whose pressure forces the player's next move — NOT a narrator question. No "Do you...?", "Will you...?", "What do you do?". NPC dialogue questions are fine; narrator questions to the player are not.)`
+const TURN_REMINDER = `(OOC: For your next reply — 1-5 paragraphs of clear, grammatical prose, complete sentences. You author NPCs, animals, and the world. End on a narrated stimulus that fits the present scene: something said, done, discovered, revealed, or shifting that makes the player's next action urgent and obvious they must take one. The decision is the player's — never present it as a choice to pick from, in any voice. NPC questions, if any, must be things the NPC genuinely wants answered for their own reasons — not disguised option lists aimed at the player.)`
 
 const DEFAULT_SCENARIO = `A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.`
+
+const DEFAULT_STYLE_GUIDE = ''
+
+type SlotKey = 'scenario' | 'styleGuide'
+type AdventureSlots = Record<SlotKey, string>
+
+interface SlotDef {
+  key: SlotKey
+  label: string
+  header: string
+  framing: string
+  hint: string
+  placeholder: string
+  defaultValue: string
+  storageKey: string
+  rows: number
+}
+
+const ADVENTURE_SLOTS: SlotDef[] = [
+  {
+    key: 'scenario',
+    label: 'Scenario brief',
+    header: '# Scenario brief',
+    framing:
+      'The premise, setting, and tone for this adventure — the foundational frame for everything you narrate.',
+    hint: 'Premise, setting, and opening situation. Sets where and what the adventure is.',
+    placeholder: 'e.g. A lone adventurer arrives at the threshold of the Mouldering Vaults...',
+    defaultValue: DEFAULT_SCENARIO,
+    storageKey: 'dm.scenario',
+    rows: 5,
+  },
+  {
+    key: 'styleGuide',
+    label: 'Author style guide',
+    header: '# Author style guide',
+    framing:
+      'The author voice, genre, and prose register for this adventure. Apply throughout your narration in addition to the general prose rules above.',
+    hint: 'Voice, genre, prose register. Optional but powerful — sets the feel of the writing.',
+    placeholder: 'e.g. Gritty urban noir; sparse, elliptical dialogue; present tense; no purple prose.',
+    defaultValue: DEFAULT_STYLE_GUIDE,
+    storageKey: 'dm.styleGuide',
+    rows: 4,
+  },
+]
+
+function defaultSlots(): AdventureSlots {
+  const out = {} as AdventureSlots
+  for (const def of ADVENTURE_SLOTS) out[def.key] = def.defaultValue
+  return out
+}
+
+function buildSlotMessage(def: SlotDef, value: string): string {
+  return `${def.header}\n\n${def.framing}\n\n${value}`
+}
 
 const DEFAULT_STATE: WorldState = {
   scene: { location: '', time: '', mood: '' },
@@ -159,51 +241,93 @@ const DEFAULT_STATE: WorldState = {
 }
 
 function buildSummarizerPrompt(targetChars: number): string {
-  return `You are an archivist whose sole responsibility is to summarize the early part
-of an ongoing roleplaying-game storyline, so the Dungeon Master can keep narrating
-without re-reading every prior turn.
+  const maxChars = Math.ceil(targetChars * 1.5)
+  return `You are an archivist whose sole responsibility is to produce a unified
+retelling of an ongoing roleplaying-game storyline, so the Dungeon Master can keep
+narrating without re-reading every prior turn.
 
 You will be given (1) the rules the DM operates under, (2) the scenario brief, (3) any
-existing summary of even earlier events, and (4) a chronicle of in-character exchanges
-between the DM and the player.
+existing summary of earlier events, and (4) a chronicle of in-character exchanges
+between the DM and the player. Produce a SINGLE UNIFIED RETELLING that merges the
+existing summary (if any) with the new chronicle into one continuous account of the
+story so far. Together your output replaces both inputs.
 
-Produce a SINGLE UNIFIED RECAP that merges the existing summary (if any) with the new
-chronicle. The existing summary has already been compressed once; you may compress it
-further to stay within the target length, but do not drop any material fact — its
-characters, items, injuries, promises, and unresolved threads must survive into the new
-recap. Together, your output replaces both the old summary and the supplied chronicle.
+# Style
+Write proper narrative English prose: past tense, third person, the voice of a
+chronicler recapping the tale. Every sentence is complete and grammatical, with
+subject, verb, and all articles, auxiliaries, prepositions, and conjunctions in place.
+Sentences flow into one another. The retelling reads as a continuous story-so-far —
+not a list of facts, not a dossier, not bullet points.
 
-Preserve everything a future turn might need to stay consistent:
-  - Every plot point, decision, action, and consequence, in the order they happened.
-  - Every character introduced: their role, motivations, goals, current attitude toward
-    the player, and current whereabouts / status.
-  - Every location visited, item acquired or lost, injury sustained, promise made,
-    secret revealed, clue discovered, unresolved thread, and story flag set.
-  - The player character's current condition (position, clothes, inventory, injuries,
-    mood) at the end of the summarized period.
+# Tapered detail (most important)
+The retelling has DECREASING RESOLUTION as it recedes into the past. Distant events
+collapse into broad strokes — a single sentence or dependent clause for what was once
+a whole scene. Middle events get a sentence or two each. The most recent events fold
+in at finer detail, a few sentences per beat. By the end the reader should feel they
+have been told the whole tale, with the early acts in summary and the recent acts
+nearly in scene.
 
-Strip anything that does not change the story going forward: repeated atmosphere,
-redundant descriptions, flavor-only imagery, unsuccessful attempts that left no trace,
-and filler dialogue.
+Nothing important is dropped. Every character, thread, promise, injury, and decision
+that still shapes the plot survives into the new retelling. What changes between
+passes is the WORDS used to recount old events: with each compaction you re-tell the
+older material more tightly than it appeared in the previous summary, choosing
+phrasing that compresses without losing material consequence.
 
-Write in plain past-tense prose, third person, as a chronicler — not in character.
+When merging the existing summary with new chronicle: the existing summary is already
+shaped this way. Re-write its earlier sections more economically to make room; absorb
+the new chronicle as the most recent layer at fuller resolution; the result reads as
+one continuous retelling.
+
+A fragment of good retelling reads like this:
+
+  Long before, the party had fled the burning village and reached the abbey, where
+  the priest agreed to shelter them in exchange for a promise to recover his
+  brother's seal. Through the weeks that followed they crossed the marsh and lost
+  one of their number to fever, but eventually reached the river. There the priest
+  pressed the captain about the missing seal, and the captain refused to answer
+  until the camp was set; by nightfall those evasions had hardened into open
+  silence, and the priest noted a fresh tear in the captain's cloak.
+
+Notice how weeks of travel collapse into one sentence while the recent confrontation
+gets three. That is the shape.
+
+# Coverage at the right resolution
+Preserve everything a future turn might need to stay consistent — but at the
+resolution appropriate to its age:
+  - Plot points, decisions, actions, and consequences, in chronological order.
+  - Each character introduced: their role, motivations, current attitude toward the
+    player, and current whereabouts.
+  - Locations visited, items acquired or lost, injuries sustained, promises made,
+    secrets revealed, clues discovered, unresolved threads, and story flags set.
+  - The player character's current condition (position, clothes, inventory,
+    injuries, mood) at the end of the retelling.
+
+Older background may live in a single dependent clause ("after the abbey-priest's
+errand, …"); recent state should be precise.
+
+# Constraints
 Target total length: roughly ${targetChars.toLocaleString()} characters for the entire
-unified recap (not per section). Err on keeping important events. Do not pad, do not
-invent, do not foreshadow, do not summarize events that have not happened. Output the
-summary text only, with no preamble, headers, or meta commentary.`
+retelling. HARD MAXIMUM: ${maxChars.toLocaleString()} characters. If the merged content
+would exceed the maximum, COMPRESS THE OLDER SECTIONS FURTHER — re-tell early events
+in fewer words, condense multiple old beats into one summary sentence, prefer summary
+clauses over scene re-creation for distant material. Do not delete characters, threads,
+or material facts; re-tell them more tightly.
+
+Do not pad, invent, foreshadow, or summarize events that have not happened. Output
+the retelling text only — no preamble, headers, bullet markers, or meta commentary.`
 }
 
 interface ContextConfig {
   triggerChars: number
-  prefixChars: number
+  recentTailChars: number
   summaryTargetChars: number
   stateCleanupChars: number
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
-  triggerChars: 25_000,
-  prefixChars: 15_000,
-  summaryTargetChars: 5_000,
+  triggerChars: 5_000,
+  recentTailChars: 12_000,
+  summaryTargetChars: 4_000,
   stateCleanupChars: 10_000,
 }
 
@@ -220,19 +344,39 @@ const DEFAULT_SAMPLING: SamplingParams = {
 }
 
 const LS_SYSTEM = 'dm.systemPrompt'
-const LS_SCENARIO = 'dm.scenario'
 const LS_STATE = 'dm.state'
 const LS_SUMMARY = 'dm.summary'
 const LS_MESSAGES = 'dm.messages'
 const LS_SAMPLING = 'dm.sampling'
 const LS_CONTEXT = 'dm.context'
 const LS_COMPACT_CUTOFF = 'dm.compactCutoff'
+const LS_SAVES = 'dm.saves'
 
 function loadStored(key: string, fallback: string): string {
   try {
     return localStorage.getItem(key) ?? fallback
   } catch {
     return fallback
+  }
+}
+
+function loadStoredSlots(): AdventureSlots {
+  const out = {} as AdventureSlots
+  for (const def of ADVENTURE_SLOTS) {
+    out[def.key] = loadStored(def.storageKey, def.defaultValue)
+  }
+  return out
+}
+
+function persistSlots(slots: AdventureSlots) {
+  for (const def of ADVENTURE_SLOTS) {
+    try {
+      const v = slots[def.key]
+      if (v) localStorage.setItem(def.storageKey, v)
+      else localStorage.removeItem(def.storageKey)
+    } catch {
+      // ignore quota / disabled storage
+    }
   }
 }
 
@@ -288,12 +432,88 @@ function loadStoredCompactCutoff(): number {
   }
 }
 
+function loadStoredSaves(): SavedGame[] {
+  try {
+    const raw = localStorage.getItem(LS_SAVES)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isSavedGame).map(normalizeSavedGame)
+  } catch {
+    return []
+  }
+}
+
+function persistSaves(saves: SavedGame[]) {
+  try {
+    localStorage.setItem(LS_SAVES, JSON.stringify(saves))
+  } catch {
+    // ignore quota / disabled storage
+  }
+}
+
+function makeSaveId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function isSavedGame(v: unknown): v is SavedGame {
+  if (!v || typeof v !== 'object') return false
+  const s = v as Record<string, unknown>
+  const hasNewSlots =
+    typeof s.slots === 'object' && s.slots !== null && !Array.isArray(s.slots)
+  const hasOldScenario = typeof s.scenario === 'string'
+  return (
+    typeof s.id === 'string' &&
+    typeof s.name === 'string' &&
+    typeof s.savedAt === 'number' &&
+    (hasNewSlots || hasOldScenario) &&
+    typeof s.summary === 'string' &&
+    typeof s.compactCutoff === 'number' &&
+    Array.isArray(s.messages) &&
+    typeof s.state === 'object' &&
+    s.state !== null &&
+    !Array.isArray(s.state)
+  )
+}
+
+function normalizeSavedGame(raw: SavedGame): SavedGame {
+  const legacy = raw as SavedGame & { scenario?: string }
+  const incoming: Partial<AdventureSlots> = (legacy.slots as Partial<AdventureSlots> | undefined) ?? {}
+  const slots = { ...defaultSlots(), ...incoming }
+  if (legacy.scenario && !incoming.scenario) {
+    slots.scenario = legacy.scenario
+  }
+  const { scenario: _legacyScenario, ...rest } = legacy
+  void _legacyScenario
+  return { ...rest, slots }
+}
+
 function loadStoredContext(): ContextConfig {
   try {
     const raw = localStorage.getItem(LS_CONTEXT)
     if (!raw) return { ...DEFAULT_CONTEXT }
-    const parsed = JSON.parse(raw) as Partial<ContextConfig>
-    return { ...DEFAULT_CONTEXT, ...parsed }
+    const parsed = JSON.parse(raw) as Partial<ContextConfig> & { prefixChars?: number }
+    const recentTail =
+      typeof parsed.recentTailChars === 'number'
+        ? parsed.recentTailChars
+        : typeof parsed.prefixChars === 'number'
+          ? parsed.prefixChars
+          : DEFAULT_CONTEXT.recentTailChars
+    let trigger =
+      typeof parsed.triggerChars === 'number' ? parsed.triggerChars : DEFAULT_CONTEXT.triggerChars
+    if (trigger > 15_000) trigger = DEFAULT_CONTEXT.triggerChars
+    return {
+      triggerChars: trigger,
+      recentTailChars: recentTail,
+      summaryTargetChars:
+        typeof parsed.summaryTargetChars === 'number'
+          ? parsed.summaryTargetChars
+          : DEFAULT_CONTEXT.summaryTargetChars,
+      stateCleanupChars:
+        typeof parsed.stateCleanupChars === 'number'
+          ? parsed.stateCleanupChars
+          : DEFAULT_CONTEXT.stateCleanupChars,
+    }
   } catch {
     return { ...DEFAULT_CONTEXT }
   }
@@ -342,7 +562,7 @@ function App() {
   const [systemPrompt, setSystemPrompt] = useState(() =>
     loadStored(LS_SYSTEM, DEFAULT_SYSTEM_PROMPT),
   )
-  const [scenario, setScenario] = useState(() => loadStored(LS_SCENARIO, DEFAULT_SCENARIO))
+  const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
   const [summary, setSummary] = useState<string>(() => loadStored(LS_SUMMARY, ''))
   const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages())
@@ -356,6 +576,8 @@ function App() {
   const [showState, setShowState] = useState(false)
   const [showContext, setShowContext] = useState(false)
   const [showNewAdventure, setShowNewAdventure] = useState(false)
+  const [showSaves, setShowSaves] = useState(false)
+  const [saves, setSaves] = useState<SavedGame[]>(() => loadStoredSaves())
   const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -379,6 +601,11 @@ function App() {
     persistState(next)
   }
 
+  function commitSlots(next: AdventureSlots) {
+    setSlots(next)
+    persistSlots(next)
+  }
+
   function commitSummary(next: string) {
     setSummary(next)
     try {
@@ -399,6 +626,95 @@ function App() {
     }
   }
 
+  function commitSaves(next: SavedGame[]) {
+    setSaves(next)
+    persistSaves(next)
+  }
+
+  function saveCurrentGame(name: string) {
+    const entry: SavedGame = {
+      id: makeSaveId(),
+      name: name.trim() || 'Untitled save',
+      savedAt: Date.now(),
+      slots: { ...slots },
+      state: structuredClone(state),
+      summary,
+      messages,
+      compactCutoff,
+    }
+    commitSaves([entry, ...saves])
+  }
+
+  function loadSavedGame(id: string) {
+    const target = saves.find((s) => s.id === id)
+    if (!target) return
+    if (
+      (messages.length > 0 || summary) &&
+      !confirm('Load this save? Your current adventure will be replaced.')
+    ) {
+      return
+    }
+    abortRef.current?.abort()
+    setThinking(false)
+    setSnapshot(null)
+    commitSlots({ ...defaultSlots(), ...target.slots })
+    commitState(structuredClone(target.state))
+    commitSummary(target.summary)
+    setMessages(target.messages)
+    commitCompactCutoff(target.compactCutoff)
+    setShowSaves(false)
+  }
+
+  function deleteSavedGame(id: string) {
+    const target = saves.find((s) => s.id === id)
+    if (!target) return
+    if (!confirm(`Delete "${target.name}"? This cannot be undone.`)) return
+    commitSaves(saves.filter((s) => s.id !== id))
+  }
+
+  function exportSavedGame(id: string) {
+    const target = saves.find((s) => s.id === id)
+    if (!target) return
+    const payload: SaveFile = { marker: SAVE_FILE_MARKER, version: 1, save: target }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const slug = target.name.replace(/[^a-z0-9-_]+/gi, '_').slice(0, 40) || 'save'
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${slug}.dm-save.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  async function importSavedGame(file: File) {
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text) as unknown
+      let save: SavedGame | null = null
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (parsed as { marker?: unknown }).marker === SAVE_FILE_MARKER &&
+        isSavedGame((parsed as { save?: unknown }).save)
+      ) {
+        save = (parsed as SaveFile).save
+      } else if (isSavedGame(parsed)) {
+        save = parsed
+      }
+      if (!save) {
+        alert('That file is not a valid Dungeon Master save.')
+        return
+      }
+      const normalized = normalizeSavedGame(save)
+      const entry: SavedGame = { ...normalized, id: makeSaveId(), savedAt: Date.now() }
+      commitSaves([entry, ...saves])
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   async function runTurn(
     pendingMessages: Message[],
     baseState: WorldState,
@@ -413,23 +729,23 @@ function App() {
     try {
       let workingSummary = baseSummary
       let workingCutoff = baseCutoff
-      if (
-        totalChars(
-          systemPrompt,
-          scenario,
-          workingSummary,
-          baseState,
-          pendingMessages.slice(workingCutoff),
-        ) > context.triggerChars
-      ) {
+      const proposedCutoff = findCompactionCutoff(
+        pendingMessages,
+        workingCutoff,
+        context.recentTailChars,
+      )
+      const wouldFoldChars = pendingMessages
+        .slice(workingCutoff, proposedCutoff)
+        .reduce((n, m) => n + m.text.length, 0)
+      if (wouldFoldChars >= context.triggerChars) {
         setStatusText('Compacting chronicle…')
         const compacted = await compactHistory(
           systemPrompt,
-          scenario,
+          slots,
           workingSummary,
           pendingMessages,
           workingCutoff,
-          context.prefixChars,
+          context.recentTailChars,
           context.summaryTargetChars,
           controller.signal,
         )
@@ -442,7 +758,7 @@ function App() {
 
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
-        scenario,
+        slots,
         workingSummary,
         pendingMessages.slice(workingCutoff),
         baseState,
@@ -502,6 +818,47 @@ function App() {
     setSnapshot(null)
   }
 
+  async function compactNow() {
+    if (thinking) return
+    const proposedCutoff = findCompactionCutoff(
+      messages,
+      compactCutoff,
+      context.recentTailChars,
+    )
+    const wouldFold = proposedCutoff > compactCutoff
+    const summaryOverTarget = summary.length > Math.ceil(context.summaryTargetChars * 1.2)
+    if (!wouldFold && !summaryOverTarget) {
+      alert('Nothing to compact: chronicle is up to date and within target length.')
+      return
+    }
+    setThinking(true)
+    setStatusText(wouldFold ? 'Compacting chronicle…' : 'Re-compressing chronicle…')
+    const controller = new AbortController()
+    abortRef.current = controller
+    try {
+      const compacted = await compactHistory(
+        systemPrompt,
+        slots,
+        summary,
+        messages,
+        compactCutoff,
+        context.recentTailChars,
+        context.summaryTargetChars,
+        controller.signal,
+        true,
+      )
+      commitSummary(compacted.summary)
+      commitCompactCutoff(compacted.cutoff)
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
+      setThinking(false)
+    }
+  }
+
   async function retry() {
     if (thinking || !snapshot) return
     const snap = snapshot
@@ -526,17 +883,16 @@ function App() {
 
   function saveSettings(
     nextSystem: string,
-    nextScenario: string,
+    nextSlots: AdventureSlots,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
   ) {
     setSystemPrompt(nextSystem)
-    setScenario(nextScenario)
+    commitSlots(nextSlots)
     setSampling(nextSampling)
     setContext(nextContext)
     try {
       localStorage.setItem(LS_SYSTEM, nextSystem)
-      localStorage.setItem(LS_SCENARIO, nextScenario)
       localStorage.setItem(LS_SAMPLING, JSON.stringify(nextSampling))
       localStorage.setItem(LS_CONTEXT, JSON.stringify(nextContext))
     } catch {
@@ -544,17 +900,11 @@ function App() {
     }
   }
 
-  async function newAdventure(scenarioOverride: string) {
-    const briefRaw = scenarioOverride.trim()
-    if (!briefRaw) return
-    if (briefRaw !== scenario) {
-      setScenario(briefRaw)
-      try {
-        localStorage.setItem(LS_SCENARIO, briefRaw)
-      } catch {
-        // ignore quota / disabled storage
-      }
-    }
+  async function newAdventure(slotsOverride: AdventureSlots) {
+    const nextSlots: AdventureSlots = { ...slots, ...slotsOverride }
+    nextSlots.scenario = nextSlots.scenario.trim()
+    if (!nextSlots.scenario) return
+    commitSlots(nextSlots)
     abortRef.current?.abort()
     setInput('')
     setMessages([])
@@ -571,13 +921,13 @@ function App() {
       {
         id: 'bootstrap',
         role: 'player',
-        text: `(OOC: Begin a new adventure. Scenario brief — ${briefRaw}\n\nPopulate the initial world state with scene/location/mood, the player's starting condition, any NPCs present at the start, and their goals. Then narrate the opening scene in 2-4 short paragraphs, in character as the DM. Do not reference this OOC message; just begin.)`,
+        text: `(OOC: Begin a new adventure. Scenario brief — ${nextSlots.scenario}\n\nPopulate the initial world state with scene/location/mood, the player's starting condition, any NPCs present at the start, and their goals. Then narrate the opening scene in 2-4 short paragraphs, in character as the DM. Do not reference this OOC message; just begin.)`,
       },
     ]
     try {
       const { text: reply, state: nextState } = await askDungeonMaster(
         systemPrompt,
-        briefRaw,
+        nextSlots,
         '',
         bootstrap,
         freshState,
@@ -614,6 +964,17 @@ function App() {
             title="Start a new adventure — confirm or edit the scenario brief"
           >
             New Adventure
+          </button>
+          <button
+            className="ghost"
+            onClick={() => void compactNow()}
+            disabled={thinking || messages.length - compactCutoff <= 1}
+            title="Fold older turns into the chronicle summary now"
+          >
+            Compact
+          </button>
+          <button className="ghost" onClick={() => setShowSaves(true)}>
+            Saves
           </button>
           <button className="ghost" onClick={() => setShowContext(true)}>
             Context
@@ -682,7 +1043,7 @@ function App() {
       {showSettings && (
         <SettingsPanel
           systemPrompt={systemPrompt}
-          scenario={scenario}
+          slots={slots}
           sampling={sampling}
           context={context}
           onClose={() => setShowSettings(false)}
@@ -709,7 +1070,7 @@ function App() {
           apiMessages={[
             ...buildApiMessages(
               systemPrompt,
-              scenario,
+              slots,
               summary,
               messages.slice(compactCutoff),
               state,
@@ -724,13 +1085,26 @@ function App() {
       )}
       {showNewAdventure && (
         <NewAdventurePrompt
-          scenario={scenario}
+          slots={slots}
           inProgress={messages.length > 0}
           onCancel={() => setShowNewAdventure(false)}
-          onBegin={(brief) => {
+          onBegin={(nextSlots) => {
             setShowNewAdventure(false)
-            void newAdventure(brief)
+            void newAdventure(nextSlots)
           }}
+        />
+      )}
+      {showSaves && (
+        <SavesPanel
+          saves={saves}
+          canSave={messages.length > 0}
+          turnCount={messages.length}
+          onClose={() => setShowSaves(false)}
+          onSave={saveCurrentGame}
+          onLoad={loadSavedGame}
+          onDelete={deleteSavedGame}
+          onExport={exportSavedGame}
+          onImport={importSavedGame}
         />
       )}
     </main>
@@ -739,13 +1113,13 @@ function App() {
 
 interface SettingsPanelProps {
   systemPrompt: string
-  scenario: string
+  slots: AdventureSlots
   sampling: SamplingParams
   context: ContextConfig
   onClose: () => void
   onSave: (
     systemPrompt: string,
-    scenario: string,
+    slots: AdventureSlots,
     sampling: SamplingParams,
     context: ContextConfig,
   ) => void
@@ -753,16 +1127,20 @@ interface SettingsPanelProps {
 
 function SettingsPanel({
   systemPrompt,
-  scenario,
+  slots,
   sampling,
   context,
   onClose,
   onSave,
 }: SettingsPanelProps) {
   const [draftSystem, setDraftSystem] = useState(systemPrompt)
-  const [draftScenario, setDraftScenario] = useState(scenario)
+  const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
+
+  function setSlotField(key: SlotKey, value: string) {
+    setDraftSlots((s) => ({ ...s, [key]: value }))
+  }
 
   function setSamplingField<K extends keyof SamplingParams>(key: K, value: number) {
     setDraftSampling((s) => ({ ...s, [key]: value }))
@@ -773,7 +1151,9 @@ function SettingsPanel({
   }
 
   function save() {
-    onSave(draftSystem.trim(), draftScenario.trim(), draftSampling, draftContext)
+    const trimmed = {} as AdventureSlots
+    for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
+    onSave(draftSystem.trim(), trimmed, draftSampling, draftContext)
     onClose()
   }
 
@@ -798,15 +1178,18 @@ function SettingsPanel({
             rows={10}
           />
         </label>
-        <label>
-          <span>Scenario brief</span>
-          <textarea
-            value={draftScenario}
-            onChange={(e) => setDraftScenario(e.target.value)}
-            rows={5}
-            placeholder="Setting, tone, and premise — the DM will narrate the opening scene from this."
-          />
-        </label>
+        {ADVENTURE_SLOTS.map((def) => (
+          <label key={def.key}>
+            <span>{def.label}</span>
+            <textarea
+              value={draftSlots[def.key] ?? ''}
+              onChange={(e) => setSlotField(def.key, e.target.value)}
+              rows={def.rows}
+              placeholder={def.placeholder}
+            />
+            <small className="hint">{def.hint}</small>
+          </label>
+        ))}
 
         <div className="sampling-grid">
           <label className="sampling-field">
@@ -849,32 +1232,33 @@ function SettingsPanel({
 
         <div className="sampling-grid">
           <label className="sampling-field">
+            <span>Recent tail (chars)</span>
+            <input
+              type="number"
+              min={2000}
+              step={1000}
+              value={draftContext.recentTailChars}
+              onChange={(e) => setContextField('recentTailChars', Number(e.target.value))}
+            />
+            <small>
+              Recent message text always kept live (uncompacted). Older turns past
+              this tail are eligible for folding into the chronicle. Default{' '}
+              {DEFAULT_CONTEXT.recentTailChars.toLocaleString()}.
+            </small>
+          </label>
+          <label className="sampling-field">
             <span>Compact trigger (chars)</span>
             <input
               type="number"
-              min={5000}
-              step={1000}
+              min={500}
+              step={500}
               value={draftContext.triggerChars}
               onChange={(e) => setContextField('triggerChars', Number(e.target.value))}
             />
             <small>
-              Compaction fires when summary + history exceeds this. Default{' '}
+              Compaction fires when this much older-than-tail material has piled
+              up since the last fold. Default{' '}
               {DEFAULT_CONTEXT.triggerChars.toLocaleString()}.
-            </small>
-          </label>
-          <label className="sampling-field">
-            <span>Prefix to compress (chars)</span>
-            <input
-              type="number"
-              min={1000}
-              step={1000}
-              value={draftContext.prefixChars}
-              onChange={(e) => setContextField('prefixChars', Number(e.target.value))}
-            />
-            <small>
-              Upper bound on chars folded into the summary per compaction — never
-              more than half the remaining messages by count. Default{' '}
-              {DEFAULT_CONTEXT.prefixChars.toLocaleString()}.
             </small>
           </label>
           <label className="sampling-field">
@@ -928,15 +1312,25 @@ function SettingsPanel({
 }
 
 interface NewAdventurePromptProps {
-  scenario: string
+  slots: AdventureSlots
   inProgress: boolean
   onCancel: () => void
-  onBegin: (scenario: string) => void
+  onBegin: (slots: AdventureSlots) => void
 }
 
-function NewAdventurePrompt({ scenario, inProgress, onCancel, onBegin }: NewAdventurePromptProps) {
-  const [draft, setDraft] = useState(scenario)
-  const trimmed = draft.trim()
+function NewAdventurePrompt({ slots, inProgress, onCancel, onBegin }: NewAdventurePromptProps) {
+  const [drafts, setDrafts] = useState<AdventureSlots>(() => ({ ...slots }))
+  const scenarioReady = (drafts.scenario ?? '').trim().length > 0
+
+  function setSlotField(key: SlotKey, value: string) {
+    setDrafts((d) => ({ ...d, [key]: value }))
+  }
+
+  function begin() {
+    const trimmed = {} as AdventureSlots
+    for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (drafts[def.key] ?? '').trim()
+    onBegin(trimmed)
+  }
 
   return (
     <div className="modal-backdrop">
@@ -950,20 +1344,23 @@ function NewAdventurePrompt({ scenario, inProgress, onCancel, onBegin }: NewAdve
             ? 'This will end the current adventure and start a fresh one. The DM will narrate the opening from the brief below.'
             : 'The DM will narrate the opening from the brief below.'}
         </p>
-        <label>
-          <span>Scenario brief</span>
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={6}
-            placeholder="Setting, tone, and premise."
-            autoFocus
-          />
-        </label>
+        {ADVENTURE_SLOTS.map((def, i) => (
+          <label key={def.key}>
+            <span>{def.label}</span>
+            <textarea
+              value={drafts[def.key] ?? ''}
+              onChange={(e) => setSlotField(def.key, e.target.value)}
+              rows={def.rows}
+              placeholder={def.placeholder}
+              autoFocus={i === 0}
+            />
+            <small className="hint">{def.hint}</small>
+          </label>
+        ))}
         <div className="modal-actions">
           <span className="spacer" />
           <button className="ghost" onClick={onCancel}>Cancel</button>
-          <button onClick={() => onBegin(trimmed)} disabled={!trimmed}>
+          <button onClick={begin} disabled={!scenarioReady}>
             Begin Adventure
           </button>
         </div>
@@ -1048,9 +1445,10 @@ function StateViewer({
 
         <h2>Chronicle summary</h2>
         <p className="hint">
-          Auto-generated when history exceeds {context.triggerChars.toLocaleString()} chars;
-          the oldest ~{context.prefixChars.toLocaleString()} chars are folded into this recap
-          (target ~{context.summaryTargetChars.toLocaleString()} chars).
+          Auto-generated when at least {context.triggerChars.toLocaleString()} chars of
+          older-than-tail history have accumulated; older turns are folded into this recap
+          (target ~{context.summaryTargetChars.toLocaleString()} chars), while the most
+          recent ~{context.recentTailChars.toLocaleString()} chars of message text stay live.
           Current length: {summaryDraft.length.toLocaleString()} chars. Edit freely and
           click <em>Save summary</em>.
         </p>
@@ -1088,6 +1486,130 @@ function StateViewer({
           <button onClick={() => onSaveSummary(summaryDraft)} disabled={!summaryDirty}>
             Save summary
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface SavesPanelProps {
+  saves: SavedGame[]
+  canSave: boolean
+  turnCount: number
+  onClose: () => void
+  onSave: (name: string) => void
+  onLoad: (id: string) => void
+  onDelete: (id: string) => void
+  onExport: (id: string) => void
+  onImport: (file: File) => void
+}
+
+function formatRelative(ts: number): string {
+  const diffMs = Date.now() - ts
+  const sec = Math.max(0, Math.floor(diffMs / 1000))
+  if (sec < 60) return 'just now'
+  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`
+  if (sec < 86400) return `${Math.floor(sec / 3600)} hr ago`
+  const days = Math.floor(sec / 86400)
+  if (days < 14) return `${days}d ago`
+  return new Date(ts).toLocaleDateString()
+}
+
+function SavesPanel({
+  saves,
+  canSave,
+  turnCount,
+  onClose,
+  onSave,
+  onLoad,
+  onDelete,
+  onExport,
+  onImport,
+}: SavesPanelProps) {
+  const [name, setName] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handleSave() {
+    onSave(name)
+    setName('')
+  }
+
+  function handleImportClick() {
+    fileRef.current?.click()
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) onImport(file)
+    e.target.value = ''
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>Saved games</h2>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+        </div>
+
+        <h3 className="saves-subhead">Save current game</h3>
+        <p className="hint">
+          {canSave
+            ? `Snapshot scenario, style, chronicle, state, and all ${turnCount} turn${turnCount === 1 ? '' : 's'} under a short label.`
+            : 'Start an adventure first — there is nothing to save yet.'}
+        </p>
+        <div className="saves-save-row">
+          <input
+            type="text"
+            placeholder="Brief summary — e.g. Before the crypt fight"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canSave) handleSave()
+            }}
+            disabled={!canSave}
+          />
+          <button onClick={handleSave} disabled={!canSave}>
+            Save current
+          </button>
+        </div>
+
+        <h3 className="saves-subhead">Saved ({saves.length})</h3>
+        {saves.length === 0 ? (
+          <p className="hint">No saved games yet.</p>
+        ) : (
+          <div className="saves-list">
+            {saves.map((s) => (
+              <div key={s.id} className="saves-item">
+                <div className="saves-item-head">
+                  <span className="saves-item-name">{s.name}</span>
+                  <span className="saves-item-meta">
+                    {s.messages.length} turn{s.messages.length === 1 ? '' : 's'} · {formatRelative(s.savedAt)}
+                  </span>
+                </div>
+                <div className="saves-item-actions">
+                  <button onClick={() => onLoad(s.id)}>Load</button>
+                  <button className="ghost" onClick={() => onExport(s.id)}>Export</button>
+                  <button className="ghost" onClick={() => onDelete(s.id)}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button className="ghost" onClick={handleImportClick}>
+            Import from file…
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <span className="spacer" />
+          <button onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -1191,39 +1713,23 @@ const UPDATE_STATE_TOOL = {
   },
 }
 
-function totalChars(
-  systemPrompt: string,
-  scenario: string,
-  summary: string,
-  state: WorldState,
-  messages: Message[],
-): number {
-  return (
-    systemPrompt.length +
-    scenario.length +
-    summary.length +
-    STATE_RULES.length +
-    JSON.stringify(state).length +
-    messages.reduce((n, m) => n + m.text.length, 0)
-  )
-}
-
 function findCompactionCutoff(
   messages: Message[],
-  startIndex: number,
-  targetChars: number,
+  priorCutoff: number,
+  recentTailChars: number,
 ): number {
-  const remaining = messages.length - startIndex
-  if (remaining <= 1) return startIndex
-  const halfCount = Math.max(1, Math.floor(remaining / 2))
+  // Walk backwards from the end accumulating text. The new cutoff is the
+  // earliest message index whose tail [index..end] still contains at least
+  // recentTailChars of message text — guaranteeing the live tail survives.
+  // Anything before the cutoff is foldable into the chronicle summary.
   let acc = 0
-  let cut = startIndex
-  for (let i = startIndex; i < startIndex + halfCount; i++) {
+  for (let i = messages.length - 1; i >= 0; i--) {
     acc += messages[i].text.length
-    cut = i + 1
-    if (acc >= targetChars) break
+    if (acc >= recentTailChars) {
+      return Math.max(priorCutoff, i)
+    }
   }
-  return cut
+  return priorCutoff
 }
 
 function buildStateSystemMessage(
@@ -1243,19 +1749,17 @@ function buildStateSystemMessage(
 
 function buildApiMessagesIndexed(
   systemPrompt: string,
-  scenario: string,
+  slots: AdventureSlots,
   summary: string,
   history: Message[],
   currentState: WorldState,
   stateCleanupThreshold: number,
 ): { messages: ApiMessage[]; stateIndex: number } {
-  const scenarioTrimmed = scenario.trim()
   const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt }]
-  if (scenarioTrimmed) {
-    messages.push({
-      role: 'system',
-      content: `# Scenario brief\n\nThe premise, setting, and tone for this adventure — the foundational frame for everything you narrate.\n\n${scenarioTrimmed}`,
-    })
+  for (const def of ADVENTURE_SLOTS) {
+    const value = (slots[def.key] ?? '').trim()
+    if (!value) continue
+    messages.push({ role: 'system', content: buildSlotMessage(def, value) })
   }
   if (summary) {
     messages.push({
@@ -1273,7 +1777,7 @@ function buildApiMessagesIndexed(
 
 function buildApiMessages(
   systemPrompt: string,
-  scenario: string,
+  slots: AdventureSlots,
   summary: string,
   history: Message[],
   currentState: WorldState,
@@ -1281,7 +1785,7 @@ function buildApiMessages(
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
     systemPrompt,
-    scenario,
+    slots,
     summary,
     history,
     currentState,
@@ -1291,30 +1795,44 @@ function buildApiMessages(
 
 async function compactHistory(
   systemPrompt: string,
-  scenario: string,
+  slots: AdventureSlots,
   priorSummary: string,
   messages: Message[],
   priorCutoff: number,
-  prefixChars: number,
+  recentTailChars: number,
   summaryTargetChars: number,
   signal: AbortSignal,
+  allowRewrite = false,
 ): Promise<{ summary: string; cutoff: number }> {
-  const newCutoff = findCompactionCutoff(messages, priorCutoff, prefixChars)
-  if (newCutoff <= priorCutoff) return { summary: priorSummary, cutoff: priorCutoff }
-  const toSummarize = messages.slice(priorCutoff, newCutoff)
+  const slotsBlock = ADVENTURE_SLOTS.map((def) => {
+    const v = (slots[def.key] ?? '').trim()
+    return v ? `${def.label}:\n\n${v}` : ''
+  })
+    .filter(Boolean)
+    .join('\n\n')
+  const newCutoff = findCompactionCutoff(messages, priorCutoff, recentTailChars)
+  const hasNew = newCutoff > priorCutoff
+  if (!hasNew && !(allowRewrite && priorSummary)) {
+    return { summary: priorSummary, cutoff: priorCutoff }
+  }
 
+  const toSummarize = hasNew ? messages.slice(priorCutoff, newCutoff) : []
   const chronicle = toSummarize
     .map((m) => `${m.role === 'dm' ? 'DM' : 'PLAYER'}: ${m.text}`)
     .join('\n\n')
 
-  const userContent =
-    `DM system prompt (rules the narrator follows):\n\n${systemPrompt}\n\n` +
-    `Scenario brief:\n\n${scenario}\n\n` +
-    (priorSummary
-      ? `Existing summary of even earlier events (merge and further compress as needed):\n\n${priorSummary}\n\n`
-      : '') +
-    `Chronicle to fold in (in order):\n\n${chronicle}\n\n` +
-    `Now write the unified recap.`
+  const userContent = hasNew
+    ? `DM system prompt (rules the narrator follows):\n\n${systemPrompt}\n\n` +
+      `${slotsBlock}\n\n` +
+      (priorSummary
+        ? `Existing retelling of earlier events (merge in and re-tell more tightly as needed):\n\n${priorSummary}\n\n`
+        : '') +
+      `Chronicle to fold in (in order):\n\n${chronicle}\n\n` +
+      `Now write the unified retelling.`
+    : `DM system prompt (rules the narrator follows):\n\n${systemPrompt}\n\n` +
+      `${slotsBlock}\n\n` +
+      `Existing retelling to RE-COMPRESS — there is no new chronicle to fold in this pass. Re-tell the same material more tightly so the result fits within the target length. Preserve every character, thread, and material fact; the early sections in particular should collapse further.\n\n${priorSummary}\n\n` +
+      `Now write the re-compressed retelling.`
 
   const apiMessages: ApiMessage[] = [
     { role: 'system', content: buildSummarizerPrompt(summaryTargetChars) },
@@ -1341,8 +1859,8 @@ async function compactHistory(
     choices?: { message?: { content?: string } }[]
   }
   const content = data.choices?.[0]?.message?.content?.trim()
-  if (!content) throw new Error('Summarizer returned empty recap')
-  return { summary: content, cutoff: newCutoff }
+  if (!content) throw new Error('Summarizer returned empty retelling')
+  return { summary: content, cutoff: hasNew ? newCutoff : priorCutoff }
 }
 
 function modelSupportsSampling(model: string): boolean {
@@ -1352,7 +1870,7 @@ function modelSupportsSampling(model: string): boolean {
 
 async function askDungeonMaster(
   systemPrompt: string,
-  scenario: string,
+  slots: AdventureSlots,
   summary: string,
   history: Message[],
   initialState: WorldState,
@@ -1363,7 +1881,7 @@ async function askDungeonMaster(
   let currentState = initialState
   const { messages: apiMessages, stateIndex } = buildApiMessagesIndexed(
     systemPrompt,
-    scenario,
+    slots,
     summary,
     history,
     currentState,
