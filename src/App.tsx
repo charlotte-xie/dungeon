@@ -907,7 +907,7 @@ function App() {
               state,
               context.stateCleanupChars,
             ),
-            { role: 'user', content: TURN_REMINDER },
+            { role: 'system', content: TURN_REMINDER },
           ]}
           tools={[UPDATE_STATE_TOOL]}
           sampling={sampling}
@@ -1729,7 +1729,7 @@ async function askDungeonMaster(
     // __XAI_MODEL__ is injected by Vite `define` — see vite.config.ts.
     const body: Record<string, unknown> = {
       model: __XAI_MODEL__,
-      messages: [...apiMessages, { role: 'user', content: TURN_REMINDER }],
+      messages: [...apiMessages, { role: 'system', content: TURN_REMINDER }],
       tools: [UPDATE_STATE_TOOL],
       stream: false,
     }
