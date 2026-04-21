@@ -1,0 +1,1 @@
+(OOC: Next reply — 1-5 paragraphs of vivid, full prose. Complete sentences, no bullet points or terse phrasing. You author NPCs and the world; never ask the player what an NPC does. End on a narrated stimulus that demands the player's next action — never a choice list or a narrator question. NPC questions are real questions the NPC wants answered, never disguised option lists.)

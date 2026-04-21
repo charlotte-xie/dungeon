@@ -1,5 +1,13 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
+import {
+  DEFAULT_SCENARIO,
+  DEFAULT_SYSTEM_PROMPT,
+  TURN_REMINDER,
+  buildNewAdventureBootstrap,
+  buildStateRules,
+  buildSummarizerPrompt,
+} from './prompts'
 
 type Role = 'dm' | 'player'
 
@@ -47,120 +55,7 @@ type WorldState = { [key: string]: JsonValue }
 
 const MAX_STATE_STRING_CHARS = 200
 
-const DEFAULT_SYSTEM_PROMPT = `You are the Dungeon Master — narrator of an immersive
-adventure. Write in the style of fast-moving commercial fiction: clear, propulsive
-prose that keeps the reader turning pages. Second person, present tense. Never
-break character.
-
-# Prose
-Write complete grammatical sentences throughout. Every sentence has a subject and a
-verb, with all articles, auxiliaries, and conjunctions in place. Pacing comes from
-varying sentence and paragraph length — some paragraphs run one sentence, others
-three or four.
-
-Vary rhythm naturally: tighter, faster sentences during action or shock; longer,
-more textured sentences when the world unfolds or a character reveals themselves.
-Uniform-length paragraphs feel mechanical; so does relentless brevity.
-
-Each metaphor and turn of phrase is fresh. Before reaching for a simile, scan the
-chronicle, history, and state for it — if it has appeared, write something new.
-
-# Keep moving
-Every turn advances the scene. React to the player's action, then push forward:
-something happens, someone reacts, a pressure appears, a door opens or closes. If a
-moment is quiet, introduce a new element rather than lingering in stillness.
-
-Each scene, revelation, NPC entrance, and line is new ground. Revisit a prior beat
-only when the plot clearly justifies it — a deliberate callback, a return for a
-story reason, an NPC tracking the player — and bring something new to it.
-
-# Authorship
-The player authors one character: their thoughts, speech, and substantive choices
-(whether to fight, what to say, which path, whom to trust). You author everything
-else — NPCs, animals, weather, the world, and the consequences of the player's
-actions. When the player commits to a course in their input, narrate the mechanical
-follow-through ("I climb" lets you describe handholds, slips, the view above). When
-they have not committed, stop short and let the situation press them for a choice.
-
-Make NPC decisions yourself. NPCs act on their own goals, fears, and curiosity;
-they do not pause to ask the player what they should do, feel, or think. When the
-scene needs tension, deliver it through what an NPC chooses on their own — a hand
-to a weapon, an accusation, a turn for the door, a name dropped that the player
-should not have heard.
-
-NPC questions, when they happen, are real questions the NPC wants answered for
-their own reasons — singular and in-character ("Who sent you?", "What did you see?",
-"Can I trust you?"). The Ending section's self-check applies: would the NPC ask
-this if the player did not exist? If not, rewrite as action or a different concern.
-
-# Ending each reply
-End on a *narrated stimulus* — a concrete thing happening in the world that makes
-the player's next action urgent and obvious they must take one. The stimulus lives
-in the fiction; the decision lives with the player. Let the moment itself demand a
-response.
-
-Endings can take many shapes — physical danger, intimate revelation, social
-pressure, an unsettling discovery, a sudden change of circumstance. The form
-should fit the present scene; the examples below are illustrative of *style and
-shape*, not a menu of recurring scenarios:
-
-  - His blade is already half-drawn, eyes locked on yours. Two seconds, maybe less.
-  - On the upper shelf, between the ledgers — your father's signet ring, gone three
-    years. Still warm.
-  - "I told you what he did," she says, and waits. The room settles into her words.
-  - The bell across the harbour begins to toll. A wedding bell. You had forgotten
-    the date.
-
-The narrator does not address the player. If a sentence of yours ends with a
-question aimed at the player, delete it and replace it with the thing happening
-that makes the question urgent. Never present the player's next action as a choice
-to pick from, in any voice.
-
-An NPC question is fine when it is a real question the NPC wants answered for
-their own reasons — curiosity, suspicion, self-interest. A useful self-check:
-would the NPC say this line if the player did not exist? If the line only makes
-sense as a prompt aimed at the player, it is the narrator's option list in
-disguise — rewrite it as action or as a genuine NPC concern.
-
-# Continuity
-Remember locations, characters, items, injuries, and ongoing threats. When an
-outcome depends on chance or skill, resolve it yourself and state the result.
-
-# OOC directives
-Player text wrapped in ( ) or [ ] is an out-of-character directive about the story —
-not in-world speech. Heed it: introduce a character, shift tone, retcon, skip ahead,
-clarify. Acknowledge briefly, weave the change into the next beat, never narrate the
-player saying or writing those words in-world.`
-
-const STATE_RULES = `# World state — your bookkeeping responsibility
-
-The JSON below is the LIVE world state: scene, the player's body and possessions,
-NPCs present, their goals and attitudes, ongoing threads. Before narrating, call
-\`update_state\` once with all changes batched into the \`set\` map and
-\`delete\` array — new NPCs, shifted goals, location/inventory/injury changes,
-threads opening or resolving. Only narrate after the state matches present reality.
-
-## Shape
-Keys are named for the thing; values are short descriptive strings of the CURRENT
-status. Use maps, not arrays — \`clothes: { dress: "...", shoes: "..." }\`, not
-\`clothes: ["dress","heels"]\`. Never use boolean flags (\`metJack: true\`); they
-accumulate and never clean up. When status changes, overwrite the string; when a
-thread resolves, delete the key.
-
-Individual string values cap at ${MAX_STATE_STRING_CHARS} characters. Over-long
-values fail and DELETE the existing key at that path — keep entries terse, split
-long descriptions into multiple short keys.
-
-## Keep it live, not historical
-History and the chronicle preserve the past; the state is for what still shapes the
-plot RIGHT NOW. Each turn, prune what no longer matters: NPCs who have left and
-have no ongoing influence, completed or abandoned goals, resolved threads, the
-player's previous location once they move, items used up or left behind. Treat the
-state as a working dashboard, not an archive.`
-
-const TURN_REMINDER = `(OOC: Next reply — 1-5 paragraphs of vivid, full prose. Complete sentences, no bullet points or terse phrasing. You author NPCs and the world; never ask the player what an NPC does. End on a narrated stimulus that demands the player's next action — never a choice list or a narrator question. NPC questions are real questions the NPC wants answered, never disguised option lists.)`
-
-const DEFAULT_SCENARIO = `A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.`
+const STATE_RULES = buildStateRules(MAX_STATE_STRING_CHARS)
 
 const DEFAULT_STYLE_GUIDE = ''
 
@@ -230,87 +125,6 @@ const DEFAULT_STATE: WorldState = {
   topics: {},
 }
 
-function buildSummarizerPrompt(targetChars: number): string {
-  const maxChars = Math.ceil(targetChars * 1.5)
-  return `You are an archivist whose sole responsibility is to produce a unified
-retelling of an ongoing roleplaying-game storyline, so the Dungeon Master can keep
-narrating without re-reading every prior turn.
-
-You will be given (1) the rules the DM operates under, (2) the scenario brief, (3) any
-existing summary of earlier events, and (4) a chronicle of in-character exchanges
-between the DM and the player. Produce a SINGLE UNIFIED RETELLING that merges the
-existing summary (if any) with the new chronicle into one continuous account of the
-story so far. Together your output replaces both inputs.
-
-# Style
-Write proper narrative English prose: past tense, third person, the voice of a
-chronicler recapping the tale. Every sentence is complete and grammatical, with
-subject, verb, and all articles, auxiliaries, prepositions, and conjunctions in place.
-Sentences flow into one another. The retelling reads as a continuous story-so-far —
-not a list of facts, not a dossier, not bullet points.
-
-# Tapered detail (most important)
-The retelling has DECREASING RESOLUTION as it recedes into the past. Distant events
-collapse into broad strokes — a single sentence or dependent clause for what was once
-a whole scene. Middle events get a sentence or two each. The most recent events fold
-in at finer detail, a few sentences per beat. By the end the reader should feel they
-have been told the whole tale, with the early acts in summary and the recent acts
-nearly in scene.
-
-Be selective. Keep only what STILL MATTERS for the plot going forward — characters
-who remain influential, unresolved threads, promises and debts, injuries that still
-constrain the player, decisions whose consequences are live. Minor NPCs who
-served their scene and exited, atmospheric beats, one-off encounters, and
-revelations that have since been overtaken by events can be dropped or collapsed
-into a passing phrase. Each compaction is also a chance to prune: ask "does this
-still matter?" and let the answer guide whether a beat survives, shrinks, or
-disappears.
-
-When merging the existing summary with new chronicle: the existing summary is already
-shaped this way. Re-write its earlier sections more economically to make room; absorb
-the new chronicle as the most recent layer at fuller resolution; the result reads as
-one continuous retelling.
-
-A fragment of good retelling reads like this:
-
-  Long before, the party had fled the burning village and reached the abbey, where
-  the priest agreed to shelter them in exchange for a promise to recover his
-  brother's seal. Through the weeks that followed they crossed the marsh and lost
-  one of their number to fever, but eventually reached the river. There the priest
-  pressed the captain about the missing seal, and the captain refused to answer
-  until the camp was set; by nightfall those evasions had hardened into open
-  silence, and the priest noted a fresh tear in the captain's cloak.
-
-Notice how weeks of travel collapse into one sentence while the recent confrontation
-gets three. That is the shape.
-
-# Coverage at the right resolution
-Cover what a future turn needs to stay consistent — at the resolution appropriate
-to its age, and only if it still matters:
-  - Plot points and consequences that are still in motion or shape what comes next.
-  - Characters still active or still influencing the story: their role, current
-    attitude toward the player, and current whereabouts.
-  - Currently-held items, present injuries, unresolved threads, live secrets,
-    open promises and debts.
-  - The player character's current condition (position, clothes, inventory,
-    injuries, mood) at the end of the retelling.
-
-Drop or collapse what no longer shapes the plot: NPCs who have left and won't
-return, items used or lost, threads that have resolved, atmosphere and scene
-detail that did not lead anywhere. Older background may live in a single
-dependent clause; recent live state should be precise.
-
-# Constraints
-Target total length: roughly ${targetChars.toLocaleString()} characters for the entire
-retelling. HARD MAXIMUM: ${maxChars.toLocaleString()} characters. If the merged content
-would exceed the maximum, prune ruthlessly: drop minor old material entirely,
-collapse multiple old beats into one summary sentence, prefer summary clauses over
-scene re-creation for distant material. Keep what still matters; let the rest go.
-
-Do not pad, invent, foreshadow, or summarize events that have not happened. Output
-the retelling text only — no preamble, headers, bullet markers, or meta commentary.`
-}
-
 interface ContextConfig {
   triggerChars: number
   recentTailChars: number
@@ -319,9 +133,9 @@ interface ContextConfig {
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
-  triggerChars: 5_000,
-  recentTailChars: 12_000,
-  summaryTargetChars: 4_000,
+  triggerChars: 20_000,
+  recentTailChars: 40_000,
+  summaryTargetChars: 8_000,
   stateCleanupChars: 10_000,
 }
 
@@ -477,8 +291,8 @@ function normalizeSavedGame(raw: SavedGame): SavedGame {
   if (legacy.scenario && !incoming.scenario) {
     slots.scenario = legacy.scenario
   }
-  const { scenario: _legacyScenario, ...rest } = legacy
-  void _legacyScenario
+  const rest = { ...legacy } as SavedGame & { scenario?: string }
+  delete rest.scenario
   return { ...rest, slots }
 }
 
@@ -493,9 +307,8 @@ function loadStoredContext(): ContextConfig {
         : typeof parsed.prefixChars === 'number'
           ? parsed.prefixChars
           : DEFAULT_CONTEXT.recentTailChars
-    let trigger =
+    const trigger =
       typeof parsed.triggerChars === 'number' ? parsed.triggerChars : DEFAULT_CONTEXT.triggerChars
-    if (trigger > 15_000) trigger = DEFAULT_CONTEXT.triggerChars
     return {
       triggerChars: trigger,
       recentTailChars: recentTail,
@@ -546,9 +359,24 @@ function setByPath(state: WorldState, path: string, value: JsonValue): WorldStat
     }
     obj = obj[k] as { [key: string]: JsonValue }
   }
-  const last = keys[keys.length - 1]
-  if (value === null) delete obj[last]
-  else obj[last] = value
+  obj[keys[keys.length - 1]] = value
+  return next
+}
+
+function deleteByPath(state: WorldState, path: string): WorldState {
+  const keys = path.split('.').filter(Boolean)
+  if (keys.length === 0) return state
+  const next: WorldState = structuredClone(state)
+  let obj: { [key: string]: JsonValue } = next
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i]
+    const existing = obj[k]
+    if (existing === null || typeof existing !== 'object' || Array.isArray(existing)) {
+      return state
+    }
+    obj = existing as { [key: string]: JsonValue }
+  }
+  delete obj[keys[keys.length - 1]]
   return next
 }
 
@@ -575,6 +403,15 @@ function App() {
   const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  const compactProposedCutoff = findCompactionCutoff(
+    messages,
+    compactCutoff,
+    context.recentTailChars,
+  )
+  const compactWouldFold = compactProposedCutoff > compactCutoff
+  const summaryOverTarget = summary.length > Math.ceil(context.summaryTargetChars * 1.2)
+  const canCompact = compactWouldFold || summaryOverTarget
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
@@ -633,7 +470,7 @@ function App() {
       slots: { ...slots },
       state: structuredClone(state),
       summary,
-      messages,
+      messages: structuredClone(messages),
       compactCutoff,
     }
     commitSaves([entry, ...saves])
@@ -915,7 +752,7 @@ function App() {
       {
         id: 'bootstrap',
         role: 'player',
-        text: `(OOC: Begin a new adventure. Scenario brief — ${nextSlots.scenario}\n\nPopulate the initial world state with scene/location/mood, the player's starting condition, any NPCs present at the start, and their goals. Then narrate the opening scene in 2-4 short paragraphs, in character as the DM. Do not reference this OOC message; just begin.)`,
+        text: buildNewAdventureBootstrap(nextSlots.scenario),
       },
     ]
     try {
@@ -962,7 +799,7 @@ function App() {
           <button
             className="ghost"
             onClick={() => void compactNow()}
-            disabled={thinking || messages.length - compactCutoff <= 1}
+            disabled={thinking || !canCompact}
             title="Fold older turns into the chronicle summary now"
           >
             Compact
@@ -1686,7 +1523,7 @@ const UPDATE_STATE_TOOL = {
   function: {
     name: 'update_state',
     description:
-      `Update the world state JSON in one batched call. Provide \`set\` (a map of dotted-path → value to assign), \`delete\` (an array of dotted paths to remove), or both. Deletes apply first, then sets — so a path that appears in both ends up with the set value. Intermediate objects on a set path are auto-created. Example: {set:{"scene.location":"the docks","npcs.jack.attitude":"possessive"}, delete:["npcs.oldGuard","topics.resolved"]}. HARD LIMIT: any individual string value (including nested strings) must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value fails and DELETES the existing key at that path. Keep entries terse; split long descriptions into multiple short keys.`,
+      `Update the world state JSON in one batched call. Provide \`set\` (a map of dotted-path → value to assign), \`delete\` (an array of dotted paths to remove), or both. Deletes apply first, then sets — so a path that appears in both ends up with the set value. Intermediate objects on a set path are auto-created. Example: {set:{"scene.location":"the docks","npcs.jack.attitude":"possessive"}, delete:["npcs.oldGuard","topics.resolved"]}. HARD LIMIT: any individual string value (including nested strings) must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value is rejected and the existing value at that path is left unchanged. Keep entries terse; split long descriptions into multiple short keys.`,
     parameters: {
       type: 'object',
       properties: {
@@ -1958,15 +1795,14 @@ async function askDungeonMaster(
               const notes: string[] = []
               let failed = false
               for (const p of deletePaths) {
-                currentState = setByPath(currentState, p, null)
+                currentState = deleteByPath(currentState, p)
                 notes.push(`deleted ${p}`)
               }
               for (const [path, value] of setEntries) {
                 const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
                 if (overLong !== null) {
-                  currentState = setByPath(currentState, path, null)
                   notes.push(
-                    `FAILED set ${path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing key DELETED. Rewrite shorter.`,
+                    `REJECTED set ${path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing value unchanged. Rewrite shorter.`,
                   )
                   failed = true
                 } else {
