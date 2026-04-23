@@ -427,6 +427,126 @@ textarea.state-json-editor {
   align-items: stretch;
 }
 
+.flag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.flag-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  background: #141414;
+}
+
+.flag-field input[type='checkbox'] {
+  margin-top: 0.2rem;
+  accent-color: #c9a959;
+  flex-shrink: 0;
+}
+
+.flag-field span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.flag-field strong {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #d6d6d6;
+}
+
+.flag-field small {
+  color: #8a8a8a;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.trace {
+  margin-top: 0.4rem;
+}
+
+.trace-toggle {
+  padding: 0.15rem 0.5rem;
+  font: inherit;
+  font-size: 0.75rem;
+  background: transparent;
+  color: #8a8a8a;
+  border: 1px solid #2f2f2f;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+.trace-toggle:hover {
+  color: #c9a959;
+  border-color: #3a3a3a;
+}
+
+.trace-pane {
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  background: #141414;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.trace-event {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.trace-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #666;
+}
+
+.trace-thought p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #a8a8a8;
+  white-space: pre-wrap;
+}
+
+.trace-call-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.trace-call-name {
+  font-size: 0.8rem;
+  color: #c9a959;
+  background: #1a1a1a;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+}
+
+.trace-args {
+  max-height: 20vh;
+  font-size: 0.72rem;
+}
+
+.trace-result {
+  font-size: 0.75rem;
+  color: #9fb99f;
+  white-space: pre-wrap;
+}
+
 .saves-save-row input {
   flex: 1;
   font: inherit;

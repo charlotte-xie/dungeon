@@ -5,21 +5,28 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   TURN_REMINDER,
   buildNewAdventureBootstrap,
+  buildPlotRules,
   buildStateRules,
   buildSummarizerPrompt,
 } from './prompts'
 
 type Role = 'dm' | 'player'
 
+type TraceEvent =
+  | { kind: 'thought'; text: string }
+  | { kind: 'call'; name: string; arguments: string; result: string }
+
 interface Message {
   id: string
   role: Role
   text: string
+  trace?: TraceEvent[]
 }
 
 interface TurnSnapshot {
   messages: Message[]
   state: WorldState
+  plot: string[]
   summary: string
   compactCutoff: number
   input: string
@@ -31,6 +38,7 @@ interface SavedGame {
   savedAt: number
   slots: AdventureSlots
   state: WorldState
+  plot: string[]
   summary: string
   messages: Message[]
   compactCutoff: number
@@ -54,8 +62,11 @@ type JsonValue =
 type WorldState = { [key: string]: JsonValue }
 
 const MAX_STATE_STRING_CHARS = 200
+const MAX_PLOT_ITEMS = 10
+const MAX_PLOT_ITEM_CHARS = 200
 
 const STATE_RULES = buildStateRules(MAX_STATE_STRING_CHARS)
+const PLOT_RULES = buildPlotRules(MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS)
 
 const DEFAULT_STYLE_GUIDE = ''
 
@@ -130,6 +141,7 @@ interface ContextConfig {
   recentTailChars: number
   summaryTargetChars: number
   stateCleanupChars: number
+  includePriorPlayerTurns: boolean
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
@@ -137,6 +149,7 @@ const DEFAULT_CONTEXT: ContextConfig = {
   recentTailChars: 40_000,
   summaryTargetChars: 8_000,
   stateCleanupChars: 10_000,
+  includePriorPlayerTurns: true,
 }
 
 interface SamplingParams {
@@ -152,7 +165,9 @@ const DEFAULT_SAMPLING: SamplingParams = {
 }
 
 const LS_SYSTEM = 'dm.systemPrompt'
+const LS_MODEL = 'dm.model'
 const LS_STATE = 'dm.state'
+const LS_PLOT = 'dm.plot'
 const LS_SUMMARY = 'dm.summary'
 const LS_MESSAGES = 'dm.messages'
 const LS_SAMPLING = 'dm.sampling'
@@ -202,6 +217,27 @@ function loadStoredState(): WorldState {
 function persistState(state: WorldState) {
   try {
     localStorage.setItem(LS_STATE, JSON.stringify(state))
+  } catch {
+    // ignore quota / disabled storage
+  }
+}
+
+function loadStoredPlot(): string[] {
+  try {
+    const raw = localStorage.getItem(LS_PLOT)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((p): p is string => typeof p === 'string')
+  } catch {
+    return []
+  }
+}
+
+function persistPlot(plot: string[]) {
+  try {
+    if (plot.length) localStorage.setItem(LS_PLOT, JSON.stringify(plot))
+    else localStorage.removeItem(LS_PLOT)
   } catch {
     // ignore quota / disabled storage
   }
@@ -285,15 +321,18 @@ function isSavedGame(v: unknown): v is SavedGame {
 }
 
 function normalizeSavedGame(raw: SavedGame): SavedGame {
-  const legacy = raw as SavedGame & { scenario?: string }
+  const legacy = raw as SavedGame & { scenario?: string; plot?: unknown }
   const incoming: Partial<AdventureSlots> = (legacy.slots as Partial<AdventureSlots> | undefined) ?? {}
   const slots = { ...defaultSlots(), ...incoming }
   if (legacy.scenario && !incoming.scenario) {
     slots.scenario = legacy.scenario
   }
+  const plot = Array.isArray(legacy.plot)
+    ? legacy.plot.filter((p): p is string => typeof p === 'string')
+    : []
   const rest = { ...legacy } as SavedGame & { scenario?: string }
   delete rest.scenario
-  return { ...rest, slots }
+  return { ...rest, slots, plot }
 }
 
 function loadStoredContext(): ContextConfig {
@@ -320,6 +359,10 @@ function loadStoredContext(): ContextConfig {
         typeof parsed.stateCleanupChars === 'number'
           ? parsed.stateCleanupChars
           : DEFAULT_CONTEXT.stateCleanupChars,
+      includePriorPlayerTurns:
+        typeof parsed.includePriorPlayerTurns === 'boolean'
+          ? parsed.includePriorPlayerTurns
+          : DEFAULT_CONTEXT.includePriorPlayerTurns,
     }
   } catch {
     return { ...DEFAULT_CONTEXT }
@@ -363,6 +406,17 @@ function setByPath(state: WorldState, path: string, value: JsonValue): WorldStat
   return next
 }
 
+function stripTracesBefore(messages: Message[], cutoff: number): Message[] {
+  let changed = false
+  const next = messages.map((m, i) => {
+    if (i >= cutoff || !m.trace) return m
+    changed = true
+    const copy: Message = { id: m.id, role: m.role, text: m.text }
+    return copy
+  })
+  return changed ? next : messages
+}
+
 function deleteByPath(state: WorldState, path: string): WorldState {
   const keys = path.split('.').filter(Boolean)
   if (keys.length === 0) return state
@@ -384,8 +438,10 @@ function App() {
   const [systemPrompt, setSystemPrompt] = useState(() =>
     loadStored(LS_SYSTEM, DEFAULT_SYSTEM_PROMPT),
   )
+  const [model, setModel] = useState(() => loadStored(LS_MODEL, __XAI_MODEL__))
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
+  const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
   const [summary, setSummary] = useState<string>(() => loadStored(LS_SUMMARY, ''))
   const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages())
   const [compactCutoff, setCompactCutoff] = useState<number>(() => loadStoredCompactCutoff())
@@ -401,6 +457,16 @@ function App() {
   const [showSaves, setShowSaves] = useState(false)
   const [saves, setSaves] = useState<SavedGame[]>(() => loadStoredSaves())
   const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
+  const [expandedTraces, setExpandedTraces] = useState<Set<string>>(() => new Set())
+
+  function toggleTrace(id: string) {
+    setExpandedTraces((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const logRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -430,6 +496,11 @@ function App() {
   function commitState(next: WorldState) {
     setState(next)
     persistState(next)
+  }
+
+  function commitPlot(next: string[]) {
+    setPlot(next)
+    persistPlot(next)
   }
 
   function commitSlots(next: AdventureSlots) {
@@ -469,6 +540,7 @@ function App() {
       savedAt: Date.now(),
       slots: { ...slots },
       state: structuredClone(state),
+      plot: [...plot],
       summary,
       messages: structuredClone(messages),
       compactCutoff,
@@ -490,6 +562,7 @@ function App() {
     setSnapshot(null)
     commitSlots({ ...defaultSlots(), ...target.slots })
     commitState(structuredClone(target.state))
+    commitPlot([...(target.plot ?? [])])
     commitSummary(target.summary)
     setMessages(target.messages)
     commitCompactCutoff(target.compactCutoff)
@@ -549,6 +622,7 @@ function App() {
   async function runTurn(
     pendingMessages: Message[],
     baseState: WorldState,
+    basePlot: string[],
     baseSummary: string,
     baseCutoff: number,
     onAbortRestore: () => void,
@@ -572,6 +646,7 @@ function App() {
         setStatusText('Compacting chronicle…')
         const compacted = await compactHistory(
           systemPrompt,
+          model,
           slots,
           workingSummary,
           pendingMessages,
@@ -584,21 +659,29 @@ function App() {
         workingCutoff = compacted.cutoff
         commitSummary(workingSummary)
         commitCompactCutoff(workingCutoff)
+        setMessages((m) => stripTracesBefore(m, workingCutoff))
         setStatusText('DM is thinking…')
       }
 
-      const { text: reply, state: nextState } = await askDungeonMaster(
+      const { text: reply, state: nextState, plot: nextPlot, trace } = await askDungeonMaster(
         systemPrompt,
+        model,
         slots,
         workingSummary,
         pendingMessages.slice(workingCutoff),
         baseState,
+        basePlot,
         sampling,
         context.stateCleanupChars,
+        context.includePriorPlayerTurns,
         controller.signal,
       )
-      setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'dm', text: reply }])
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: 'dm', text: reply, trace },
+      ])
       commitState(nextState)
+      commitPlot(nextPlot)
     } catch (err) {
       if (controller.signal.aborted) {
         if (abortRef.current === controller) onAbortRestore()
@@ -625,6 +708,7 @@ function App() {
     const snap: TurnSnapshot = {
       messages,
       state,
+      plot,
       summary,
       compactCutoff,
       input: text,
@@ -633,7 +717,7 @@ function App() {
     const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text }
     const pendingMessages = [...messages, playerMsg]
     setMessages(pendingMessages)
-    await runTurn(pendingMessages, state, summary, compactCutoff, () => {
+    await runTurn(pendingMessages, state, plot, summary, compactCutoff, () => {
       setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
       setInput((cur) => cur || text)
     })
@@ -643,6 +727,7 @@ function App() {
     if (thinking || !snapshot) return
     setMessages(snapshot.messages)
     commitState(snapshot.state)
+    commitPlot([...snapshot.plot])
     commitSummary(snapshot.summary)
     commitCompactCutoff(snapshot.compactCutoff)
     setInput(snapshot.input)
@@ -669,6 +754,7 @@ function App() {
     try {
       const compacted = await compactHistory(
         systemPrompt,
+        model,
         slots,
         summary,
         messages,
@@ -680,6 +766,7 @@ function App() {
       )
       commitSummary(compacted.summary)
       commitCompactCutoff(compacted.cutoff)
+      setMessages((m) => stripTracesBefore(m, compacted.cutoff))
     } catch (err) {
       if (!controller.signal.aborted) {
         alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -694,12 +781,13 @@ function App() {
     if (thinking || !snapshot) return
     const snap = snapshot
     commitState(snap.state)
+    commitPlot([...snap.plot])
     commitSummary(snap.summary)
     commitCompactCutoff(snap.compactCutoff)
     const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text: snap.input }
     const pendingMessages = [...snap.messages, playerMsg]
     setMessages(pendingMessages)
-    await runTurn(pendingMessages, snap.state, snap.summary, snap.compactCutoff, () => {
+    await runTurn(pendingMessages, snap.state, snap.plot, snap.summary, snap.compactCutoff, () => {
       setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
       setInput((cur) => cur || snap.input)
     })
@@ -714,16 +802,20 @@ function App() {
 
   function saveSettings(
     nextSystem: string,
+    nextModel: string,
     nextSlots: AdventureSlots,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
   ) {
     setSystemPrompt(nextSystem)
+    setModel(nextModel)
     commitSlots(nextSlots)
     setSampling(nextSampling)
     setContext(nextContext)
     try {
       localStorage.setItem(LS_SYSTEM, nextSystem)
+      if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
+      else localStorage.removeItem(LS_MODEL)
       localStorage.setItem(LS_SAMPLING, JSON.stringify(nextSampling))
       localStorage.setItem(LS_CONTEXT, JSON.stringify(nextContext))
     } catch {
@@ -742,6 +834,7 @@ function App() {
     setSnapshot(null)
     const freshState = structuredClone(DEFAULT_STATE)
     commitState(freshState)
+    commitPlot([])
     commitSummary('')
     commitCompactCutoff(0)
     setThinking(true)
@@ -756,18 +849,22 @@ function App() {
       },
     ]
     try {
-      const { text: reply, state: nextState } = await askDungeonMaster(
+      const { text: reply, state: nextState, plot: nextPlot, trace } = await askDungeonMaster(
         systemPrompt,
+        model,
         nextSlots,
         '',
         bootstrap,
         freshState,
+        [],
         sampling,
         context.stateCleanupChars,
+        context.includePriorPlayerTurns,
         controller.signal,
       )
-      setMessages([{ id: crypto.randomUUID(), role: 'dm', text: reply }])
+      setMessages([{ id: crypto.randomUUID(), role: 'dm', text: reply, trace }])
       commitState(nextState)
+      commitPlot(nextPlot)
     } catch (err) {
       if (controller.signal.aborted) return
       setMessages([
@@ -836,6 +933,13 @@ function App() {
             <div className={`msg msg-${m.role} ${i < compactCutoff ? 'msg-folded' : ''}`}>
               <span className="who">{m.role === 'dm' ? 'DM' : 'You'}</span>
               <p>{m.text}</p>
+              {m.role === 'dm' && m.trace !== undefined && (
+                <TraceView
+                  trace={m.trace}
+                  expanded={expandedTraces.has(m.id)}
+                  onToggle={() => toggleTrace(m.id)}
+                />
+              )}
             </div>
           </Fragment>
         ))}
@@ -874,6 +978,7 @@ function App() {
       {showSettings && (
         <SettingsPanel
           systemPrompt={systemPrompt}
+          model={model}
           slots={slots}
           sampling={sampling}
           context={context}
@@ -884,11 +989,14 @@ function App() {
       {showState && (
         <StateViewer
           state={state}
+          plot={plot}
           summary={summary}
           context={context}
           onClose={() => setShowState(false)}
           onResetState={() => commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={commitState}
+          onSavePlot={commitPlot}
+          onClearPlot={() => commitPlot([])}
           onSaveSummary={commitSummary}
           onClearSummary={() => {
             commitSummary('')
@@ -905,11 +1013,13 @@ function App() {
               summary,
               messages.slice(compactCutoff),
               state,
+              plot,
               context.stateCleanupChars,
+              context.includePriorPlayerTurns,
             ),
             { role: 'system', content: TURN_REMINDER },
           ]}
-          tools={[UPDATE_STATE_TOOL]}
+          tools={[UPDATE_STATE_TOOL, PLOT_UPDATE_TOOL]}
           sampling={sampling}
           onClose={() => setShowContext(false)}
         />
@@ -944,12 +1054,14 @@ function App() {
 
 interface SettingsPanelProps {
   systemPrompt: string
+  model: string
   slots: AdventureSlots
   sampling: SamplingParams
   context: ContextConfig
   onClose: () => void
   onSave: (
     systemPrompt: string,
+    model: string,
     slots: AdventureSlots,
     sampling: SamplingParams,
     context: ContextConfig,
@@ -958,6 +1070,7 @@ interface SettingsPanelProps {
 
 function SettingsPanel({
   systemPrompt,
+  model,
   slots,
   sampling,
   context,
@@ -965,6 +1078,7 @@ function SettingsPanel({
   onSave,
 }: SettingsPanelProps) {
   const [draftSystem, setDraftSystem] = useState(systemPrompt)
+  const [draftModel, setDraftModel] = useState(model)
   const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
@@ -977,19 +1091,20 @@ function SettingsPanel({
     setDraftSampling((s) => ({ ...s, [key]: value }))
   }
 
-  function setContextField<K extends keyof ContextConfig>(key: K, value: number) {
+  function setContextField<K extends keyof ContextConfig>(key: K, value: ContextConfig[K]) {
     setDraftContext((c) => ({ ...c, [key]: value }))
   }
 
   function save() {
     const trimmed = {} as AdventureSlots
     for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
-    onSave(draftSystem.trim(), trimmed, draftSampling, draftContext)
+    onSave(draftSystem.trim(), draftModel.trim(), trimmed, draftSampling, draftContext)
     onClose()
   }
 
   function resetDefaults() {
     setDraftSystem(DEFAULT_SYSTEM_PROMPT)
+    setDraftModel(__XAI_MODEL__)
     setDraftSampling({ ...DEFAULT_SAMPLING })
     setDraftContext({ ...DEFAULT_CONTEXT })
   }
@@ -1001,6 +1116,28 @@ function SettingsPanel({
           <h2>Settings</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
+        <label>
+          <span>Model</span>
+          <input
+            type="text"
+            value={draftModel}
+            onChange={(e) => setDraftModel(e.target.value)}
+            placeholder={__XAI_MODEL__}
+            list="dm-model-suggestions"
+            spellCheck={false}
+          />
+          <datalist id="dm-model-suggestions">
+            <option value="grok-4" />
+            <option value="grok-4-fast" />
+            <option value="grok-4-fast-reasoning" />
+            <option value="grok-code-fast" />
+          </datalist>
+          <small className="hint">
+            xAI model id sent to <code>/chat/completions</code>. Env default:{' '}
+            <code>{__XAI_MODEL__}</code>. Applies on the next turn — reasoning variants
+            skip temperature/penalty.
+          </small>
+        </label>
         <label>
           <span>System prompt</span>
           <textarea
@@ -1122,6 +1259,26 @@ function SettingsPanel({
           </label>
         </div>
 
+        <h3 className="saves-subhead">Experimental flags</h3>
+        <div className="flag-list">
+          <label className="flag-field">
+            <input
+              type="checkbox"
+              checked={draftContext.includePriorPlayerTurns}
+              onChange={(e) => setContextField('includePriorPlayerTurns', e.target.checked)}
+            />
+            <span>
+              <strong>Include prior player turns in context</strong>
+              <small>
+                When off, only the current player message is sent; earlier player messages
+                are dropped (their content already lives in the DM narration that followed).
+                Saves tokens but loses the literal wording for reference. Default{' '}
+                {DEFAULT_CONTEXT.includePriorPlayerTurns ? 'on' : 'off'}.
+              </small>
+            </span>
+          </label>
+        </div>
+
         <p className="hint">
           Saving persists to this browser. The system prompt and sampling take effect on
           the next turn. Click <em>New Adventure</em> in the header to restart — the DM
@@ -1202,27 +1359,46 @@ function NewAdventurePrompt({ slots, inProgress, onCancel, onBegin }: NewAdventu
 
 interface StateViewerProps {
   state: WorldState
+  plot: string[]
   summary: string
   context: ContextConfig
   onClose: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
+  onSavePlot: (next: string[]) => void
+  onClearPlot: () => void
   onSaveSummary: (next: string) => void
   onClearSummary: () => void
 }
 
+function plotToDraft(plot: string[]): string {
+  return plot.join('\n')
+}
+
+function parsePlotDraft(draft: string): string[] {
+  return draft
+    .split('\n')
+    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .filter((line) => line.length > 0)
+}
+
 function StateViewer({
   state,
+  plot,
   summary,
   context,
   onClose,
   onResetState,
   onSaveState,
+  onSavePlot,
+  onClearPlot,
   onSaveSummary,
   onClearSummary,
 }: StateViewerProps) {
   const [draft, setDraft] = useState(() => JSON.stringify(state, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
+  const [plotDraft, setPlotDraft] = useState(() => plotToDraft(plot))
+  const [plotError, setPlotError] = useState<string | null>(null)
   const [summaryDraft, setSummaryDraft] = useState(summary)
 
   useEffect(() => {
@@ -1231,11 +1407,17 @@ function StateViewer({
   }, [state])
 
   useEffect(() => {
+    setPlotDraft(plotToDraft(plot))
+    setPlotError(null)
+  }, [plot])
+
+  useEffect(() => {
     setSummaryDraft(summary)
   }, [summary])
 
   const currentJson = JSON.stringify(state, null, 2)
   const stateDirty = draft !== currentJson
+  const plotDirty = plotDraft !== plotToDraft(plot)
   const summaryDirty = summaryDraft !== summary
 
   function handleSave() {
@@ -1252,6 +1434,21 @@ function StateViewer({
     }
     setParseError(null)
     onSaveState(parsed as WorldState)
+  }
+
+  function handleSavePlot() {
+    const parsed = parsePlotDraft(plotDraft)
+    if (parsed.length > MAX_PLOT_ITEMS) {
+      setPlotError(`Too many bullets (${parsed.length}, max ${MAX_PLOT_ITEMS}).`)
+      return
+    }
+    const tooLong = parsed.find((s) => s.length > MAX_PLOT_ITEM_CHARS)
+    if (tooLong) {
+      setPlotError(`A bullet is too long (${tooLong.length} chars, max ${MAX_PLOT_ITEM_CHARS}).`)
+      return
+    }
+    setPlotError(null)
+    onSavePlot(parsed)
   }
 
   return (
@@ -1273,6 +1470,23 @@ function StateViewer({
           onChange={(e) => setDraft(e.target.value)}
         />
         {parseError && <p className="error-text">{parseError}</p>}
+
+        <h2>Plot outline</h2>
+        <p className="hint">
+          The DM maintains this bullet list via a <code>plot_update</code> tool — a short
+          private notebook of directions the story is aiming at. One bullet per line;
+          leading <code>-</code> or <code>*</code> is stripped on save. Max {MAX_PLOT_ITEMS}{' '}
+          bullets, each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} bullet
+          {plot.length === 1 ? '' : 's'}.
+        </p>
+        <textarea
+          className="state-json state-json-editor"
+          spellCheck={false}
+          value={plotDraft}
+          onChange={(e) => setPlotDraft(e.target.value)}
+          placeholder="(no plot outline yet — one bullet per line)"
+        />
+        {plotError && <p className="error-text">{plotError}</p>}
 
         <h2>Chronicle summary</h2>
         <p className="hint">
@@ -1303,6 +1517,15 @@ function StateViewer({
           <button
             className="ghost"
             onClick={() => {
+              if (plot.length && confirm('Clear the plot outline?')) onClearPlot()
+            }}
+            disabled={plot.length === 0}
+          >
+            Clear plot
+          </button>
+          <button
+            className="ghost"
+            onClick={() => {
               if (summary && confirm('Clear the chronicle summary?')) onClearSummary()
             }}
             disabled={!summary}
@@ -1313,6 +1536,9 @@ function StateViewer({
           <button onClick={onClose}>Close</button>
           <button onClick={handleSave} disabled={!stateDirty}>
             Save state
+          </button>
+          <button onClick={handleSavePlot} disabled={!plotDirty}>
+            Save plot
           </button>
           <button onClick={() => onSaveSummary(summaryDraft)} disabled={!summaryDirty}>
             Save summary
@@ -1505,6 +1731,70 @@ function ContextViewer({ apiMessages, tools, sampling, onClose }: ContextViewerP
   )
 }
 
+function formatToolArgs(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2)
+  } catch {
+    return trimmed
+  }
+}
+
+interface TraceViewProps {
+  trace: TraceEvent[]
+  expanded: boolean
+  onToggle: () => void
+}
+
+function TraceView({ trace, expanded, onToggle }: TraceViewProps) {
+  const calls = trace.filter((e) => e.kind === 'call').length
+  const thoughts = trace.filter((e) => e.kind === 'thought').length
+  const parts: string[] = []
+  if (calls) parts.push(`${calls} tool call${calls === 1 ? '' : 's'}`)
+  if (thoughts) parts.push(`${thoughts} note${thoughts === 1 ? '' : 's'}`)
+  const label = parts.join(' · ') || 'no tools'
+  return (
+    <div className="trace">
+      <button
+        className="trace-toggle"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        title="Show tool calls and interstitial thoughts from this turn"
+      >
+        {expanded ? '▾' : '▸'} trace ({label})
+      </button>
+      {expanded && (
+        <div className="trace-pane">
+          {trace.length === 0 ? (
+            <div className="trace-event trace-empty">
+              <span className="trace-label">no tools called this turn</span>
+            </div>
+          ) : (
+            trace.map((e, i) =>
+              e.kind === 'thought' ? (
+                <div key={i} className="trace-event trace-thought">
+                  <span className="trace-label">thought</span>
+                  <p>{e.text}</p>
+                </div>
+              ) : (
+                <div key={i} className="trace-event trace-call">
+                  <div className="trace-call-head">
+                    <span className="trace-label">call</span>
+                    <code className="trace-call-name">{e.name}</code>
+                  </div>
+                  <pre className="state-json trace-args">{formatToolArgs(e.arguments) || '(no args)'}</pre>
+                  <div className="trace-result">{e.result}</div>
+                </div>
+              ),
+            )
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface ToolCall {
   id: string
   type?: string
@@ -1538,6 +1828,26 @@ const UPDATE_STATE_TOOL = {
           description: 'Array of dotted paths to remove. Applied before sets.',
         },
       },
+    },
+  },
+}
+
+const PLOT_UPDATE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'plot_update',
+    description:
+      `Replace the full plot outline. Pass the new list; it overwrites the old entirely. Pass [] to clear. Max ${MAX_PLOT_ITEMS} bullets, each <= ${MAX_PLOT_ITEM_CHARS} chars. A bullet over the char limit or a list over the item limit rejects the whole call and leaves the existing outline unchanged.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        plot: {
+          type: 'array',
+          items: { type: 'string' },
+          description: `New full plot list. Each bullet <= ${MAX_PLOT_ITEM_CHARS} chars; at most ${MAX_PLOT_ITEMS} items. Empty array clears the outline.`,
+        },
+      },
+      required: ['plot'],
     },
   },
 }
@@ -1576,14 +1886,26 @@ function buildStateSystemMessage(
   }
 }
 
+function buildPlotSystemMessage(currentPlot: string[]): ApiMessage {
+  const bullets = currentPlot.length
+    ? currentPlot.map((p) => `- ${p}`).join('\n')
+    : '(no plot outline yet — call plot_update to set one when the story gives you enough to aim at)'
+  return {
+    role: 'system',
+    content: `${PLOT_RULES}\n\n## Current plot outline\n\n${bullets}`,
+  }
+}
+
 function buildApiMessagesIndexed(
   systemPrompt: string,
   slots: AdventureSlots,
   summary: string,
   history: Message[],
   currentState: WorldState,
+  currentPlot: string[],
   stateCleanupThreshold: number,
-): { messages: ApiMessage[]; stateIndex: number } {
+  includePriorPlayerTurns: boolean,
+): { messages: ApiMessage[]; stateIndex: number; plotIndex: number } {
   const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt }]
   for (const def of ADVENTURE_SLOTS) {
     const value = (slots[def.key] ?? '').trim()
@@ -1598,10 +1920,15 @@ function buildApiMessagesIndexed(
   }
   const stateIndex = messages.length
   messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold))
-  for (const m of history) {
+  const plotIndex = messages.length
+  messages.push(buildPlotSystemMessage(currentPlot))
+  const effectiveHistory = includePriorPlayerTurns
+    ? history
+    : history.filter((m, i) => m.role === 'dm' || i === history.length - 1)
+  for (const m of effectiveHistory) {
     messages.push({ role: m.role === 'dm' ? 'assistant' : 'user', content: m.text })
   }
-  return { messages, stateIndex }
+  return { messages, stateIndex, plotIndex }
 }
 
 function buildApiMessages(
@@ -1610,7 +1937,9 @@ function buildApiMessages(
   summary: string,
   history: Message[],
   currentState: WorldState,
+  currentPlot: string[],
   stateCleanupThreshold: number,
+  includePriorPlayerTurns: boolean,
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
     systemPrompt,
@@ -1618,12 +1947,15 @@ function buildApiMessages(
     summary,
     history,
     currentState,
+    currentPlot,
     stateCleanupThreshold,
+    includePriorPlayerTurns,
   ).messages
 }
 
 async function compactHistory(
   systemPrompt: string,
+  model: string,
   slots: AdventureSlots,
   priorSummary: string,
   messages: Message[],
@@ -1679,7 +2011,7 @@ async function compactHistory(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: __XAI_MODEL__,
+      model,
       messages: apiMessages,
       stream: false,
     }),
@@ -1704,40 +2036,181 @@ function modelSupportsSampling(model: string): boolean {
   return !/reasoning/i.test(model)
 }
 
+interface ToolExecResult {
+  state: WorldState
+  plot: string[]
+  result: string
+}
+
+function executeTool(
+  name: string,
+  rawArgs: string,
+  state: WorldState,
+  plot: string[],
+): ToolExecResult {
+  if (name === 'update_state') {
+    try {
+      const args = JSON.parse(rawArgs) as {
+        set?: Record<string, JsonValue>
+        delete?: string[]
+      }
+      const setEntries: [string, JsonValue][] =
+        args.set && typeof args.set === 'object' && !Array.isArray(args.set)
+          ? Object.entries(args.set).filter(
+              (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
+            )
+          : []
+      const deletePaths = Array.isArray(args.delete)
+        ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
+        : []
+      if (setEntries.length === 0 && deletePaths.length === 0) {
+        return {
+          state,
+          plot,
+          result:
+            'error: update_state requires a non-empty `set` map, a non-empty `delete` array, or both.',
+        }
+      }
+      const notes: string[] = []
+      let failed = false
+      let nextState = state
+      for (const p of deletePaths) {
+        nextState = deleteByPath(nextState, p)
+        notes.push(`deleted ${p}`)
+      }
+      for (const [path, value] of setEntries) {
+        const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
+        if (overLong !== null) {
+          notes.push(
+            `REJECTED set ${path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing value unchanged. Rewrite shorter.`,
+          )
+          failed = true
+        } else {
+          nextState = setByPath(nextState, path, value)
+          notes.push(`set ${path}`)
+        }
+      }
+      return { state: nextState, plot, result: `${failed ? 'partial' : 'ok'} — ${notes.join('; ')}` }
+    } catch (err) {
+      return { state, plot, result: `error: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  }
+  if (name === 'plot_update') {
+    try {
+      const args = JSON.parse(rawArgs) as { plot?: unknown }
+      if (!Array.isArray(args.plot)) {
+        return {
+          state,
+          plot,
+          result: 'error: plot_update requires `plot` as an array of strings. Existing outline unchanged.',
+        }
+      }
+      if (args.plot.some((p) => typeof p !== 'string')) {
+        return {
+          state,
+          plot,
+          result: 'error: every plot bullet must be a string. Existing outline unchanged.',
+        }
+      }
+      if (args.plot.length > MAX_PLOT_ITEMS) {
+        return {
+          state,
+          plot,
+          result: `error: plot has ${args.plot.length} items (max ${MAX_PLOT_ITEMS}). Trim the list and retry. Existing outline unchanged.`,
+        }
+      }
+      const cleaned = (args.plot as string[]).map((s) => s.trim()).filter((s) => s.length > 0)
+      const tooLong = cleaned.find((s) => s.length > MAX_PLOT_ITEM_CHARS)
+      if (tooLong) {
+        return {
+          state,
+          plot,
+          result: `error: plot bullet too long (${tooLong.length} chars, max ${MAX_PLOT_ITEM_CHARS}). Rewrite shorter. Existing outline unchanged.`,
+        }
+      }
+      return {
+        state,
+        plot: cleaned,
+        result: `ok — plot outline now has ${cleaned.length} bullet${cleaned.length === 1 ? '' : 's'}.`,
+      }
+    } catch (err) {
+      return { state, plot, result: `error: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  }
+  return { state, plot, result: `error: unknown tool ${name}` }
+}
+
+const INLINE_TOOL_CALL_PATTERN =
+  /<function_call\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/function_call>/gi
+
+interface InlineToolCall {
+  name: string
+  arguments: string
+}
+
+function parseInlineToolCalls(content: string): { cleaned: string; calls: InlineToolCall[] } {
+  const calls: InlineToolCall[] = []
+  const cleaned = content
+    .replace(INLINE_TOOL_CALL_PATTERN, (_match, name: string, body: string) => {
+      calls.push({ name, arguments: body.trim() })
+      return ''
+    })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return { cleaned, calls }
+}
+
 async function askDungeonMaster(
   systemPrompt: string,
+  model: string,
   slots: AdventureSlots,
   summary: string,
   history: Message[],
   initialState: WorldState,
+  initialPlot: string[],
   sampling: SamplingParams,
   stateCleanupThreshold: number,
+  includePriorPlayerTurns: boolean,
   signal: AbortSignal,
-): Promise<{ text: string; state: WorldState }> {
+): Promise<{ text: string; state: WorldState; plot: string[]; trace: TraceEvent[] }> {
   let currentState = initialState
-  const { messages: apiMessages, stateIndex } = buildApiMessagesIndexed(
+  let currentPlot = initialPlot
+  const { messages: apiMessages, stateIndex, plotIndex } = buildApiMessagesIndexed(
     systemPrompt,
     slots,
     summary,
     history,
     currentState,
+    currentPlot,
     stateCleanupThreshold,
+    includePriorPlayerTurns,
   )
+
+  const trace: TraceEvent[] = []
+  const pushToolResult = (call: ToolCall, content: string) => {
+    apiMessages.push({ role: 'tool', tool_call_id: call.id, content })
+    trace.push({
+      kind: 'call',
+      name: call.function?.name ?? '(unknown)',
+      arguments: call.function?.arguments ?? '',
+      result: content,
+    })
+  }
 
   let nudged = false
   for (let iter = 0; iter < 8; iter++) {
-    // __XAI_MODEL__ is injected by Vite `define` — see vite.config.ts.
     const body: Record<string, unknown> = {
-      model: __XAI_MODEL__,
+      model,
       messages: [...apiMessages, { role: 'system', content: TURN_REMINDER }],
-      tools: [UPDATE_STATE_TOOL],
+      tools: [UPDATE_STATE_TOOL, PLOT_UPDATE_TOOL],
       stream: false,
     }
-    if (modelSupportsSampling(__XAI_MODEL__)) {
+    if (modelSupportsSampling(model)) {
       body.temperature = sampling.temperature
       body.frequency_penalty = sampling.frequencyPenalty
       body.presence_penalty = sampling.presencePenalty
     }
+    console.debug('[dm] xAI request', { iter, model, toolCount: (body.tools as unknown[])?.length, body })
     const res = await fetch('/api/xai/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1750,7 +2223,9 @@ async function askDungeonMaster(
       throw new Error(`xAI ${res.status}: ${body.slice(0, 200) || res.statusText}`)
     }
 
-    const data = (await res.json()) as {
+    const rawData = (await res.json()) as unknown
+    console.debug('[dm] xAI response', { iter, rawData })
+    const data = rawData as {
       choices?: {
         finish_reason?: string
         message?: { content?: string; tool_calls?: ToolCall[] }
@@ -1762,81 +2237,63 @@ async function askDungeonMaster(
     if (!msg) throw new Error('Empty response from xAI (no message)')
 
     if (msg.tool_calls?.length) {
+      const interstitial = msg.content?.trim()
+      if (interstitial) trace.push({ kind: 'thought', text: interstitial })
       apiMessages.push({
         role: 'assistant',
         content: msg.content ?? '',
         tool_calls: msg.tool_calls,
       })
       for (const call of msg.tool_calls) {
-        if (call.function?.name === 'update_state') {
-          try {
-            const args = JSON.parse(call.function.arguments) as {
-              set?: Record<string, JsonValue>
-              delete?: string[]
-            }
-            const setEntries: [string, JsonValue][] =
-              args.set && typeof args.set === 'object' && !Array.isArray(args.set)
-                ? Object.entries(args.set).filter(
-                    (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
-                  )
-                : []
-            const deletePaths = Array.isArray(args.delete)
-              ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
-              : []
-
-            if (setEntries.length === 0 && deletePaths.length === 0) {
-              apiMessages.push({
-                role: 'tool',
-                tool_call_id: call.id,
-                content:
-                  'error: update_state requires a non-empty `set` map, a non-empty `delete` array, or both.',
-              })
-            } else {
-              const notes: string[] = []
-              let failed = false
-              for (const p of deletePaths) {
-                currentState = deleteByPath(currentState, p)
-                notes.push(`deleted ${p}`)
-              }
-              for (const [path, value] of setEntries) {
-                const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
-                if (overLong !== null) {
-                  notes.push(
-                    `REJECTED set ${path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing value unchanged. Rewrite shorter.`,
-                  )
-                  failed = true
-                } else {
-                  currentState = setByPath(currentState, path, value)
-                  notes.push(`set ${path}`)
-                }
-              }
-              apiMessages.push({
-                role: 'tool',
-                tool_call_id: call.id,
-                content: `${failed ? 'partial' : 'ok'} — ${notes.join('; ')}`,
-              })
-            }
-          } catch (err) {
-            apiMessages.push({
-              role: 'tool',
-              tool_call_id: call.id,
-              content: `error: ${err instanceof Error ? err.message : String(err)}`,
-            })
-          }
-        } else {
-          apiMessages.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: `error: unknown tool ${call.function?.name ?? '(anonymous)'}`,
-          })
-        }
+        const name = call.function?.name ?? '(anonymous)'
+        const rawArgs = call.function?.arguments ?? ''
+        const exec = executeTool(name, rawArgs, currentState, currentPlot)
+        currentState = exec.state
+        currentPlot = exec.plot
+        pushToolResult(call, exec.result)
       }
       apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
+      apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
       continue
     }
 
-    const content = msg.content?.trim()
-    if (content) return { text: content, state: currentState }
+    const content = msg.content?.trim() ?? ''
+    const { cleaned, calls: inlineCalls } = parseInlineToolCalls(content)
+    if (inlineCalls.length) {
+      console.warn('[dm] extracted inline tool calls from narrative', {
+        count: inlineCalls.length,
+        names: inlineCalls.map((c) => c.name),
+      })
+      apiMessages.push({
+        role: 'assistant',
+        content,
+      })
+      for (const call of inlineCalls) {
+        const exec = executeTool(call.name, call.arguments, currentState, currentPlot)
+        currentState = exec.state
+        currentPlot = exec.plot
+        trace.push({
+          kind: 'call',
+          name: `${call.name} (inline)`,
+          arguments: call.arguments,
+          result: exec.result,
+        })
+      }
+      apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
+      apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      if (cleaned) return { text: cleaned, state: currentState, plot: currentPlot, trace }
+      if (!nudged) {
+        nudged = true
+        apiMessages.push({
+          role: 'user',
+          content:
+            '(OOC: Inline tool calls extracted. Use the structured tool API next time. Now provide the narrative reply — 2-4 short paragraphs, no XML tags.)',
+        })
+        continue
+      }
+      throw new Error('Narrative reply was entirely inline tool calls with no remaining prose')
+    }
+    if (content) return { text: content, state: currentState, plot: currentPlot, trace }
 
     console.warn('[dm] empty xAI message', { iter, finishReason, data })
     if (!nudged) {

@@ -1,5 +1,6 @@
 import dmSystem from './prompts/dm-system.md?raw'
 import stateRulesTemplate from './prompts/state-rules.md?raw'
+import plotRulesTemplate from './prompts/plot-rules.md?raw'
 import turnReminder from './prompts/turn-reminder.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
@@ -18,6 +19,10 @@ export const DEFAULT_SCENARIO = defaultScenario.trim()
 
 export function buildStateRules(maxStateStringChars: number): string {
   return fill(stateRulesTemplate, { maxStateStringChars }).trim()
+}
+
+export function buildPlotRules(maxPlotItems: number, maxPlotItemChars: number): string {
+  return fill(plotRulesTemplate, { maxPlotItems, maxPlotItemChars }).trim()
 }
 
 export function buildSummarizerPrompt(targetChars: number): string {
