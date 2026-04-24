@@ -30,7 +30,11 @@ interface TurnSnapshot {
   summary: string
   compactCutoff: number
   input: string
+  continueRequested?: boolean
 }
+
+const CONTINUE_DIRECTIVE =
+  '(OOC: Continue the scene without waiting for a new player action. Push the narrative forward — time passing, an NPC making a move, a revelation, a pressure mounting — until the player faces a concrete decision. End on a narrated stimulus as usual.)'
 
 interface SavedGame {
   id: string
@@ -142,6 +146,9 @@ interface ContextConfig {
   summaryTargetChars: number
   stateCleanupChars: number
   includePriorPlayerTurns: boolean
+  appendReminderToUser: boolean
+  includeWorldState: boolean
+  includePlotOutline: boolean
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
@@ -150,6 +157,9 @@ const DEFAULT_CONTEXT: ContextConfig = {
   summaryTargetChars: 8_000,
   stateCleanupChars: 10_000,
   includePriorPlayerTurns: true,
+  appendReminderToUser: false,
+  includeWorldState: true,
+  includePlotOutline: true,
 }
 
 interface SamplingParams {
@@ -363,6 +373,18 @@ function loadStoredContext(): ContextConfig {
         typeof parsed.includePriorPlayerTurns === 'boolean'
           ? parsed.includePriorPlayerTurns
           : DEFAULT_CONTEXT.includePriorPlayerTurns,
+      appendReminderToUser:
+        typeof parsed.appendReminderToUser === 'boolean'
+          ? parsed.appendReminderToUser
+          : DEFAULT_CONTEXT.appendReminderToUser,
+      includeWorldState:
+        typeof parsed.includeWorldState === 'boolean'
+          ? parsed.includeWorldState
+          : DEFAULT_CONTEXT.includeWorldState,
+      includePlotOutline:
+        typeof parsed.includePlotOutline === 'boolean'
+          ? parsed.includePlotOutline
+          : DEFAULT_CONTEXT.includePlotOutline,
     }
   } catch {
     return { ...DEFAULT_CONTEXT }
@@ -674,6 +696,9 @@ function App() {
         sampling,
         context.stateCleanupChars,
         context.includePriorPlayerTurns,
+        context.appendReminderToUser,
+        context.includeWorldState,
+        context.includePlotOutline,
         controller.signal,
       )
       setMessages((m) => [
@@ -720,6 +745,30 @@ function App() {
     await runTurn(pendingMessages, state, plot, summary, compactCutoff, () => {
       setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
       setInput((cur) => cur || text)
+    })
+  }
+
+  async function continueStory() {
+    if (thinking || messages.length === 0) return
+    const snap: TurnSnapshot = {
+      messages,
+      state,
+      plot,
+      summary,
+      compactCutoff,
+      input: '',
+      continueRequested: true,
+    }
+    setSnapshot(snap)
+    const playerMsg: Message = {
+      id: crypto.randomUUID(),
+      role: 'player',
+      text: CONTINUE_DIRECTIVE,
+    }
+    const pendingMessages = [...messages, playerMsg]
+    setMessages(pendingMessages)
+    await runTurn(pendingMessages, state, plot, summary, compactCutoff, () => {
+      setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
     })
   }
 
@@ -784,7 +833,8 @@ function App() {
     commitPlot([...snap.plot])
     commitSummary(snap.summary)
     commitCompactCutoff(snap.compactCutoff)
-    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text: snap.input }
+    const replayText = snap.continueRequested ? CONTINUE_DIRECTIVE : snap.input
+    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text: replayText }
     const pendingMessages = [...snap.messages, playerMsg]
     setMessages(pendingMessages)
     await runTurn(pendingMessages, snap.state, snap.plot, snap.summary, snap.compactCutoff, () => {
@@ -860,6 +910,9 @@ function App() {
         sampling,
         context.stateCleanupChars,
         context.includePriorPlayerTurns,
+        context.appendReminderToUser,
+        context.includeWorldState,
+        context.includePlotOutline,
         controller.signal,
       )
       setMessages([{ id: crypto.randomUUID(), role: 'dm', text: reply, trace }])
@@ -970,6 +1023,14 @@ function App() {
           >
             Retry
           </button>
+          <button
+            className="ghost"
+            onClick={() => void continueStory()}
+            disabled={thinking || messages.length === 0}
+            title="Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision"
+          >
+            Continue
+          </button>
           <button onClick={() => void send()} disabled={thinking || !input.trim()}>
             Act
           </button>
@@ -1006,8 +1067,8 @@ function App() {
       )}
       {showContext && (
         <ContextViewer
-          apiMessages={[
-            ...buildApiMessages(
+          apiMessages={applyTurnReminder(
+            buildApiMessages(
               systemPrompt,
               slots,
               summary,
@@ -1016,10 +1077,15 @@ function App() {
               plot,
               context.stateCleanupChars,
               context.includePriorPlayerTurns,
+              context.includeWorldState,
+              context.includePlotOutline,
             ),
-            { role: 'system', content: TURN_REMINDER },
+            context.appendReminderToUser,
+          )}
+          tools={[
+            ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
+            ...(context.includePlotOutline ? [PLOT_UPDATE_TOOL] : []),
           ]}
-          tools={[UPDATE_STATE_TOOL, PLOT_UPDATE_TOOL]}
           sampling={sampling}
           onClose={() => setShowContext(false)}
         />
@@ -1274,6 +1340,56 @@ function SettingsPanel({
                 are dropped (their content already lives in the DM narration that followed).
                 Saves tokens but loses the literal wording for reference. Default{' '}
                 {DEFAULT_CONTEXT.includePriorPlayerTurns ? 'on' : 'off'}.
+              </small>
+            </span>
+          </label>
+          <label className="flag-field">
+            <input
+              type="checkbox"
+              checked={draftContext.appendReminderToUser}
+              onChange={(e) => setContextField('appendReminderToUser', e.target.checked)}
+            />
+            <span>
+              <strong>Append turn reminder to last user message</strong>
+              <small>
+                When on, the turn reminder is folded into the latest player message as an
+                OOC suffix so the wire ends with a <code>user</code> turn (standard
+                alternation). When off, it trails as a separate <code>system</code> message
+                after the player's input. Flip this if the model hallucinates
+                &quot;Player input:&quot; style turns. Default{' '}
+                {DEFAULT_CONTEXT.appendReminderToUser ? 'on' : 'off'}.
+              </small>
+            </span>
+          </label>
+          <label className="flag-field">
+            <input
+              type="checkbox"
+              checked={draftContext.includeWorldState}
+              onChange={(e) => setContextField('includeWorldState', e.target.checked)}
+            />
+            <span>
+              <strong>Include world state</strong>
+              <small>
+                When off, the world-state system message is dropped AND the{' '}
+                <code>update_state</code> tool is not advertised — the model can't read or
+                write state. Useful for comparing prose quality with/without structured
+                grounding. Default {DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.
+              </small>
+            </span>
+          </label>
+          <label className="flag-field">
+            <input
+              type="checkbox"
+              checked={draftContext.includePlotOutline}
+              onChange={(e) => setContextField('includePlotOutline', e.target.checked)}
+            />
+            <span>
+              <strong>Include plot outline</strong>
+              <small>
+                When off, the plot-outline system message is dropped AND the{' '}
+                <code>plot_update</code> tool is not advertised — the model steers without
+                a running outline. Default{' '}
+                {DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.
               </small>
             </span>
           </label>
@@ -1905,6 +2021,8 @@ function buildApiMessagesIndexed(
   currentPlot: string[],
   stateCleanupThreshold: number,
   includePriorPlayerTurns: boolean,
+  includeWorldState: boolean,
+  includePlotOutline: boolean,
 ): { messages: ApiMessage[]; stateIndex: number; plotIndex: number } {
   const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt }]
   for (const def of ADVENTURE_SLOTS) {
@@ -1918,10 +2036,16 @@ function buildApiMessagesIndexed(
       content: `# Story so far\n\nChronicle of earlier turns, condensed by the archivist. Treat as canon.\n\n${summary}`,
     })
   }
-  const stateIndex = messages.length
-  messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold))
-  const plotIndex = messages.length
-  messages.push(buildPlotSystemMessage(currentPlot))
+  let stateIndex = -1
+  if (includeWorldState) {
+    stateIndex = messages.length
+    messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold))
+  }
+  let plotIndex = -1
+  if (includePlotOutline) {
+    plotIndex = messages.length
+    messages.push(buildPlotSystemMessage(currentPlot))
+  }
   const effectiveHistory = includePriorPlayerTurns
     ? history
     : history.filter((m, i) => m.role === 'dm' || i === history.length - 1)
@@ -1940,6 +2064,8 @@ function buildApiMessages(
   currentPlot: string[],
   stateCleanupThreshold: number,
   includePriorPlayerTurns: boolean,
+  includeWorldState: boolean,
+  includePlotOutline: boolean,
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
     systemPrompt,
@@ -1950,6 +2076,8 @@ function buildApiMessages(
     currentPlot,
     stateCleanupThreshold,
     includePriorPlayerTurns,
+    includeWorldState,
+    includePlotOutline,
   ).messages
 }
 
@@ -2029,6 +2157,24 @@ async function compactHistory(
   const content = data.choices?.[0]?.message?.content?.trim()
   if (!content) throw new Error('Summarizer returned empty retelling')
   return { summary: content, cutoff: hasNew ? newCutoff : priorCutoff }
+}
+
+function applyTurnReminder(messages: ApiMessage[], appendToUser: boolean): ApiMessage[] {
+  if (!appendToUser) {
+    return [...messages, { role: 'system', content: TURN_REMINDER }]
+  }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      const copy = messages.slice()
+      const existing = copy[i].content
+      copy[i] = {
+        ...copy[i],
+        content: `${existing}\n\n(OOC: ${TURN_REMINDER})`,
+      }
+      return copy
+    }
+  }
+  return [...messages, { role: 'system', content: TURN_REMINDER }]
 }
 
 function modelSupportsSampling(model: string): boolean {
@@ -2171,6 +2317,9 @@ async function askDungeonMaster(
   sampling: SamplingParams,
   stateCleanupThreshold: number,
   includePriorPlayerTurns: boolean,
+  appendReminderToUser: boolean,
+  includeWorldState: boolean,
+  includePlotOutline: boolean,
   signal: AbortSignal,
 ): Promise<{ text: string; state: WorldState; plot: string[]; trace: TraceEvent[] }> {
   let currentState = initialState
@@ -2184,7 +2333,12 @@ async function askDungeonMaster(
     currentPlot,
     stateCleanupThreshold,
     includePriorPlayerTurns,
+    includeWorldState,
+    includePlotOutline,
   )
+  const tools: unknown[] = []
+  if (includeWorldState) tools.push(UPDATE_STATE_TOOL)
+  if (includePlotOutline) tools.push(PLOT_UPDATE_TOOL)
 
   const trace: TraceEvent[] = []
   const pushToolResult = (call: ToolCall, content: string) => {
@@ -2201,10 +2355,10 @@ async function askDungeonMaster(
   for (let iter = 0; iter < 8; iter++) {
     const body: Record<string, unknown> = {
       model,
-      messages: [...apiMessages, { role: 'system', content: TURN_REMINDER }],
-      tools: [UPDATE_STATE_TOOL, PLOT_UPDATE_TOOL],
+      messages: applyTurnReminder(apiMessages, appendReminderToUser),
       stream: false,
     }
+    if (tools.length) body.tools = tools
     if (modelSupportsSampling(model)) {
       body.temperature = sampling.temperature
       body.frequency_penalty = sampling.frequencyPenalty
@@ -2252,8 +2406,12 @@ async function askDungeonMaster(
         currentPlot = exec.plot
         pushToolResult(call, exec.result)
       }
-      apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
-      apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      if (stateIndex >= 0) {
+        apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
+      }
+      if (plotIndex >= 0) {
+        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      }
       continue
     }
 
@@ -2279,8 +2437,12 @@ async function askDungeonMaster(
           result: exec.result,
         })
       }
-      apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
-      apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      if (stateIndex >= 0) {
+        apiMessages[stateIndex] = buildStateSystemMessage(currentState, stateCleanupThreshold)
+      }
+      if (plotIndex >= 0) {
+        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      }
       if (cleaned) return { text: cleaned, state: currentState, plot: currentPlot, trace }
       if (!nudged) {
         nudged = true
