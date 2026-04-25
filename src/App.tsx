@@ -174,8 +174,12 @@ const DEFAULT_SAMPLING: SamplingParams = {
   presencePenalty: 0,
 }
 
+const XAI_BASE_URL = 'https://api.x.ai/v1'
+const DEFAULT_MODEL = 'grok-4'
+
 const LS_SYSTEM = 'dm.systemPrompt'
 const LS_MODEL = 'dm.model'
+const LS_XAI_KEY = 'dm.xaiKey'
 const LS_STATE = 'dm.state'
 const LS_PLOT = 'dm.plot'
 const LS_SUMMARY = 'dm.summary'
@@ -460,7 +464,8 @@ function App() {
   const [systemPrompt, setSystemPrompt] = useState(() =>
     loadStored(LS_SYSTEM, DEFAULT_SYSTEM_PROMPT),
   )
-  const [model, setModel] = useState(() => loadStored(LS_MODEL, __XAI_MODEL__))
+  const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
+  const [xaiKey, setXaiKey] = useState(() => loadStored(LS_XAI_KEY, ''))
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
   const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
@@ -669,6 +674,7 @@ function App() {
         const compacted = await compactHistory(
           systemPrompt,
           model,
+          xaiKey,
           slots,
           workingSummary,
           pendingMessages,
@@ -688,6 +694,7 @@ function App() {
       const { text: reply, state: nextState, plot: nextPlot, trace } = await askDungeonMaster(
         systemPrompt,
         model,
+        xaiKey,
         slots,
         workingSummary,
         pendingMessages.slice(workingCutoff),
@@ -760,16 +767,15 @@ function App() {
       continueRequested: true,
     }
     setSnapshot(snap)
-    const playerMsg: Message = {
+    const directiveMsg: Message = {
       id: crypto.randomUUID(),
       role: 'player',
       text: CONTINUE_DIRECTIVE,
     }
-    const pendingMessages = [...messages, playerMsg]
-    setMessages(pendingMessages)
-    await runTurn(pendingMessages, state, plot, summary, compactCutoff, () => {
-      setMessages((m) => (m[m.length - 1]?.id === playerMsg.id ? m.slice(0, -1) : m))
-    })
+    // The directive is sent to the model but never added to the visible
+    // transcript, so it doesn't appear in replay or get persisted.
+    const pendingMessages = [...messages, directiveMsg]
+    await runTurn(pendingMessages, state, plot, summary, compactCutoff, () => {})
   }
 
   function undo() {
@@ -804,6 +810,7 @@ function App() {
       const compacted = await compactHistory(
         systemPrompt,
         model,
+        xaiKey,
         slots,
         summary,
         messages,
@@ -833,8 +840,18 @@ function App() {
     commitPlot([...snap.plot])
     commitSummary(snap.summary)
     commitCompactCutoff(snap.compactCutoff)
-    const replayText = snap.continueRequested ? CONTINUE_DIRECTIVE : snap.input
-    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text: replayText }
+    if (snap.continueRequested) {
+      const directiveMsg: Message = {
+        id: crypto.randomUUID(),
+        role: 'player',
+        text: CONTINUE_DIRECTIVE,
+      }
+      setMessages(snap.messages)
+      const pendingMessages = [...snap.messages, directiveMsg]
+      await runTurn(pendingMessages, snap.state, snap.plot, snap.summary, snap.compactCutoff, () => {})
+      return
+    }
+    const playerMsg: Message = { id: crypto.randomUUID(), role: 'player', text: snap.input }
     const pendingMessages = [...snap.messages, playerMsg]
     setMessages(pendingMessages)
     await runTurn(pendingMessages, snap.state, snap.plot, snap.summary, snap.compactCutoff, () => {
@@ -853,17 +870,21 @@ function App() {
   function saveSettings(
     nextSystem: string,
     nextModel: string,
+    nextXaiKey: string,
     nextSlots: AdventureSlots,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
   ) {
     setSystemPrompt(nextSystem)
     setModel(nextModel)
+    setXaiKey(nextXaiKey)
     commitSlots(nextSlots)
     setSampling(nextSampling)
     setContext(nextContext)
     try {
       localStorage.setItem(LS_SYSTEM, nextSystem)
+      if (nextXaiKey) localStorage.setItem(LS_XAI_KEY, nextXaiKey)
+      else localStorage.removeItem(LS_XAI_KEY)
       if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
       else localStorage.removeItem(LS_MODEL)
       localStorage.setItem(LS_SAMPLING, JSON.stringify(nextSampling))
@@ -902,6 +923,7 @@ function App() {
       const { text: reply, state: nextState, plot: nextPlot, trace } = await askDungeonMaster(
         systemPrompt,
         model,
+        xaiKey,
         nextSlots,
         '',
         bootstrap,
@@ -1040,6 +1062,7 @@ function App() {
         <SettingsPanel
           systemPrompt={systemPrompt}
           model={model}
+          xaiKey={xaiKey}
           slots={slots}
           sampling={sampling}
           context={context}
@@ -1121,6 +1144,7 @@ function App() {
 interface SettingsPanelProps {
   systemPrompt: string
   model: string
+  xaiKey: string
   slots: AdventureSlots
   sampling: SamplingParams
   context: ContextConfig
@@ -1128,6 +1152,7 @@ interface SettingsPanelProps {
   onSave: (
     systemPrompt: string,
     model: string,
+    xaiKey: string,
     slots: AdventureSlots,
     sampling: SamplingParams,
     context: ContextConfig,
@@ -1137,6 +1162,7 @@ interface SettingsPanelProps {
 function SettingsPanel({
   systemPrompt,
   model,
+  xaiKey,
   slots,
   sampling,
   context,
@@ -1145,6 +1171,7 @@ function SettingsPanel({
 }: SettingsPanelProps) {
   const [draftSystem, setDraftSystem] = useState(systemPrompt)
   const [draftModel, setDraftModel] = useState(model)
+  const [draftXaiKey, setDraftXaiKey] = useState(xaiKey)
   const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
@@ -1164,13 +1191,20 @@ function SettingsPanel({
   function save() {
     const trimmed = {} as AdventureSlots
     for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
-    onSave(draftSystem.trim(), draftModel.trim(), trimmed, draftSampling, draftContext)
+    onSave(
+      draftSystem.trim(),
+      draftModel.trim(),
+      draftXaiKey.trim(),
+      trimmed,
+      draftSampling,
+      draftContext,
+    )
     onClose()
   }
 
   function resetDefaults() {
     setDraftSystem(DEFAULT_SYSTEM_PROMPT)
-    setDraftModel(__XAI_MODEL__)
+    setDraftModel(DEFAULT_MODEL)
     setDraftSampling({ ...DEFAULT_SAMPLING })
     setDraftContext({ ...DEFAULT_CONTEXT })
   }
@@ -1183,12 +1217,31 @@ function SettingsPanel({
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
         <label>
+          <span>xAI API key</span>
+          <input
+            type="password"
+            value={draftXaiKey}
+            onChange={(e) => setDraftXaiKey(e.target.value)}
+            placeholder="xai-…"
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <small className="hint">
+            Stored in this browser&apos;s localStorage and sent directly to{' '}
+            <code>api.x.ai</code> on each turn. Get one at{' '}
+            <a href="https://console.x.ai/" target="_blank" rel="noreferrer">
+              console.x.ai
+            </a>
+            .
+          </small>
+        </label>
+        <label>
           <span>Model</span>
           <input
             type="text"
             value={draftModel}
             onChange={(e) => setDraftModel(e.target.value)}
-            placeholder={__XAI_MODEL__}
+            placeholder={DEFAULT_MODEL}
             list="dm-model-suggestions"
             spellCheck={false}
           />
@@ -1199,8 +1252,8 @@ function SettingsPanel({
             <option value="grok-code-fast" />
           </datalist>
           <small className="hint">
-            xAI model id sent to <code>/chat/completions</code>. Env default:{' '}
-            <code>{__XAI_MODEL__}</code>. Applies on the next turn — reasoning variants
+            xAI model id sent to <code>/chat/completions</code>. Default:{' '}
+            <code>{DEFAULT_MODEL}</code>. Applies on the next turn — reasoning variants
             skip temperature/penalty.
           </small>
         </label>
@@ -2081,9 +2134,29 @@ function buildApiMessages(
   ).messages
 }
 
+async function xaiChat(
+  body: unknown,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<Response> {
+  if (!apiKey) {
+    throw new Error('xAI API key not set. Open Settings and paste your key.')
+  }
+  return fetch(`${XAI_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+}
+
 async function compactHistory(
   systemPrompt: string,
   model: string,
+  apiKey: string,
   slots: AdventureSlots,
   priorSummary: string,
   messages: Message[],
@@ -2135,16 +2208,15 @@ async function compactHistory(
     { role: 'user', content: userContent },
   ]
 
-  const res = await fetch('/api/xai/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const res = await xaiChat(
+    {
       model,
       messages: apiMessages,
       stream: false,
-    }),
+    },
+    apiKey,
     signal,
-  })
+  )
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
@@ -2309,6 +2381,7 @@ function parseInlineToolCalls(content: string): { cleaned: string; calls: Inline
 async function askDungeonMaster(
   systemPrompt: string,
   model: string,
+  apiKey: string,
   slots: AdventureSlots,
   summary: string,
   history: Message[],
@@ -2365,12 +2438,7 @@ async function askDungeonMaster(
       body.presence_penalty = sampling.presencePenalty
     }
     console.debug('[dm] xAI request', { iter, model, toolCount: (body.tools as unknown[])?.length, body })
-    const res = await fetch('/api/xai/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal,
-    })
+    const res = await xaiChat(body, apiKey, signal)
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
