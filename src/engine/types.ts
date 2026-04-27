@@ -76,6 +76,7 @@ export interface ContextConfig {
   includeWorldState: boolean
   includePlotOutline: boolean
   usePlanner: boolean
+  nsfw: boolean
 }
 
 export interface ChronicleEntry {

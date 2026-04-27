@@ -1,7 +1,7 @@
 // Composes the OpenAI-shaped messages array sent to the model. Pure functions
 // — given turns + state + plot + flags, returns the wire payload.
 
-import { TURN_REMINDER } from '../prompts'
+import { NSFW_OFF_PROMPT, NSFW_ON_PROMPT, TURN_REMINDER } from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import { STATE_RULES } from './state'
@@ -55,8 +55,12 @@ export function buildApiMessagesIndexed(
   includePriorPlayerTurns: boolean,
   includeWorldState: boolean,
   includePlotOutline: boolean,
+  nsfw: boolean,
 ): { messages: ApiMessage[]; stateIndex: number; plotIndex: number } {
-  const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt }]
+  const messages: ApiMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'system', content: nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT },
+  ]
   for (const def of ADVENTURE_SLOTS) {
     const value = (slots[def.key] ?? '').trim()
     if (!value) continue
@@ -108,6 +112,7 @@ export function buildApiMessages(
   includePriorPlayerTurns: boolean,
   includeWorldState: boolean,
   includePlotOutline: boolean,
+  nsfw: boolean,
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
     systemPrompt,
@@ -120,6 +125,7 @@ export function buildApiMessages(
     includePriorPlayerTurns,
     includeWorldState,
     includePlotOutline,
+    nsfw,
   ).messages
 }
 

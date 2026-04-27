@@ -38,6 +38,7 @@ export interface PlannerContext {
   stateCleanupThreshold: number
   includeWorldState: boolean
   includePlotOutline: boolean
+  nsfw: boolean
 }
 
 export interface PlannerResult {
@@ -69,6 +70,7 @@ export async function runPlanner(
     true, // include the player's input on the in-flight turn (planner needs it)
     ctx.includeWorldState,
     ctx.includePlotOutline,
+    ctx.nsfw,
   )
 
   const tools: unknown[] = []

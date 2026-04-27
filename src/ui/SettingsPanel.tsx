@@ -326,6 +326,22 @@ export function SettingsPanel({
           <label className="flag-field">
             <input
               type="checkbox"
+              checked={draftContext.nsfw}
+              onChange={(e) => setContextField('nsfw', e.target.checked)}
+            />
+            <span>
+              <strong>Allow NSFW / mature themes</strong>
+              <small>
+                When on, the DM is told the player is a consenting adult and may include
+                dark, mature, or NSFW themes if they fit the story. When off, the DM is
+                told to avoid NSFW descriptions or plot developments. Default{' '}
+                {DEFAULT_CONTEXT.nsfw ? 'on' : 'off'}.
+              </small>
+            </span>
+          </label>
+          <label className="flag-field">
+            <input
+              type="checkbox"
               checked={draftContext.usePlanner}
               onChange={(e) => setContextField('usePlanner', e.target.checked)}
             />

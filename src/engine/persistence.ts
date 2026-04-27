@@ -198,6 +198,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.usePlanner === 'boolean'
           ? parsed.usePlanner
           : DEFAULT_CONTEXT.usePlanner,
+      nsfw:
+        typeof parsed.nsfw === 'boolean'
+          ? parsed.nsfw
+          : DEFAULT_CONTEXT.nsfw,
     }
   } catch {
     return { ...DEFAULT_CONTEXT }

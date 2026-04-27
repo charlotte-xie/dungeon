@@ -305,6 +305,7 @@ function App() {
             stateCleanupThreshold: context.stateCleanupChars,
             includeWorldState: context.includeWorldState,
             includePlotOutline: context.includePlotOutline,
+            nsfw: context.nsfw,
           },
           controller.signal,
         )
@@ -340,6 +341,7 @@ function App() {
           appendReminderToUser: context.appendReminderToUser,
           includeWorldState: context.includeWorldState,
           includePlotOutline: context.includePlotOutline,
+          nsfw: context.nsfw,
           disableMutationTools: context.usePlanner,
           plannerInstruction: plannerCall?.text,
         },
@@ -568,6 +570,7 @@ function App() {
           appendReminderToUser: context.appendReminderToUser,
           includeWorldState: context.includeWorldState,
           includePlotOutline: context.includePlotOutline,
+          nsfw: context.nsfw,
         },
         controller.signal,
       )
@@ -765,6 +768,7 @@ function App() {
               context.includePriorPlayerTurns,
               context.includeWorldState,
               context.includePlotOutline,
+              context.nsfw,
             ),
             context.appendReminderToUser,
           )}

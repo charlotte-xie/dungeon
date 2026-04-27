@@ -35,6 +35,7 @@ export interface NarratorContext {
   appendReminderToUser: boolean
   includeWorldState: boolean
   includePlotOutline: boolean
+  nsfw: boolean
   // When true, drop update_state / plot_update from the offered tool set —
   // the planner already handled state/plot mutations for this turn and the
   // narrator is purely a writer.
@@ -70,6 +71,7 @@ export async function runNarrator(
     ctx.includePriorPlayerTurns,
     ctx.includeWorldState,
     ctx.includePlotOutline,
+    ctx.nsfw,
   )
   const tools: unknown[] = []
   if (!ctx.disableMutationTools) {

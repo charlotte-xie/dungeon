@@ -71,6 +71,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includeWorldState: true,
   includePlotOutline: true,
   usePlanner: false,
+  nsfw: true,
 }
 
 export const DEFAULT_SAMPLING: SamplingParams = {
