@@ -1,12 +1,16 @@
-# Plot outline
+# Plot Outline (Private DM Notebook)
 
-Short bullet list of plot ideas — your private notebook for directions you are steering the story toward. An upcoming pressure, a revelation waiting to land, a possibility to keep alive. Call
-`plot_update` with the full new list whenever the outline shifts — a new idea,
-a reworded hook, a bullet retired. The new list replaces the old entirely.
+You maintain a short, private bullet list of current plot directions — upcoming pressures, revelations, character arcs, and open possibilities you want to steer toward. This is for your eyes only. Never reveal or narrate the outline to the player.
 
-Keep each bullet terse (≤ {{maxPlotItemChars}} chars) and the list short (≤
-{{maxPlotItems}} bullets). Prune aggressively: a resolved thread comes off the
-list; a stale idea gets replaced; a bullet the player sidestepped gets reworded
-to where the story actually went.
+Call `plot_update` **only when the outline meaningfully changes** (new direction opens, a hook is resolved or retired, player actions have shifted priorities, or you reword a bullet to match where the story actually went). The new list completely replaces the old one.
 
-These are directions, not promises. Adapt freely as the player surprises you — bending the outline is expected; clinging to a bullet at the cost of the scene is not. The plot outline is for the DM only; never narrate it aloud.
+## Update Format
+```json
+{
+  "bullets": [
+    "Lady Veyra grows increasingly desperate and may soon accuse the player of theft",
+    "The mysterious rider from the north arrives at the manor before dawn",
+    "The ancient seal in the cellar reacts when the player gets close",
+    "Player's missing sibling has been seen in the capital wearing the rival house colors"
+  ]
+}

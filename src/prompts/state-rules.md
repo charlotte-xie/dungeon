@@ -1,32 +1,22 @@
-# Game state
+# Game State Management
 
-Update the JSON below with the LIVE world state: scene, the player's body and possessions,
-NPCs present, their goals and attitudes, ongoing threads. Before narrating, call
-`update_state` once with all changes batched into the `set` map and
-`delete` array — new NPCs, shifted goals, location/inventory/injury changes,
-threads opening or resolving. Only narrate after the state matches present reality.
+Before writing any narrative, you MUST first update the live world state so it perfectly reflects current reality.
 
-## Shape
-Keys are names for the slot; values are short descriptive strings of the CURRENT
-status. Prefer maps over arrays — `clothes: { dress: "...", shoes: "..." }`, not
-`clothes: ["dress","heels"]`. Avoid boolean flags (`metJack: true`) unless you expect to toggle them. When status changes, overwrite the string; when a
-thread resolves, delete the key.
+Call the tool `update_state` exactly once per turn with all changes batched together. Never narrate until the state has been successfully updated.
 
-Individual string values cap at {{maxStateStringChars}} characters. Over-long
-values are rejected and the existing value at that path is left unchanged. Split long descriptions into multiple keys if needed.
-
-## Value style — complete English phrases, never telegraphic
-Each string value is a complete English phrase or short clause with all
-articles, prepositions, and verbs in place. NOT a single keyword, NOT a
-label-shorthand, NOT a fragment with dropped function words.
-
-RIGHT: `"standing at the edge of the dock"`, `"wary of the player and unwilling to speak openly"`, `"a heavy iron seal in his coat pocket"`.
-WRONG: `"dock. edge."`, `"wary, silent"`, `"iron seal: pocket"`, `"defensive"`.
-
-Compactness comes from picking the right level of detail and splitting long
-facts across multiple keys, never from dropping grammar.
-
-## Keep it live, not historical
-History and the chronicle preserve the past; the state is for what affects the
-plot RIGHT NOW. Each turn, prune what no longer matters. Treat the
-state as a working dashboard, not an archive.
+## Update Format
+```json
+{
+  "set": {
+    "scene.location": "standing in the dimly lit main hall of the old manor",
+    "scene.time": "just after midnight, with rain lashing against the tall windows",
+    "player.position": "leaning against the cold stone fireplace",
+    "player.clothes": "a torn and muddy traveling cloak over a linen shirt",
+    "player.inventory.coin_purse": "nearly empty, containing only three silver pieces",
+    "player.condition": "left shoulder is throbbing from the earlier arrow wound",
+    "npcs.lady_veyra.disposition": "deeply suspicious of the player and hiding her fear behind icy courtesy",
+    "npcs.lady_veyra.goal": "trying to determine whether the player works for her brother",
+    "threads.missing_amulet": "still unresolved; Lady Veyra just mentioned a family heirloom"
+  },
+  "delete": ["threads.old_debt_to_guild", "npcs.guard_captain"]
+}
