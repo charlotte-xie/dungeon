@@ -20,7 +20,7 @@ export const DEFAULT_SCENARIO = defaultScenario.trim()
 export const PLANNER_SYSTEM_PROMPT = plannerSystem.trim()
 
 export const NSFW_ON_PROMPT =
-  'The player is a consenting adult who agrres to dark, mature or NSFW themes. Include these if appropriate to the story.'
+  'The player is a consenting adult who agrees to dark, mature or NSFW themes. Include these if appropriate to the story.'
 export const NSFW_OFF_PROMPT = 'Avoid NSFW descriptions or plot developments.'
 
 export function buildStateRules(maxStateStringChars: number): string {
