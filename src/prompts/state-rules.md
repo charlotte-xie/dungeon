@@ -15,6 +15,17 @@ thread resolves, delete the key.
 Individual string values cap at {{maxStateStringChars}} characters. Over-long
 values are rejected and the existing value at that path is left unchanged. Split long descriptions into multiple keys if needed.
 
+## Value style — complete English phrases, never telegraphic
+Each string value is a complete English phrase or short clause with all
+articles, prepositions, and verbs in place. NOT a single keyword, NOT a
+label-shorthand, NOT a fragment with dropped function words.
+
+RIGHT: `"standing at the edge of the dock"`, `"wary of the player and unwilling to speak openly"`, `"a heavy iron seal in his coat pocket"`.
+WRONG: `"dock. edge."`, `"wary, silent"`, `"iron seal: pocket"`, `"defensive"`.
+
+Compactness comes from picking the right level of detail and splitting long
+facts across multiple keys, never from dropping grammar.
+
 ## Keep it live, not historical
 History and the chronicle preserve the past; the state is for what affects the
 plot RIGHT NOW. Each turn, prune what no longer matters. Treat the

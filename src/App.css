@@ -142,30 +142,38 @@ header h1 {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
+  align-items: stretch;
 }
 
 .composer textarea {
   flex: 1;
-  resize: none;
-  padding: 0.5rem;
+  resize: vertical;
+  padding: 0.45rem 0.6rem;
   font: inherit;
   background: #1a1a1a;
   color: inherit;
   border: 1px solid #3a3a3a;
   border-radius: 4px;
+  min-height: 2.4rem;
+  line-height: 1.35;
 }
 
 .composer-buttons {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.35rem;
-  justify-content: stretch;
+  align-items: stretch;
+}
+
+.composer-buttons .primary {
+  padding: 0 1.4rem;
+  font-size: 0.95rem;
+  min-width: 4.5rem;
 }
 
 .composer-buttons .ghost {
-  padding: 0 0.8rem;
-  min-height: 1.9rem;
-  font-size: 0.8rem;
+  padding: 0 0.7rem;
+  font-size: 0.75rem;
   background: transparent;
   color: #c9a959;
   border: 1px solid #3a3a3a;
@@ -174,12 +182,6 @@ header h1 {
 
 .composer-buttons .ghost:hover:not(:disabled) {
   border-color: #c9a959;
-}
-
-.composer-buttons > button:last-child {
-  flex: 1;
-  min-height: 2.4rem;
-  font-size: 1rem;
 }
 
 .composer button {
@@ -522,6 +524,15 @@ textarea.state-json-editor {
   white-space: pre-wrap;
 }
 
+.trace-reasoning p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #8aa6c2;
+  white-space: pre-wrap;
+  border-left: 2px solid #2d4456;
+  padding-left: 0.55rem;
+}
+
 .trace-call-head {
   display: flex;
   align-items: baseline;
@@ -547,6 +558,101 @@ textarea.state-json-editor {
   white-space: pre-wrap;
 }
 
+.trace-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #2a2a2a;
+}
+
+.trace-section:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.trace-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.trace-section-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #c9a959;
+  font-weight: 600;
+}
+
+.trace-section-model {
+  font-size: 0.7rem;
+  color: #777;
+  background: #1a1a1a;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+}
+
+.trace-output p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #d8d2c0;
+  white-space: pre-wrap;
+}
+
+.chronicle-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0.4rem;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+}
+
+.chronicle-level {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chronicle-level-head {
+  font-size: 0.85rem;
+  margin: 0;
+  color: #c9a959;
+  font-weight: 600;
+}
+
+.chronicle-level-meta {
+  font-size: 0.7rem;
+  color: #888;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.chronicle-entry {
+  border-left: 2px solid #3a3a3a;
+  padding: 0.25rem 0.6rem;
+}
+
+.chronicle-entry-meta {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #777;
+  margin-bottom: 0.25rem;
+}
+
+.chronicle-entry-text {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #d8d2c0;
+  white-space: pre-wrap;
+}
+
 .saves-save-row input {
   flex: 1;
   font: inherit;
@@ -555,6 +661,31 @@ textarea.state-json-editor {
   color: #e6e6e6;
   border: 1px solid #3a3a3a;
   border-radius: 4px;
+}
+
+.model-picker {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.model-picker select,
+.model-picker input {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  background: #1a1a1a;
+  color: #e6e6e6;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
+.model-picker select {
+  flex: 0 0 auto;
+  max-width: 50%;
+}
+
+.model-picker input {
+  flex: 1;
+  min-width: 0;
 }
 
 .saves-save-row input:disabled {
