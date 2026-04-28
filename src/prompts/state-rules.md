@@ -1,8 +1,8 @@
 # Game State Management
 
-Before writing any narrative, you MUST first update the live world state so it perfectly reflects current reality.
+Before narrating, update the live world state to reflect current reality.
 
-Call the tool `update_state` exactly once per turn with all changes batched together. Never narrate until the state has been successfully updated.
+Call `update_state` exactly once per turn with all changes batched. Never narrate until state has been updated.
 
 ## Update Format
 ```json
@@ -20,3 +20,4 @@ Call the tool `update_state` exactly once per turn with all changes batched toge
   },
   "delete": ["threads.old_debt_to_guild", "npcs.guard_captain"]
 }
+```
