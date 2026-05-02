@@ -29,6 +29,7 @@ interface SettingsPanelProps {
   slots: AdventureSlots
   sampling: SamplingParams
   context: ContextConfig
+  showTrace: boolean
   onClose: () => void
   onSave: (
     systemPrompt: string,
@@ -37,6 +38,7 @@ interface SettingsPanelProps {
     slots: AdventureSlots,
     sampling: SamplingParams,
     context: ContextConfig,
+    showTrace: boolean,
   ) => void
 }
 
@@ -47,6 +49,7 @@ export function SettingsPanel({
   slots,
   sampling,
   context,
+  showTrace,
   onClose,
   onSave,
 }: SettingsPanelProps) {
@@ -56,6 +59,7 @@ export function SettingsPanel({
   const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
+  const [draftShowTrace, setDraftShowTrace] = useState<boolean>(showTrace)
 
   function setSlotField(key: SlotKey, value: string) {
     setDraftSlots((s) => ({ ...s, [key]: value }))
@@ -79,6 +83,7 @@ export function SettingsPanel({
       trimmed,
       draftSampling,
       draftContext,
+      draftShowTrace,
     )
     onClose()
   }
@@ -97,7 +102,7 @@ export function SettingsPanel({
           <h2>Settings</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
-        <label>
+        <label title="Stored in this browser's localStorage and sent directly to api.x.ai on each turn. Get one at https://console.x.ai/">
           <span>xAI API key</span>
           <input
             type="password"
@@ -107,16 +112,10 @@ export function SettingsPanel({
             spellCheck={false}
             autoComplete="off"
           />
-          <small className="hint">
-            Stored in this browser&apos;s localStorage and sent directly to{' '}
-            <code>api.x.ai</code> on each turn. Get one at{' '}
-            <a href="https://console.x.ai/" target="_blank" rel="noreferrer">
-              console.x.ai
-            </a>
-            .
-          </small>
         </label>
-        <label>
+        <label
+          title={`Pick a preset on the left or type any xAI model id on the right. Sent to /chat/completions. Default: ${DEFAULT_MODEL}. Applies on the next turn — reasoning variants skip temperature/penalty.`}
+        >
           <span>Model</span>
           <div className="model-picker">
             <select
@@ -138,11 +137,6 @@ export function SettingsPanel({
               spellCheck={false}
             />
           </div>
-          <small className="hint">
-            Pick a preset on the left or type any xAI model id on the right. Sent to{' '}
-            <code>/chat/completions</code>. Default: <code>{DEFAULT_MODEL}</code>.
-            Applies on the next turn — reasoning variants skip temperature/penalty.
-          </small>
         </label>
         <label>
           <span>System prompt</span>
@@ -153,7 +147,7 @@ export function SettingsPanel({
           />
         </label>
         {ADVENTURE_SLOTS.map((def) => (
-          <label key={def.key}>
+          <label key={def.key} title={def.hint}>
             <span>{def.label}</span>
             <textarea
               value={draftSlots[def.key] ?? ''}
@@ -161,12 +155,14 @@ export function SettingsPanel({
               rows={def.rows}
               placeholder={def.placeholder}
             />
-            <small className="hint">{def.hint}</small>
           </label>
         ))}
 
         <div className="sampling-grid">
-          <label className="sampling-field">
+          <label
+            className="sampling-field"
+            title={`Higher = more varied prose and rhythm. Default ${DEFAULT_SAMPLING.temperature}. Ignored on reasoning models.`}
+          >
             <span>Temperature</span>
             <input
               type="number"
@@ -176,9 +172,11 @@ export function SettingsPanel({
               value={draftSampling.temperature}
               onChange={(e) => setSamplingField('temperature', Number(e.target.value))}
             />
-            <small>Higher = more varied prose and rhythm. Default {DEFAULT_SAMPLING.temperature}. Ignored on reasoning models.</small>
           </label>
-          <label className="sampling-field">
+          <label
+            className="sampling-field"
+            title={`Discourages repeated phrases and sentence shapes. Default ${DEFAULT_SAMPLING.frequencyPenalty}.`}
+          >
             <span>Frequency penalty</span>
             <input
               type="number"
@@ -188,9 +186,11 @@ export function SettingsPanel({
               value={draftSampling.frequencyPenalty}
               onChange={(e) => setSamplingField('frequencyPenalty', Number(e.target.value))}
             />
-            <small>Discourages repeated phrases and sentence shapes. Default {DEFAULT_SAMPLING.frequencyPenalty}.</small>
           </label>
-          <label className="sampling-field">
+          <label
+            className="sampling-field"
+            title={`Pushes toward new topics / fresh turns. Default ${DEFAULT_SAMPLING.presencePenalty}.`}
+          >
             <span>Presence penalty</span>
             <input
               type="number"
@@ -200,12 +200,14 @@ export function SettingsPanel({
               value={draftSampling.presencePenalty}
               onChange={(e) => setSamplingField('presencePenalty', Number(e.target.value))}
             />
-            <small>Pushes toward new topics / fresh turns. Default {DEFAULT_SAMPLING.presencePenalty}.</small>
           </label>
         </div>
 
         <div className="sampling-grid">
-          <label className="sampling-field">
+          <label
+            className="sampling-field"
+            title={`When the live tail (turns past the cutoff) reaches this many turns, the oldest M get folded into one chronicle entry. Same threshold applies recursively at every chronicle level. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
+          >
             <span>Compaction threshold (N)</span>
             <input
               type="number"
@@ -214,14 +216,11 @@ export function SettingsPanel({
               value={draftContext.compactionThreshold}
               onChange={(e) => setContextField('compactionThreshold', Number(e.target.value))}
             />
-            <small>
-              When the live tail (turns past the cutoff) reaches this many turns,
-              the oldest <em>M</em> get folded into one chronicle entry. Same threshold
-              applies recursively at every chronicle level. Default{' '}
-              {DEFAULT_CONTEXT.compactionThreshold}.
-            </small>
           </label>
-          <label className="sampling-field">
+          <label
+            className="sampling-field"
+            title={`How many turns or entries to fold per compaction step. One chronicle entry covers M raw turns; a level-1 entry covers M²; and so on. Default ${DEFAULT_CONTEXT.compactionBatch}.`}
+          >
             <span>Compaction batch (M)</span>
             <input
               type="number"
@@ -230,13 +229,11 @@ export function SettingsPanel({
               value={draftContext.compactionBatch}
               onChange={(e) => setContextField('compactionBatch', Number(e.target.value))}
             />
-            <small>
-              How many turns or entries to fold per compaction step. One chronicle
-              entry covers <em>M</em> raw turns; a level-1 entry covers <em>M²</em>;
-              and so on. Default {DEFAULT_CONTEXT.compactionBatch}.
-            </small>
           </label>
-          <label className="sampling-field">
+          <label
+            className="sampling-field"
+            title={`When the state JSON exceeds this, a cleanup reminder is appended to the state system message. Default ${DEFAULT_CONTEXT.stateCleanupChars.toLocaleString()}.`}
+          >
             <span>State cleanup nudge (chars)</span>
             <input
               type="number"
@@ -245,120 +242,102 @@ export function SettingsPanel({
               value={draftContext.stateCleanupChars}
               onChange={(e) => setContextField('stateCleanupChars', Number(e.target.value))}
             />
-            <small>
-              When the state JSON exceeds this, a cleanup reminder is appended to the
-              state system message. Default {DEFAULT_CONTEXT.stateCleanupChars.toLocaleString()}.
-            </small>
+          </label>
+        </div>
+
+        <h3 className="saves-subhead">Display</h3>
+        <div className="flag-list">
+          <label
+            className="flag-field"
+            title="Display the per-turn trace toggle and reasoning / tool-call boxes under each DM reply. Turn off to hide them entirely. Default on."
+          >
+            <input
+              type="checkbox"
+              checked={draftShowTrace}
+              onChange={(e) => setDraftShowTrace(e.target.checked)}
+            />
+            <strong>Show trace under DM messages</strong>
           </label>
         </div>
 
         <h3 className="saves-subhead">Experimental flags</h3>
         <div className="flag-list">
-          <label className="flag-field">
+          <label
+            className="flag-field"
+            title={`When off, only the current player message is sent; earlier player messages are dropped (their content already lives in the DM narration that followed). Saves tokens but loses the literal wording for reference. Default ${DEFAULT_CONTEXT.includePriorPlayerTurns ? 'on' : 'off'}.`}
+          >
             <input
               type="checkbox"
               checked={draftContext.includePriorPlayerTurns}
               onChange={(e) => setContextField('includePriorPlayerTurns', e.target.checked)}
             />
-            <span>
-              <strong>Include prior player turns in context</strong>
-              <small>
-                When off, only the current player message is sent; earlier player messages
-                are dropped (their content already lives in the DM narration that followed).
-                Saves tokens but loses the literal wording for reference. Default{' '}
-                {DEFAULT_CONTEXT.includePriorPlayerTurns ? 'on' : 'off'}.
-              </small>
-            </span>
+            <strong>Include prior player turns in context</strong>
           </label>
-          <label className="flag-field">
+          <label
+            className="flag-field"
+            title={`When on (default), the turn reminder is sent as a trailing system message after the player's input — clean separation, treated as just-in-time guidance. When off, the reminder is sent as an extra user message wrapped in (OOC: …); the dm-system prompt treats parens-wrapped player text as out-of-character directives, which can give the reminder more behavioral weight at the cost of breaking strict user/assistant alternation. Flip this off if the model under-weights the checklist as a system message. Default ${DEFAULT_CONTEXT.reminderAsSystem ? 'on' : 'off'}.`}
+          >
             <input
               type="checkbox"
-              checked={draftContext.appendReminderToUser}
-              onChange={(e) => setContextField('appendReminderToUser', e.target.checked)}
+              checked={draftContext.reminderAsSystem}
+              onChange={(e) => setContextField('reminderAsSystem', e.target.checked)}
             />
-            <span>
-              <strong>Fold turn reminder into player message</strong>
-              <small>
-                When on, the turn reminder is folded into the latest player message as an
-                OOC suffix so the wire ends with one <code>user</code> turn (standard
-                alternation). When off (default), the reminder is sent as a separate
-                <code>user</code> message wrapped in <code>(OOC: …)</code> after the
-                player's input — the dm-system prompt treats parens-wrapped player text
-                as out-of-character directives, so this lands as an in-channel
-                instruction rather than mid-conversation system noise. Flip this on if
-                the model hallucinates a second player turn or stops mid-OOC. Default{' '}
-                {DEFAULT_CONTEXT.appendReminderToUser ? 'on' : 'off'}.
-              </small>
-            </span>
+            <strong>Send turn reminder as system message</strong>
           </label>
-          <label className="flag-field">
+          <label
+            className="flag-field"
+            title={`When off, the long-term-memory system message is dropped AND the update_memory tool is not advertised — the model has no persistent record of NPCs, locations, plot themes, or key past events. Default ${DEFAULT_CONTEXT.includeMemory ? 'on' : 'off'}.`}
+          >
+            <input
+              type="checkbox"
+              checked={draftContext.includeMemory}
+              onChange={(e) => setContextField('includeMemory', e.target.checked)}
+            />
+            <strong>Include long-term memory</strong>
+          </label>
+          <label
+            className="flag-field"
+            title={`When off, the live-state system message is dropped AND the update_state tool is not advertised — the model has no record of the current scene. Useful for comparing prose quality with/without structured grounding. Default ${DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.`}
+          >
             <input
               type="checkbox"
               checked={draftContext.includeWorldState}
               onChange={(e) => setContextField('includeWorldState', e.target.checked)}
             />
-            <span>
-              <strong>Include world state</strong>
-              <small>
-                When off, the world-state system message is dropped AND the{' '}
-                <code>update_state</code> tool is not advertised — the model can't read or
-                write state. Useful for comparing prose quality with/without structured
-                grounding. Default {DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.
-              </small>
-            </span>
+            <strong>Include live state</strong>
           </label>
-          <label className="flag-field">
+          <label
+            className="flag-field"
+            title={`When off, the future-plot-plan system message is dropped AND the future_plot_plan tool is not advertised — the model steers without a running plan. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
+          >
             <input
               type="checkbox"
               checked={draftContext.includePlotOutline}
               onChange={(e) => setContextField('includePlotOutline', e.target.checked)}
             />
-            <span>
-              <strong>Include plot outline</strong>
-              <small>
-                When off, the plot-outline system message is dropped AND the{' '}
-                <code>plot_update</code> tool is not advertised — the model steers without
-                a running outline. Default{' '}
-                {DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.
-              </small>
-            </span>
+            <strong>Include future plot plan</strong>
           </label>
-          <label className="flag-field">
+          <label
+            className="flag-field"
+            title={`When on, the DM is told the player is a consenting adult and may include dark, mature, or NSFW themes if they fit the story. When off, the DM is told to avoid NSFW descriptions or plot developments. Default ${DEFAULT_CONTEXT.nsfw ? 'on' : 'off'}.`}
+          >
             <input
               type="checkbox"
               checked={draftContext.nsfw}
               onChange={(e) => setContextField('nsfw', e.target.checked)}
             />
-            <span>
-              <strong>Allow NSFW / mature themes</strong>
-              <small>
-                When on, the DM is told the player is a consenting adult and may include
-                dark, mature, or NSFW themes if they fit the story. When off, the DM is
-                told to avoid NSFW descriptions or plot developments. Default{' '}
-                {DEFAULT_CONTEXT.nsfw ? 'on' : 'off'}.
-              </small>
-            </span>
+            <strong>Allow NSFW / mature themes</strong>
           </label>
-          <label className="flag-field">
+          <label
+            className="flag-field"
+            title={`When on, a planner pass runs before the narrator each turn: it reads the chronicle, recent turns, and current state, then writes a director's-note instruction (visible in the trace) and handles all update_state / update_memory / future_plot_plan calls. The instruction is then injected into the narrator's prompt as a labeled PLANNER INPUT system message, and the narrator's mutation tools are suppressed (planner already covered them). Roughly doubles tokens and latency per turn. Default ${DEFAULT_CONTEXT.usePlanner ? 'on' : 'off'}.`}
+          >
             <input
               type="checkbox"
               checked={draftContext.usePlanner}
               onChange={(e) => setContextField('usePlanner', e.target.checked)}
             />
-            <span>
-              <strong>Run planner before narrator</strong>
-              <small>
-                When on, a planner pass runs before the narrator each turn: it reads the
-                chronicle, recent turns, and current state, then writes a director's-note
-                instruction (visible in the trace) and handles all{' '}
-                <code>update_state</code> / <code>plot_update</code> calls. The
-                instruction is then injected into the narrator's prompt as a labeled{' '}
-                <code>PLANNER INPUT</code> system message, and the narrator's mutation
-                tools are suppressed (planner already covered them). Roughly doubles
-                tokens and latency per turn. Default{' '}
-                {DEFAULT_CONTEXT.usePlanner ? 'on' : 'off'}.
-              </small>
-            </span>
+            <strong>Run planner before narrator</strong>
           </label>
         </div>
 

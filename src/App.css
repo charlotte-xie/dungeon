@@ -61,6 +61,29 @@ header h1 {
   white-space: pre-wrap;
 }
 
+.msg-edit {
+  display: block;
+  width: 100%;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  outline: 1px dashed #c9a959;
+  outline-offset: 4px;
+  border-radius: 2px;
+  resize: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.msg-edit:focus {
+  outline-style: solid;
+}
+
 .who {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -217,7 +240,7 @@ header h1 {
   background: #161616;
   border: 1px solid #3a3a3a;
   border-radius: 8px;
-  padding: 1.25rem 1.25rem 1rem;
+  padding: 0 1.25rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
@@ -292,6 +315,12 @@ header h1 {
   justify-content: space-between;
   gap: 0.75rem;
   margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #161616;
+  padding: 1rem 0 0.5rem;
+  border-bottom: 1px solid #2a2a2a;
 }
 
 .modal-close {
@@ -359,14 +388,6 @@ header h1 {
   text-transform: uppercase;
 }
 
-.sampling-field small {
-  font-size: 0.7rem;
-  color: #9a9a9a;
-  letter-spacing: normal;
-  text-transform: none;
-  line-height: 1.35;
-}
-
 @media (max-width: 560px) {
   .sampling-grid {
     grid-template-columns: 1fr;
@@ -397,7 +418,8 @@ header h1 {
   color: #d6d6d6;
   max-height: 55vh;
   overflow: auto;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 textarea.state-json-editor {
@@ -438,37 +460,26 @@ textarea.state-json-editor {
 
 .flag-field {
   display: flex;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
   gap: 0.6rem;
   font: inherit;
-  padding: 0.5rem 0.6rem;
+  padding: 0.4rem 0.6rem;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
   background: #141414;
 }
 
 .flag-field input[type='checkbox'] {
-  margin-top: 0.2rem;
   accent-color: #c9a959;
   flex-shrink: 0;
-}
-
-.flag-field span {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
 }
 
 .flag-field strong {
   font-size: 0.9rem;
   font-weight: 500;
   color: #d6d6d6;
-}
-
-.flag-field small {
-  color: #8a8a8a;
-  font-size: 0.78rem;
-  line-height: 1.4;
 }
 
 .trace {

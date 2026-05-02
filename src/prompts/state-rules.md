@@ -1,23 +1,39 @@
-# Game State Management
+# Live State (Current Scene Only)
 
-Before narrating, update the live world state to reflect current reality.
+Live state is the **current scene** — what is true *right now*, in this moment, in this location. It is short-lived and ephemeral. It exists so you stay consistent across one scene; once the scene ends, most of it is overwritten or cleared.
 
-Call `update_state` exactly once per turn with all changes batched. Never narrate until state has been updated.
+## What belongs here
 
-## Update Format
+- The current location and immediate surroundings (what room, what time of day, what weather).
+- The player's current position, posture, what they're wearing/holding right now.
+- Which NPCs are physically present in the scene and what they're doing this moment.
+- The active stimulus the scene is built around (an open conversation thread, an unresolved demand, a noise the player just heard).
+
+## What does NOT belong here
+
+- Recurring NPCs' personalities, secrets, or relationships across the story → that's **memory** (`update_memory`).
+- Named locations the player may revisit later → memory.
+- Plot themes, macguffins, key past events → memory.
+- Where the story is going next → **future plot plan** (`future_plot_plan`).
+
+If you find yourself writing to state about something that will still matter three scenes from now, write it to memory instead.
+
+## Tool
+
+Call `update_state` with changes batched. Provide `set` (dotted-path → value) and/or `delete` (array of paths). On scene change, aggressively `delete` keys from the previous scene that no longer apply.
+
 ```json
 {
   "set": {
-    "scene.location": "standing in the dimly lit main hall of the old manor",
-    "scene.time": "just after midnight, with rain lashing against the tall windows",
+    "scene.location": "the priest's study, candle-lit, after midnight",
+    "scene.mood": "tense; an open ledger sits on the desk between you",
     "player.position": "leaning against the cold stone fireplace",
-    "player.clothes": "a torn and muddy traveling cloak over a linen shirt",
-    "player.inventory.coin_purse": "nearly empty, containing only three silver pieces",
-    "player.condition": "left shoulder is throbbing from the earlier arrow wound",
-    "npcs.lady_veyra.disposition": "deeply suspicious of the player and hiding her fear behind icy courtesy",
-    "npcs.lady_veyra.goal": "trying to determine whether the player works for her brother",
-    "threads.missing_amulet": "still unresolved; Lady Veyra just mentioned a family heirloom"
+    "player.holding": "the iron seal you lifted from the altar"
   },
-  "delete": ["threads.old_debt_to_guild", "npcs.guard_captain"]
+  "delete": ["scene.weather", "npcs_present.acolyte"]
 }
 ```
+
+## Limits
+
+Any individual string value (including nested strings) must be <= {{maxStateStringChars}} characters. Over-long values are rejected. Split long descriptions across multiple short keyed fields, each a complete English phrase.

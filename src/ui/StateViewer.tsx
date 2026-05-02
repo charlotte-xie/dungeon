@@ -1,51 +1,66 @@
 import { useState } from 'react'
 import { MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS } from '../engine/tools'
-import type { Chronicle, ContextConfig, WorldState } from '../engine/types'
+import type { Chronicle, ContextConfig, Memory, WorldState } from '../engine/types'
 
 interface StateViewerProps {
   state: WorldState
   plot: string[]
+  memory: Memory
   chronicle: Chronicle
   context: ContextConfig
   onClose: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
   onSavePlot: (next: string[]) => void
+  onSaveMemory: (next: Memory) => void
   onClearPlot: () => void
+  onClearMemory: () => void
   onClearChronicle: () => void
 }
 
 function plotToDraft(plot: string[]): string {
-  return plot.join('\n')
+  return plot.map((p, i) => `${i + 1}. ${p}`).join('\n')
 }
 
 function parsePlotDraft(draft: string): string[] {
   return draft
     .split('\n')
-    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .map((line) =>
+      line
+        // Strip any line-leading list prefix: an arbitrary positive integer
+        // followed by ., ), :, or ] (so re-ordered/non-sequential numbering
+        // survives a round-trip), or a -, *, or • bullet.
+        .replace(/^\s*(?:\d+[.):\]]\s+|[-*•]\s+)/, '')
+        .trim(),
+    )
     .filter((line) => line.length > 0)
 }
 
 export function StateViewer({
   state,
   plot,
+  memory,
   chronicle,
   context,
   onClose,
   onResetState,
   onSaveState,
   onSavePlot,
+  onSaveMemory,
   onClearPlot,
+  onClearMemory,
   onClearChronicle,
 }: StateViewerProps) {
   const [draft, setDraft] = useState(() => JSON.stringify(state, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
   const [plotDraft, setPlotDraft] = useState(() => plotToDraft(plot))
   const [plotError, setPlotError] = useState<string | null>(null)
+  const [memoryDraft, setMemoryDraft] = useState(() => JSON.stringify(memory, null, 2))
+  const [memoryError, setMemoryError] = useState<string | null>(null)
 
   // Reset local drafts when the parent's prop changes (e.g. after a turn that
-  // mutated state/plot). Adjusting state during render — a documented React
-  // pattern — instead of useEffect avoids cascading-render lints.
+  // mutated state/plot/memory). Adjusting state during render — a documented
+  // React pattern — instead of useEffect avoids cascading-render lints.
   const [prevState, setPrevState] = useState(state)
   if (prevState !== state) {
     setPrevState(state)
@@ -58,10 +73,19 @@ export function StateViewer({
     setPlotDraft(plotToDraft(plot))
     setPlotError(null)
   }
+  const [prevMemory, setPrevMemory] = useState(memory)
+  if (prevMemory !== memory) {
+    setPrevMemory(memory)
+    setMemoryDraft(JSON.stringify(memory, null, 2))
+    setMemoryError(null)
+  }
 
   const currentJson = JSON.stringify(state, null, 2)
+  const currentMemoryJson = JSON.stringify(memory, null, 2)
   const stateDirty = draft !== currentJson
   const plotDirty = plotDraft !== plotToDraft(plot)
+  const memoryDirty = memoryDraft !== currentMemoryJson
+  const memoryEntries = Object.keys(memory).length
 
   const totalEntries = chronicle.reduce((n, level) => n + level.length, 0)
   const totalChars = chronicle.reduce(
@@ -100,17 +124,54 @@ export function StateViewer({
     onSavePlot(parsed)
   }
 
+  function handleSaveMemory() {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(memoryDraft)
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : String(err))
+      return
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      setMemoryError('Memory must be a JSON object (e.g. { "Lady Veyra": {...} }).')
+      return
+    }
+    setMemoryError(null)
+    onSaveMemory(parsed as Memory)
+  }
+
   return (
     <div className="modal-backdrop">
       <div className="modal">
         <div className="modal-header">
-          <h2>World State</h2>
+          <h2>Engine state</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
+
+        <h2>Long-term memory</h2>
         <p className="hint">
-          The DM maintains this JSON via an <code>update_state</code> tool after each turn.
-          It's sent to the model as a system message after the conversation history. Edit
-          below and click <em>Save state</em> to override.
+          The DM maintains this JSON via the <code>update_memory</code> tool — the
+          canonical record of <strong>NPCs, locations, plot themes, and key past events</strong>{' '}
+          that persist across scenes. Top-level keys are entity names; values are
+          objects of fields. Prefer this over live state for anything that will still
+          matter three scenes from now. Current: {memoryEntries} entr
+          {memoryEntries === 1 ? 'y' : 'ies'}.
+        </p>
+        <textarea
+          className="state-json state-json-editor"
+          spellCheck={false}
+          value={memoryDraft}
+          onChange={(e) => setMemoryDraft(e.target.value)}
+          placeholder="(no memory yet — call update_memory or paste JSON here)"
+        />
+        {memoryError && <p className="error-text">{memoryError}</p>}
+
+        <h2>Live state (current scene)</h2>
+        <p className="hint">
+          The DM maintains this JSON via the <code>update_state</code> tool — the{' '}
+          <strong>current scene only</strong>. Player's immediate position, what NPCs
+          are present right now, the active stimulus. On scene change, stale keys are
+          deleted.
         </p>
         <textarea
           className="state-json state-json-editor"
@@ -120,20 +181,23 @@ export function StateViewer({
         />
         {parseError && <p className="error-text">{parseError}</p>}
 
-        <h2>Plot outline</h2>
+        <h2>Future plot plan</h2>
         <p className="hint">
-          The DM maintains this bullet list via a <code>plot_update</code> tool — a short
-          private notebook of directions the story is aiming at. One bullet per line;
-          leading <code>-</code> or <code>*</code> is stripped on save. Max {MAX_PLOT_ITEMS}{' '}
-          bullets, each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} bullet
-          {plot.length === 1 ? '' : 's'}.
+          The DM maintains this numbered list via the <code>future_plot_plan</code> tool
+          (append/insert/update/delete by 1-indexed position) — a short private notebook
+          of arrows the story is aiming at. <strong>Future only:</strong> entries should
+          describe what is still ahead of the player; past events should be deleted as
+          they play out. One entry per line; leading <code>-</code>, <code>*</code>, or{' '}
+          <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
+          each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
+          {plot.length === 1 ? 'y' : 'ies'}.
         </p>
         <textarea
           className="state-json state-json-editor"
           spellCheck={false}
           value={plotDraft}
           onChange={(e) => setPlotDraft(e.target.value)}
-          placeholder="(no plot outline yet — one bullet per line)"
+          placeholder="(no future plot plan yet — one entry per line)"
         />
         {plotError && <p className="error-text">{plotError}</p>}
 
@@ -187,7 +251,16 @@ export function StateViewer({
           <button
             className="ghost"
             onClick={() => {
-              if (confirm('Reset world state to empty defaults?')) onResetState()
+              if (memoryEntries > 0 && confirm('Clear all long-term memory?')) onClearMemory()
+            }}
+            disabled={memoryEntries === 0}
+          >
+            Clear memory
+          </button>
+          <button
+            className="ghost"
+            onClick={() => {
+              if (confirm('Reset live state to empty defaults?')) onResetState()
             }}
           >
             Reset state
@@ -195,11 +268,11 @@ export function StateViewer({
           <button
             className="ghost"
             onClick={() => {
-              if (plot.length && confirm('Clear the plot outline?')) onClearPlot()
+              if (plot.length && confirm('Clear the future plot plan?')) onClearPlot()
             }}
             disabled={plot.length === 0}
           >
-            Clear plot
+            Clear plan
           </button>
           <button
             className="ghost"
@@ -212,6 +285,9 @@ export function StateViewer({
           </button>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
+          <button onClick={handleSaveMemory} disabled={!memoryDirty}>
+            Save memory
+          </button>
           <button onClick={handleSave} disabled={!stateDirty}>
             Save state
           </button>

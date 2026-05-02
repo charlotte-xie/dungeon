@@ -1,7 +1,7 @@
 // Planner agent. Reads the chronicle, recent turns, and current state/plot,
 // then returns a director's-note instruction for the Narrator. Uses the same
-// update_state / plot_update tools as the Narrator so it can record any new
-// facts the last turn established and re-aim the plot outline.
+// update_state / future_plot_plan tools as the Narrator so it can record any new
+// facts the last turn established and re-aim the future plot plan.
 //
 // Coexists with the single-call narrator path; runs only when ContextConfig
 // .usePlanner is on. The instruction text is stored for inspection and (in a
@@ -10,14 +10,22 @@
 import { PLANNER_SYSTEM_PROMPT } from '../../prompts'
 import {
   buildApiMessagesIndexed,
+  buildMemorySystemMessage,
   buildPlotSystemMessage,
   buildStateSystemMessage,
 } from '../request'
-import { PLOT_UPDATE_TOOL, UPDATE_STATE_TOOL, executeTool, parseInlineToolCalls } from '../tools'
+import {
+  FUTURE_PLOT_PLAN_TOOL,
+  UPDATE_MEMORY_TOOL,
+  UPDATE_STATE_TOOL,
+  executeTool,
+  parseInlineToolCalls,
+} from '../tools'
 import { modelSupportsSampling, xaiChat } from '../xai'
 import type {
   AdventureSlots,
   Chronicle,
+  Memory,
   ModelCall,
   SamplingParams,
   ToolCall,
@@ -34,10 +42,12 @@ export interface PlannerContext {
   history: Turn[]
   state: WorldState
   plot: string[]
+  memory: Memory
   sampling: SamplingParams
   stateCleanupThreshold: number
   includeWorldState: boolean
   includePlotOutline: boolean
+  includeMemory: boolean
   nsfw: boolean
 }
 
@@ -45,6 +55,7 @@ export interface PlannerResult {
   call: ModelCall
   state: WorldState
   plot: string[]
+  memory: Memory
 }
 
 export async function runPlanner(
@@ -55,27 +66,31 @@ export async function runPlanner(
   const startedAt = Date.now()
   let currentState = ctx.state
   let currentPlot = ctx.plot
+  let currentMemory = ctx.memory
   // Reuse the narrator's request-builder, but swap in the planner system
   // prompt as the first message. The history rendering rules (player input
   // included only for the in-flight turn, etc.) are identical — both agents
   // consume the same conversation shape.
-  const { messages: apiMessages, stateIndex, plotIndex } = buildApiMessagesIndexed(
+  const { messages: apiMessages, stateIndex, plotIndex, memoryIndex } = buildApiMessagesIndexed(
     PLANNER_SYSTEM_PROMPT,
     ctx.slots,
     ctx.chronicle,
     ctx.history,
     currentState,
     currentPlot,
+    currentMemory,
     ctx.stateCleanupThreshold,
     true, // include the player's input on the in-flight turn (planner needs it)
     ctx.includeWorldState,
     ctx.includePlotOutline,
+    ctx.includeMemory,
     ctx.nsfw,
   )
 
   const tools: unknown[] = []
+  if (ctx.includeMemory) tools.push(UPDATE_MEMORY_TOOL)
   if (ctx.includeWorldState) tools.push(UPDATE_STATE_TOOL)
-  if (ctx.includePlotOutline) tools.push(PLOT_UPDATE_TOOL)
+  if (ctx.includePlotOutline) tools.push(FUTURE_PLOT_PLAN_TOOL)
 
   const trace: TraceEvent[] = []
   let totalReasoningTokens = 0
@@ -173,9 +188,10 @@ export async function runPlanner(
       for (const call of msg.tool_calls) {
         const name = call.function?.name ?? '(anonymous)'
         const rawArgs = call.function?.arguments ?? ''
-        const exec = executeTool(name, rawArgs, currentState, currentPlot)
+        const exec = executeTool(name, rawArgs, currentState, currentPlot, currentMemory)
         currentState = exec.state
         currentPlot = exec.plot
+        currentMemory = exec.memory
         pushToolResult(call, exec.result)
       }
       if (stateIndex >= 0) {
@@ -183,6 +199,9 @@ export async function runPlanner(
       }
       if (plotIndex >= 0) {
         apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      }
+      if (memoryIndex >= 0) {
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
       }
       continue
     }
@@ -196,9 +215,10 @@ export async function runPlanner(
       })
       apiMessages.push({ role: 'assistant', content })
       for (const call of inlineCalls) {
-        const exec = executeTool(call.name, call.arguments, currentState, currentPlot)
+        const exec = executeTool(call.name, call.arguments, currentState, currentPlot, currentMemory)
         currentState = exec.state
         currentPlot = exec.plot
+        currentMemory = exec.memory
         trace.push({
           kind: 'call',
           name: `${call.name} (inline)`,
@@ -212,8 +232,16 @@ export async function runPlanner(
       if (plotIndex >= 0) {
         apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
       }
+      if (memoryIndex >= 0) {
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
+      }
       if (cleaned) {
-        return { call: finishCall(cleaned), state: currentState, plot: currentPlot }
+        return {
+          call: finishCall(cleaned),
+          state: currentState,
+          plot: currentPlot,
+          memory: currentMemory,
+        }
       }
       if (!nudged) {
         nudged = true
@@ -227,7 +255,12 @@ export async function runPlanner(
       throw new Error('Planner output was entirely inline tool calls with no instruction text')
     }
     if (content) {
-      return { call: finishCall(content), state: currentState, plot: currentPlot }
+      return {
+        call: finishCall(content),
+        state: currentState,
+        plot: currentPlot,
+        memory: currentMemory,
+      }
     }
 
     console.warn('[planner] empty xAI message', { iter, finishReason, data })

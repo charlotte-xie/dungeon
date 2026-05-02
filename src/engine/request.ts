@@ -5,11 +5,12 @@ import { NSFW_OFF_PROMPT, NSFW_ON_PROMPT, TURN_REMINDER } from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import { STATE_RULES } from './state'
-import { PLOT_RULES } from './tools'
+import { MEMORY_RULES, PLOT_RULES } from './tools'
 import type {
   AdventureSlots,
   ApiMessage,
   Chronicle,
+  Memory,
   SlotDef,
   Turn,
   WorldState,
@@ -34,13 +35,27 @@ export function buildStateSystemMessage(
   }
 }
 
-export function buildPlotSystemMessage(currentPlot: string[]): ApiMessage {
-  const bullets = currentPlot.length
-    ? currentPlot.map((p) => `- ${p}`).join('\n')
-    : '(no plot outline yet — call plot_update to set one when the story gives you enough to aim at)'
+export function buildMemorySystemMessage(currentMemory: Memory): ApiMessage {
+  const entries = Object.keys(currentMemory)
+  const body = entries.length
+    ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
+    : '(no memory yet — call `update_memory` to record any NPC, location, plot theme, or key past event that should persist across scenes)'
   return {
     role: 'system',
-    content: `${PLOT_RULES}\n\n## Current plot outline\n\n${bullets}`,
+    content: `${MEMORY_RULES}\n\n## Current memory\n\n${body}`,
+  }
+}
+
+export function buildPlotSystemMessage(currentPlot: string[]): ApiMessage {
+  const bullets = currentPlot.length
+    ? currentPlot.map((p, i) => `${i + 1}. ${p}`).join('\n')
+    : '(no future plot plan yet — call future_plot_plan with op="append" to add the first arrow when the story gives you enough to aim at)'
+  const reminder = currentPlot.length
+    ? '\n\nReminder: every entry above must describe something STILL AHEAD of the player. Sweep the list now — if any entry has already played out, `delete` it before writing this turn.'
+    : ''
+  return {
+    role: 'system',
+    content: `${PLOT_RULES}\n\n## Current future plot plan\n\n${bullets}${reminder}`,
   }
 }
 
@@ -51,12 +66,19 @@ export function buildApiMessagesIndexed(
   history: Turn[],
   currentState: WorldState,
   currentPlot: string[],
+  currentMemory: Memory,
   stateCleanupThreshold: number,
   includePriorPlayerTurns: boolean,
   includeWorldState: boolean,
   includePlotOutline: boolean,
+  includeMemory: boolean,
   nsfw: boolean,
-): { messages: ApiMessage[]; stateIndex: number; plotIndex: number } {
+): {
+  messages: ApiMessage[]
+  stateIndex: number
+  plotIndex: number
+  memoryIndex: number
+} {
   const messages: ApiMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'system', content: nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT },
@@ -66,19 +88,24 @@ export function buildApiMessagesIndexed(
     if (!value) continue
     messages.push({ role: 'system', content: buildSlotMessage(def, value) })
   }
-  const chronicleMessage = buildChronicleSystemMessage(chronicle)
-  if (chronicleMessage) {
-    messages.push(chronicleMessage)
+  let memoryIndex = -1
+  if (includeMemory) {
+    memoryIndex = messages.length
+    messages.push(buildMemorySystemMessage(currentMemory))
+  }
+  let plotIndex = -1
+  if (includePlotOutline) {
+    plotIndex = messages.length
+    messages.push(buildPlotSystemMessage(currentPlot))
   }
   let stateIndex = -1
   if (includeWorldState) {
     stateIndex = messages.length
     messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold))
   }
-  let plotIndex = -1
-  if (includePlotOutline) {
-    plotIndex = messages.length
-    messages.push(buildPlotSystemMessage(currentPlot))
+  const chronicleMessage = buildChronicleSystemMessage(chronicle)
+  if (chronicleMessage) {
+    messages.push(chronicleMessage)
   }
   for (let i = 0; i < history.length; i++) {
     const t = history[i]
@@ -98,7 +125,7 @@ export function buildApiMessagesIndexed(
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
     }
   }
-  return { messages, stateIndex, plotIndex }
+  return { messages, stateIndex, plotIndex, memoryIndex }
 }
 
 export function buildApiMessages(
@@ -108,10 +135,12 @@ export function buildApiMessages(
   history: Turn[],
   currentState: WorldState,
   currentPlot: string[],
+  currentMemory: Memory,
   stateCleanupThreshold: number,
   includePriorPlayerTurns: boolean,
   includeWorldState: boolean,
   includePlotOutline: boolean,
+  includeMemory: boolean,
   nsfw: boolean,
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
@@ -121,35 +150,25 @@ export function buildApiMessages(
     history,
     currentState,
     currentPlot,
+    currentMemory,
     stateCleanupThreshold,
     includePriorPlayerTurns,
     includeWorldState,
     includePlotOutline,
+    includeMemory,
     nsfw,
   ).messages
 }
 
 export function applyTurnReminder(
   messages: ApiMessage[],
-  appendToUser: boolean,
+  asSystem: boolean,
 ): ApiMessage[] {
-  if (appendToUser) {
-    // Fold into the existing last user message as an OOC suffix.
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        const copy = messages.slice()
-        const existing = copy[i].content
-        copy[i] = {
-          ...copy[i],
-          content: `${existing}\n\n(OOC: ${TURN_REMINDER})`,
-        }
-        return copy
-      }
-    }
+  if (asSystem) {
+    return [...messages, { role: 'system', content: TURN_REMINDER }]
   }
-  // Default: append as a separate user message wrapped in (OOC: ...). The
-  // dm-system prompt documents OOC-in-parens as the player's directive
-  // convention, so the model treats it as in-channel guidance rather than
-  // mid-conversation system noise.
+  // Alternative: extra user message wrapped in (OOC: ...). The dm-system
+  // prompt documents OOC-in-parens as the player's directive convention, so
+  // this lands as in-channel guidance rather than out-of-band system noise.
   return [...messages, { role: 'user', content: `(OOC: ${TURN_REMINDER})` }]
 }

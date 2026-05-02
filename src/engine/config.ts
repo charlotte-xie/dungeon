@@ -5,6 +5,7 @@ import { DEFAULT_SCENARIO } from '../prompts'
 import type {
   AdventureSlots,
   ContextConfig,
+  Memory,
   SamplingParams,
   SlotDef,
   WorldState,
@@ -57,19 +58,19 @@ export const DEFAULT_STATE: WorldState = {
     inventory: {},
     status: {},
   },
-  npcs: {},
-  goals: {},
-  topics: {},
 }
+
+export const DEFAULT_MEMORY: Memory = {}
 
 export const DEFAULT_CONTEXT: ContextConfig = {
   compactionThreshold: 8,
   compactionBatch: 4,
   stateCleanupChars: 10_000,
   includePriorPlayerTurns: true,
-  appendReminderToUser: false,
+  reminderAsSystem: true,
   includeWorldState: true,
   includePlotOutline: true,
+  includeMemory: true,
   usePlanner: false,
   nsfw: true,
 }

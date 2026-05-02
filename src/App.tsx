@@ -18,6 +18,7 @@ import {
   LS_CONTEXT,
   LS_MODEL,
   LS_SAMPLING,
+  LS_SHOW_TRACE,
   LS_SYSTEM,
   LS_TURNS,
   LS_XAI_KEY,
@@ -25,6 +26,7 @@ import {
   loadStored,
   loadStoredChronicle,
   loadStoredContext,
+  loadStoredMemory,
   loadStoredPlot,
   loadStoredSampling,
   loadStoredSaves,
@@ -35,18 +37,20 @@ import {
   makeSaveId,
   normalizeSavedGame,
   persistChronicle,
+  persistMemory,
   persistPlot,
   persistSaves,
   persistSlots,
   persistState,
 } from './engine/persistence'
 import { applyTurnReminder, buildApiMessages } from './engine/request'
-import { PLOT_UPDATE_TOOL, UPDATE_STATE_TOOL } from './engine/tools'
+import { FUTURE_PLOT_PLAN_TOOL, UPDATE_MEMORY_TOOL, UPDATE_STATE_TOOL } from './engine/tools'
 import {
   CONTINUE_DIRECTIVE,
   type AdventureSlots,
   type Chronicle,
   type ContextConfig,
+  type Memory,
   type ModelCall,
   type SamplingParams,
   type SaveFile,
@@ -68,6 +72,67 @@ import { SettingsPanel } from './ui/SettingsPanel'
 import { StateViewer } from './ui/StateViewer'
 import { TraceView } from './ui/TraceView'
 
+function EditableMessage({
+  text,
+  onSave,
+}: {
+  text: string
+  onSave: (next: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(text)
+
+  if (!editing) {
+    return (
+      <p
+        title="Double-click to edit"
+        onDoubleClick={() => {
+          setDraft(text)
+          setEditing(true)
+        }}
+      >
+        {text}
+      </p>
+    )
+  }
+
+  const autosize = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  return (
+    <textarea
+      className="msg-edit"
+      value={draft}
+      autoFocus
+      onChange={(e) => {
+        setDraft(e.target.value)
+        autosize(e.currentTarget)
+      }}
+      onFocus={(e) => {
+        autosize(e.currentTarget)
+        const len = e.currentTarget.value.length
+        e.currentTarget.setSelectionRange(len, len)
+      }}
+      onBlur={() => {
+        if (draft !== text) onSave(draft)
+        setEditing(false)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setDraft(text)
+          setEditing(false)
+        } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault()
+          e.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
 function App() {
   const [systemPrompt, setSystemPrompt] = useState(() =>
     loadStored(LS_SYSTEM, DEFAULT_SYSTEM_PROMPT),
@@ -77,6 +142,7 @@ function App() {
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
   const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
+  const [memory, setMemory] = useState<Memory>(() => loadStoredMemory())
   const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
   const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
   const [turns, setTurns] = useState<Turn[]>(initialTurns)
@@ -94,6 +160,15 @@ function App() {
   const [saves, setSaves] = useState<SavedGame[]>(() => loadStoredSaves())
   const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(() => new Set())
+  const [showTrace, setShowTrace] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(LS_SHOW_TRACE)
+      if (raw === null) return true
+      return raw === 'true'
+    } catch {
+      return true
+    }
+  })
 
   function toggleTrace(id: string) {
     setExpandedTraces((s) => {
@@ -123,6 +198,14 @@ function App() {
     }
   }, [turns])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_SHOW_TRACE, String(showTrace))
+    } catch {
+      // ignore quota / disabled storage
+    }
+  }, [showTrace])
+
   useEffect(() => () => abortRef.current?.abort(), [])
 
   function commitState(next: WorldState) {
@@ -133,6 +216,11 @@ function App() {
   function commitPlot(next: string[]) {
     setPlot(next)
     persistPlot(next)
+  }
+
+  function commitMemory(next: Memory) {
+    setMemory(next)
+    persistMemory(next)
   }
 
   function commitSlots(next: AdventureSlots) {
@@ -168,6 +256,7 @@ function App() {
       slots: { ...slots },
       state: structuredClone(state),
       plot: [...plot],
+      memory: structuredClone(memory),
       chronicle: structuredClone(chronicle),
       turns: structuredClone(turns),
       compactCutoff,
@@ -190,6 +279,7 @@ function App() {
     commitSlots({ ...defaultSlots(), ...target.slots })
     commitState(structuredClone(target.state))
     commitPlot([...(target.plot ?? [])])
+    commitMemory(structuredClone(target.memory ?? {}))
     commitChronicle(target.chronicle ?? [])
     setTurns(target.turns)
     commitCompactCutoff(target.compactCutoff)
@@ -251,6 +341,7 @@ function App() {
     baseTurns: Turn[],
     baseState: WorldState,
     basePlot: string[],
+    baseMemory: Memory,
     baseChronicle: Chronicle,
     baseCutoff: number,
     onAbortRestore: () => void,
@@ -290,6 +381,7 @@ function App() {
       let plannerCall: ModelCall | undefined
       let workingState = baseState
       let workingPlot = basePlot
+      let workingMemory = baseMemory
       if (context.usePlanner) {
         setStatusText('Planner thinking…')
         const plannerResult = await runPlanner(
@@ -301,10 +393,12 @@ function App() {
             history: allTurns.slice(workingCutoff),
             state: workingState,
             plot: workingPlot,
+            memory: workingMemory,
             sampling,
             stateCleanupThreshold: context.stateCleanupChars,
             includeWorldState: context.includeWorldState,
             includePlotOutline: context.includePlotOutline,
+            includeMemory: context.includeMemory,
             nsfw: context.nsfw,
           },
           controller.signal,
@@ -312,11 +406,13 @@ function App() {
         plannerCall = plannerResult.call
         workingState = plannerResult.state
         workingPlot = plannerResult.plot
-        // Reflect planner's tool-driven state/plot updates immediately so the
-        // user can see them in the State viewer mid-turn, and so the narrator
-        // sees the post-planner world below.
+        workingMemory = plannerResult.memory
+        // Reflect planner's tool-driven state/plot/memory updates immediately
+        // so the user can see them mid-turn, and so the narrator sees the
+        // post-planner world below.
         commitState(workingState)
         commitPlot(workingPlot)
+        commitMemory(workingMemory)
         setTurns((ts) =>
           ts.map((t) =>
             t.id === pendingTurn.id ? { ...t, planner: plannerCall } : t,
@@ -335,12 +431,14 @@ function App() {
           history: allTurns.slice(workingCutoff),
           initialState: workingState,
           initialPlot: workingPlot,
+          initialMemory: workingMemory,
           sampling,
           stateCleanupThreshold: context.stateCleanupChars,
           includePriorPlayerTurns: context.includePriorPlayerTurns,
-          appendReminderToUser: context.appendReminderToUser,
+          reminderAsSystem: context.reminderAsSystem,
           includeWorldState: context.includeWorldState,
           includePlotOutline: context.includePlotOutline,
+          includeMemory: context.includeMemory,
           nsfw: context.nsfw,
           disableMutationTools: context.usePlanner,
           plannerInstruction: plannerCall?.text,
@@ -365,6 +463,7 @@ function App() {
       )
       commitState(result.state)
       commitPlot(result.plot)
+      commitMemory(result.memory)
     } catch (err) {
       if (controller.signal.aborted) {
         if (abortRef.current === controller) onAbortRestore()
@@ -397,6 +496,7 @@ function App() {
       turns,
       state,
       plot,
+      memory,
       chronicle,
       compactCutoff,
       input: text,
@@ -405,7 +505,7 @@ function App() {
     setSnapshot(snap)
     const pendingTurn = makePendingTurn('player', text)
     setTurns([...turns, pendingTurn])
-    await runTurn(pendingTurn, turns, state, plot, chronicle, compactCutoff, () => {
+    await runTurn(pendingTurn, turns, state, plot, memory, chronicle, compactCutoff, () => {
       setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
       setInput((cur) => cur || text)
     })
@@ -417,6 +517,7 @@ function App() {
       turns,
       state,
       plot,
+      memory,
       chronicle,
       compactCutoff,
       input: '',
@@ -425,7 +526,7 @@ function App() {
     setSnapshot(snap)
     const pendingTurn = makePendingTurn('continue', CONTINUE_DIRECTIVE)
     setTurns([...turns, pendingTurn])
-    await runTurn(pendingTurn, turns, state, plot, chronicle, compactCutoff, () => {
+    await runTurn(pendingTurn, turns, state, plot, memory, chronicle, compactCutoff, () => {
       setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
     })
   }
@@ -435,6 +536,7 @@ function App() {
     setTurns(snapshot.turns)
     commitState(snapshot.state)
     commitPlot([...snapshot.plot])
+    commitMemory(structuredClone(snapshot.memory))
     commitChronicle(snapshot.chronicle)
     commitCompactCutoff(snapshot.compactCutoff)
     setInput(snapshot.input)
@@ -483,6 +585,7 @@ function App() {
     const snap = snapshot
     commitState(snap.state)
     commitPlot([...snap.plot])
+    commitMemory(structuredClone(snap.memory))
     commitChronicle(snap.chronicle)
     commitCompactCutoff(snap.compactCutoff)
     const isContinue = snap.kind === 'continue'
@@ -497,7 +600,16 @@ function App() {
           setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
           setInput((cur) => cur || snap.input)
         }
-    await runTurn(pendingTurn, snap.turns, snap.state, snap.plot, snap.chronicle, snap.compactCutoff, onAbort)
+    await runTurn(
+      pendingTurn,
+      snap.turns,
+      snap.state,
+      snap.plot,
+      snap.memory,
+      snap.chronicle,
+      snap.compactCutoff,
+      onAbort,
+    )
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -514,6 +626,7 @@ function App() {
     nextSlots: AdventureSlots,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
+    nextShowTrace: boolean,
   ) {
     setSystemPrompt(nextSystem)
     setModel(nextModel)
@@ -521,6 +634,7 @@ function App() {
     commitSlots(nextSlots)
     setSampling(nextSampling)
     setContext(nextContext)
+    setShowTrace(nextShowTrace)
     try {
       localStorage.setItem(LS_SYSTEM, nextSystem)
       if (nextXaiKey) localStorage.setItem(LS_XAI_KEY, nextXaiKey)
@@ -545,6 +659,7 @@ function App() {
     const freshState = structuredClone(DEFAULT_STATE)
     commitState(freshState)
     commitPlot([])
+    commitMemory({})
     commitChronicle([])
     commitCompactCutoff(0)
     setThinking(true)
@@ -564,12 +679,14 @@ function App() {
           history: [pendingTurn],
           initialState: freshState,
           initialPlot: [],
+          initialMemory: {},
           sampling,
           stateCleanupThreshold: context.stateCleanupChars,
           includePriorPlayerTurns: context.includePriorPlayerTurns,
-          appendReminderToUser: context.appendReminderToUser,
+          reminderAsSystem: context.reminderAsSystem,
           includeWorldState: context.includeWorldState,
           includePlotOutline: context.includePlotOutline,
+          includeMemory: context.includeMemory,
           nsfw: context.nsfw,
         },
         controller.signal,
@@ -587,6 +704,7 @@ function App() {
       ])
       commitState(result.state)
       commitPlot(result.plot)
+      commitMemory(result.memory)
     } catch (err) {
       if (controller.signal.aborted) {
         setTurns([])
@@ -659,14 +777,32 @@ function App() {
               {showInput && (
                 <div className={`msg msg-player ${folded ? 'msg-folded' : ''}`}>
                   <span className="who">You</span>
-                  <p>{t.input}</p>
+                  <EditableMessage
+                    text={t.input ?? ''}
+                    onSave={(next) =>
+                      setTurns((cur) =>
+                        cur.map((x) => (x.id === t.id ? { ...x, input: next } : x)),
+                      )
+                    }
+                  />
                 </div>
               )}
               {showReply && (
                 <div className={`msg msg-dm ${folded ? 'msg-folded' : ''}`}>
                   <span className="who">DM</span>
-                  <p>{t.reply.text}</p>
-                  {(t.reply.trace !== undefined || t.planner) && (
+                  <EditableMessage
+                    text={t.reply.text ?? ''}
+                    onSave={(next) =>
+                      setTurns((cur) =>
+                        cur.map((x) =>
+                          x.id === t.id
+                            ? { ...x, reply: { ...x.reply, text: next } }
+                            : x,
+                        ),
+                      )
+                    }
+                  />
+                  {showTrace && (t.reply.trace !== undefined || t.planner) && (
                     <TraceView
                       calls={[
                         ...(t.planner ? [{ label: 'planner', call: t.planner }] : []),
@@ -733,6 +869,7 @@ function App() {
           slots={slots}
           sampling={sampling}
           context={context}
+          showTrace={showTrace}
           onClose={() => setShowSettings(false)}
           onSave={saveSettings}
         />
@@ -741,13 +878,16 @@ function App() {
         <StateViewer
           state={state}
           plot={plot}
+          memory={memory}
           chronicle={chronicle}
           context={context}
           onClose={() => setShowState(false)}
           onResetState={() => commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={commitState}
           onSavePlot={commitPlot}
+          onSaveMemory={commitMemory}
           onClearPlot={() => commitPlot([])}
+          onClearMemory={() => commitMemory({})}
           onClearChronicle={() => {
             commitChronicle([])
             commitCompactCutoff(0)
@@ -764,20 +904,23 @@ function App() {
               turns.slice(compactCutoff),
               state,
               plot,
+              memory,
               context.stateCleanupChars,
               context.includePriorPlayerTurns,
               context.includeWorldState,
               context.includePlotOutline,
+              context.includeMemory,
               context.nsfw,
             ),
-            context.appendReminderToUser,
+            context.reminderAsSystem,
           )}
           tools={
             context.usePlanner
               ? []
               : [
+                  ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
                   ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
-                  ...(context.includePlotOutline ? [PLOT_UPDATE_TOOL] : []),
+                  ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL] : []),
                 ]
           }
           sampling={sampling}

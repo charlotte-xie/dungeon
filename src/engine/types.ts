@@ -44,6 +44,11 @@ export type JsonValue =
 
 export type WorldState = { [key: string]: JsonValue }
 
+// Long-term memory: a name → fields map of canonical entities (NPCs,
+// locations, plot themes, key events) that persist across scenes. Same JSON
+// shape as WorldState but conceptually stable rather than scene-local.
+export type Memory = { [key: string]: JsonValue }
+
 export type SlotKey = 'scenario' | 'styleGuide'
 export type AdventureSlots = Record<SlotKey, string>
 
@@ -72,9 +77,10 @@ export interface ContextConfig {
   compactionBatch: number
   stateCleanupChars: number
   includePriorPlayerTurns: boolean
-  appendReminderToUser: boolean
+  reminderAsSystem: boolean
   includeWorldState: boolean
   includePlotOutline: boolean
+  includeMemory: boolean
   usePlanner: boolean
   nsfw: boolean
 }
@@ -105,6 +111,7 @@ export interface TurnSnapshot {
   turns: Turn[]
   state: WorldState
   plot: string[]
+  memory: Memory
   chronicle: Chronicle
   compactCutoff: number
   input: string
@@ -118,6 +125,7 @@ export interface SavedGame {
   slots: AdventureSlots
   state: WorldState
   plot: string[]
+  memory: Memory
   chronicle: Chronicle
   turns: Turn[]
   compactCutoff: number

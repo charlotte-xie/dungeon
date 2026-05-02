@@ -5,14 +5,22 @@
 import {
   applyTurnReminder,
   buildApiMessagesIndexed,
+  buildMemorySystemMessage,
   buildPlotSystemMessage,
   buildStateSystemMessage,
 } from '../request'
-import { PLOT_UPDATE_TOOL, UPDATE_STATE_TOOL, executeTool, parseInlineToolCalls } from '../tools'
+import {
+  FUTURE_PLOT_PLAN_TOOL,
+  UPDATE_MEMORY_TOOL,
+  UPDATE_STATE_TOOL,
+  executeTool,
+  parseInlineToolCalls,
+} from '../tools'
 import { modelSupportsSampling, xaiChat } from '../xai'
 import type {
   AdventureSlots,
   Chronicle,
+  Memory,
   SamplingParams,
   ToolCall,
   TraceEvent,
@@ -29,16 +37,18 @@ export interface NarratorContext {
   history: Turn[]
   initialState: WorldState
   initialPlot: string[]
+  initialMemory: Memory
   sampling: SamplingParams
   stateCleanupThreshold: number
   includePriorPlayerTurns: boolean
-  appendReminderToUser: boolean
+  reminderAsSystem: boolean
   includeWorldState: boolean
   includePlotOutline: boolean
+  includeMemory: boolean
   nsfw: boolean
-  // When true, drop update_state / plot_update from the offered tool set —
-  // the planner already handled state/plot mutations for this turn and the
-  // narrator is purely a writer.
+  // When true, drop update_state / future_plot_plan / update_memory from the
+  // offered tool set — the planner already handled mutations for this turn
+  // and the narrator is purely a writer.
   disableMutationTools?: boolean
   // Director's-note from the planner. Injected as the final system message
   // (after the turn reminder) so it's the freshest guidance the model sees
@@ -50,6 +60,7 @@ export interface NarratorResult {
   text: string
   state: WorldState
   plot: string[]
+  memory: Memory
   trace: TraceEvent[]
   reasoningTokens?: number
 }
@@ -60,23 +71,27 @@ export async function runNarrator(
 ): Promise<NarratorResult> {
   let currentState = ctx.initialState
   let currentPlot = ctx.initialPlot
-  const { messages: apiMessages, stateIndex, plotIndex } = buildApiMessagesIndexed(
+  let currentMemory = ctx.initialMemory
+  const { messages: apiMessages, stateIndex, plotIndex, memoryIndex } = buildApiMessagesIndexed(
     ctx.systemPrompt,
     ctx.slots,
     ctx.chronicle,
     ctx.history,
     currentState,
     currentPlot,
+    currentMemory,
     ctx.stateCleanupThreshold,
     ctx.includePriorPlayerTurns,
     ctx.includeWorldState,
     ctx.includePlotOutline,
+    ctx.includeMemory,
     ctx.nsfw,
   )
   const tools: unknown[] = []
   if (!ctx.disableMutationTools) {
+    if (ctx.includeMemory) tools.push(UPDATE_MEMORY_TOOL)
     if (ctx.includeWorldState) tools.push(UPDATE_STATE_TOOL)
-    if (ctx.includePlotOutline) tools.push(PLOT_UPDATE_TOOL)
+    if (ctx.includePlotOutline) tools.push(FUTURE_PLOT_PLAN_TOOL)
   }
 
   const plannerSystemMessage = ctx.plannerInstruction
@@ -118,7 +133,7 @@ export async function runNarrator(
 
   let nudged = false
   for (let iter = 0; iter < 8; iter++) {
-    const reminded = applyTurnReminder(apiMessages, ctx.appendReminderToUser)
+    const reminded = applyTurnReminder(apiMessages, ctx.reminderAsSystem)
     const finalMessages = plannerSystemMessage
       ? [...reminded, plannerSystemMessage]
       : reminded
@@ -178,9 +193,10 @@ export async function runNarrator(
       for (const call of msg.tool_calls) {
         const name = call.function?.name ?? '(anonymous)'
         const rawArgs = call.function?.arguments ?? ''
-        const exec = executeTool(name, rawArgs, currentState, currentPlot)
+        const exec = executeTool(name, rawArgs, currentState, currentPlot, currentMemory)
         currentState = exec.state
         currentPlot = exec.plot
+        currentMemory = exec.memory
         pushToolResult(call, exec.result)
       }
       if (stateIndex >= 0) {
@@ -188,6 +204,9 @@ export async function runNarrator(
       }
       if (plotIndex >= 0) {
         apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+      }
+      if (memoryIndex >= 0) {
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
       }
       continue
     }
@@ -204,9 +223,10 @@ export async function runNarrator(
         content,
       })
       for (const call of inlineCalls) {
-        const exec = executeTool(call.name, call.arguments, currentState, currentPlot)
+        const exec = executeTool(call.name, call.arguments, currentState, currentPlot, currentMemory)
         currentState = exec.state
         currentPlot = exec.plot
+        currentMemory = exec.memory
         trace.push({
           kind: 'call',
           name: `${call.name} (inline)`,
@@ -220,11 +240,15 @@ export async function runNarrator(
       if (plotIndex >= 0) {
         apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
       }
+      if (memoryIndex >= 0) {
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
+      }
       if (cleaned)
         return {
           text: cleaned,
           state: currentState,
           plot: currentPlot,
+          memory: currentMemory,
           trace,
           reasoningTokens: totalReasoningTokens || undefined,
         }
@@ -244,6 +268,7 @@ export async function runNarrator(
         text: content,
         state: currentState,
         plot: currentPlot,
+        memory: currentMemory,
         trace,
         reasoningTokens: totalReasoningTokens || undefined,
       }

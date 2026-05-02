@@ -1,5 +1,6 @@
 import dmSystem from './prompts/dm-system.md?raw'
 import stateRulesTemplate from './prompts/state-rules.md?raw'
+import memoryRulesTemplate from './prompts/memory-rules.md?raw'
 import plotRulesTemplate from './prompts/plot-rules.md?raw'
 import turnReminder from './prompts/turn-reminder.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
@@ -25,6 +26,10 @@ export const NSFW_OFF_PROMPT = 'Avoid NSFW descriptions or plot developments.'
 
 export function buildStateRules(maxStateStringChars: number): string {
   return fill(stateRulesTemplate, { maxStateStringChars }).trim()
+}
+
+export function buildMemoryRules(maxStateStringChars: number): string {
+  return fill(memoryRulesTemplate, { maxStateStringChars }).trim()
 }
 
 export function buildPlotRules(maxPlotItems: number, maxPlotItemChars: number): string {

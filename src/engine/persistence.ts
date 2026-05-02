@@ -1,12 +1,13 @@
 // All localStorage IO + save-file shape detection / migration. The React tree
 // sees only loadStored*/persist* functions and the SavedGame type.
 
-import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
+import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
 import type {
   AdventureSlots,
   Chronicle,
   ChronicleEntry,
   ContextConfig,
+  Memory,
   MessageV1,
   ModelCall,
   SamplingParams,
@@ -22,6 +23,7 @@ export const LS_MODEL = 'dm.model'
 export const LS_XAI_KEY = 'dm.xaiKey'
 export const LS_STATE = 'dm.state'
 export const LS_PLOT = 'dm.plot'
+export const LS_MEMORY = 'dm.memory'
 export const LS_CHRONICLE = 'dm.chronicle'
 
 const LS_SUMMARY_V2 = 'dm.summary'
@@ -30,6 +32,7 @@ export const LS_SAMPLING = 'dm.sampling'
 export const LS_CONTEXT = 'dm.context'
 export const LS_COMPACT_CUTOFF = 'dm.compactCutoff'
 export const LS_SAVES = 'dm.saves'
+export const LS_SHOW_TRACE = 'dm.showTrace'
 
 const LS_MESSAGES_V1 = 'dm.messages'
 
@@ -96,6 +99,32 @@ export function persistPlot(plot: string[]) {
   try {
     if (plot.length) localStorage.setItem(LS_PLOT, JSON.stringify(plot))
     else localStorage.removeItem(LS_PLOT)
+  } catch {
+    // ignore quota / disabled storage
+  }
+}
+
+export function loadStoredMemory(): Memory {
+  try {
+    const raw = localStorage.getItem(LS_MEMORY)
+    if (!raw) return structuredClone(DEFAULT_MEMORY)
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return structuredClone(DEFAULT_MEMORY)
+    }
+    return parsed as Memory
+  } catch {
+    return structuredClone(DEFAULT_MEMORY)
+  }
+}
+
+export function persistMemory(memory: Memory) {
+  try {
+    if (Object.keys(memory).length > 0) {
+      localStorage.setItem(LS_MEMORY, JSON.stringify(memory))
+    } else {
+      localStorage.removeItem(LS_MEMORY)
+    }
   } catch {
     // ignore quota / disabled storage
   }
@@ -182,10 +211,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.includePriorPlayerTurns === 'boolean'
           ? parsed.includePriorPlayerTurns
           : DEFAULT_CONTEXT.includePriorPlayerTurns,
-      appendReminderToUser:
-        typeof parsed.appendReminderToUser === 'boolean'
-          ? parsed.appendReminderToUser
-          : DEFAULT_CONTEXT.appendReminderToUser,
+      reminderAsSystem:
+        typeof parsed.reminderAsSystem === 'boolean'
+          ? parsed.reminderAsSystem
+          : DEFAULT_CONTEXT.reminderAsSystem,
       includeWorldState:
         typeof parsed.includeWorldState === 'boolean'
           ? parsed.includeWorldState
@@ -194,6 +223,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.includePlotOutline === 'boolean'
           ? parsed.includePlotOutline
           : DEFAULT_CONTEXT.includePlotOutline,
+      includeMemory:
+        typeof parsed.includeMemory === 'boolean'
+          ? parsed.includeMemory
+          : DEFAULT_CONTEXT.includeMemory,
       usePlanner:
         typeof parsed.usePlanner === 'boolean'
           ? parsed.usePlanner
@@ -351,7 +384,12 @@ export function normalizeSavedGame(
 ): SavedGame {
   const legacy = raw as SavedGame &
     SavedGameV1 &
-    SavedGameV2 & { scenario?: string; plot?: unknown; chronicle?: unknown }
+    SavedGameV2 & {
+      scenario?: string
+      plot?: unknown
+      chronicle?: unknown
+      memory?: unknown
+    }
   const incoming: Partial<AdventureSlots> = (legacy.slots as Partial<AdventureSlots> | undefined) ?? {}
   const slots = { ...defaultSlots(), ...incoming }
   if (legacy.scenario && !incoming.scenario) {
@@ -381,6 +419,10 @@ export function normalizeSavedGame(
   } else {
     chronicle = []
   }
+  const memory: Memory =
+    legacy.memory && typeof legacy.memory === 'object' && !Array.isArray(legacy.memory)
+      ? (legacy.memory as Memory)
+      : {}
   return {
     id: legacy.id,
     name: legacy.name,
@@ -388,6 +430,7 @@ export function normalizeSavedGame(
     slots,
     state: legacy.state,
     plot,
+    memory,
     chronicle,
     turns,
     compactCutoff: cutoff,
