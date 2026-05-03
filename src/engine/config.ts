@@ -68,7 +68,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   stateCleanupChars: 10_000,
   includePriorPlayerTurns: true,
   reminderAsSystem: true,
-  includeWorldState: true,
+  includeWorldState: false,
   includePlotOutline: true,
   includeMemory: true,
   usePlanner: false,

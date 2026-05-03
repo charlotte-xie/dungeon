@@ -148,58 +148,69 @@ export function StateViewer({
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
 
-        <h2>Long-term memory</h2>
-        <p className="hint">
-          The DM maintains this JSON via the <code>update_memory</code> tool — the
-          canonical record of <strong>NPCs, locations, plot themes, and key past events</strong>{' '}
-          that persist across scenes. Top-level keys are entity names; values are
-          objects of fields. Prefer this over live state for anything that will still
-          matter three scenes from now. Current: {memoryEntries} entr
-          {memoryEntries === 1 ? 'y' : 'ies'}.
-        </p>
-        <textarea
-          className="state-json state-json-editor"
-          spellCheck={false}
-          value={memoryDraft}
-          onChange={(e) => setMemoryDraft(e.target.value)}
-          placeholder="(no memory yet — call update_memory or paste JSON here)"
-        />
-        {memoryError && <p className="error-text">{memoryError}</p>}
+        {context.includeMemory && (
+          <>
+            <h2>Long-term memory</h2>
+            <p className="hint">
+              The DM maintains this JSON via the <code>update_memory</code> tool — the
+              canonical record of <strong>NPCs, locations, plot themes, and key past events</strong>{' '}
+              that persist across scenes. Top-level keys are entity names; values are
+              objects of fields. Current: {memoryEntries} entr
+              {memoryEntries === 1 ? 'y' : 'ies'}.
+            </p>
+            <textarea
+              className="state-json state-json-editor"
+              spellCheck={false}
+              value={memoryDraft}
+              onChange={(e) => setMemoryDraft(e.target.value)}
+              placeholder="(no memory yet — call update_memory or paste JSON here)"
+            />
+            {memoryError && <p className="error-text">{memoryError}</p>}
+          </>
+        )}
 
-        <h2>Live state (current scene)</h2>
-        <p className="hint">
-          The DM maintains this JSON via the <code>update_state</code> tool — the{' '}
-          <strong>current scene only</strong>. Player's immediate position, what NPCs
-          are present right now, the active stimulus. On scene change, stale keys are
-          deleted.
-        </p>
-        <textarea
-          className="state-json state-json-editor"
-          spellCheck={false}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        {parseError && <p className="error-text">{parseError}</p>}
+        {context.includeWorldState && (
+          <>
+            <h2>Live state (current scene)</h2>
+            <p className="hint">
+              The DM maintains this JSON via the <code>update_state</code> tool — the{' '}
+              <strong>current scene only</strong>. Player's immediate position, what NPCs
+              are present right now, the active stimulus. On scene change, stale keys are
+              deleted.
+            </p>
+            <textarea
+              className="state-json state-json-editor"
+              spellCheck={false}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            {parseError && <p className="error-text">{parseError}</p>}
+          </>
+        )}
 
-        <h2>Future plot plan</h2>
-        <p className="hint">
-          The DM maintains this numbered list via the <code>future_plot_plan</code> tool
-          (append/insert/update/delete by 1-indexed position) — a short private notebook
-          of arrows the story is aiming at. <strong>Future only:</strong> entries should
-          describe what is still ahead of the player; past events should be deleted as
-          they play out. One entry per line; leading <code>-</code>, <code>*</code>, or{' '}
-          <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
-          each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
-          {plot.length === 1 ? 'y' : 'ies'}.
-        </p>
-        <textarea
-          className="state-json state-json-editor"
-          spellCheck={false}
-          value={plotDraft}
-          onChange={(e) => setPlotDraft(e.target.value)}
-          placeholder="(no future plot plan yet — one entry per line)"
-        />
-        {plotError && <p className="error-text">{plotError}</p>}
+        {context.includePlotOutline && (
+          <>
+            <h2>Future plot plan</h2>
+            <p className="hint">
+              The DM maintains this numbered list via the <code>future_plot_plan</code> tool
+              (append/insert/update/delete by 1-indexed position) — a short private notebook
+              of arrows the story is aiming at. <strong>Future only:</strong> entries should
+              describe what is still ahead of the player; past events should be deleted as
+              they play out. One entry per line; leading <code>-</code>, <code>*</code>, or{' '}
+              <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
+              each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
+              {plot.length === 1 ? 'y' : 'ies'}.
+            </p>
+            <textarea
+              className="state-json state-json-editor"
+              spellCheck={false}
+              value={plotDraft}
+              onChange={(e) => setPlotDraft(e.target.value)}
+              placeholder="(no future plot plan yet — one entry per line)"
+            />
+            {plotError && <p className="error-text">{plotError}</p>}
+          </>
+        )}
 
         <h2>Chronicle</h2>
         <p className="hint">
@@ -248,32 +259,38 @@ export function StateViewer({
         )}
 
         <div className="modal-actions">
-          <button
-            className="ghost"
-            onClick={() => {
-              if (memoryEntries > 0 && confirm('Clear all long-term memory?')) onClearMemory()
-            }}
-            disabled={memoryEntries === 0}
-          >
-            Clear memory
-          </button>
-          <button
-            className="ghost"
-            onClick={() => {
-              if (confirm('Reset live state to empty defaults?')) onResetState()
-            }}
-          >
-            Reset state
-          </button>
-          <button
-            className="ghost"
-            onClick={() => {
-              if (plot.length && confirm('Clear the future plot plan?')) onClearPlot()
-            }}
-            disabled={plot.length === 0}
-          >
-            Clear plan
-          </button>
+          {context.includeMemory && (
+            <button
+              className="ghost"
+              onClick={() => {
+                if (memoryEntries > 0 && confirm('Clear all long-term memory?')) onClearMemory()
+              }}
+              disabled={memoryEntries === 0}
+            >
+              Clear memory
+            </button>
+          )}
+          {context.includeWorldState && (
+            <button
+              className="ghost"
+              onClick={() => {
+                if (confirm('Reset live state to empty defaults?')) onResetState()
+              }}
+            >
+              Reset state
+            </button>
+          )}
+          {context.includePlotOutline && (
+            <button
+              className="ghost"
+              onClick={() => {
+                if (plot.length && confirm('Clear the future plot plan?')) onClearPlot()
+              }}
+              disabled={plot.length === 0}
+            >
+              Clear plan
+            </button>
+          )}
           <button
             className="ghost"
             onClick={() => {
@@ -285,15 +302,21 @@ export function StateViewer({
           </button>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
-          <button onClick={handleSaveMemory} disabled={!memoryDirty}>
-            Save memory
-          </button>
-          <button onClick={handleSave} disabled={!stateDirty}>
-            Save state
-          </button>
-          <button onClick={handleSavePlot} disabled={!plotDirty}>
-            Save plot
-          </button>
+          {context.includeMemory && (
+            <button onClick={handleSaveMemory} disabled={!memoryDirty}>
+              Save memory
+            </button>
+          )}
+          {context.includeWorldState && (
+            <button onClick={handleSave} disabled={!stateDirty}>
+              Save state
+            </button>
+          )}
+          {context.includePlotOutline && (
+            <button onClick={handleSavePlot} disabled={!plotDirty}>
+              Save plot
+            </button>
+          )}
         </div>
       </div>
     </div>

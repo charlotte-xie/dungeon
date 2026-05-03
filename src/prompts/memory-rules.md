@@ -4,7 +4,7 @@ Your canonical record of facts that must persist across scenes — the things th
 
 ## Purpose
 
-Memory holds **durable truth about the world and the people in it**. It is not a diary of what happened — that's narration. It is not the live scene — that's state. It is the answer to: *if the player walks back into this NPC's life three scenes from now, what do I need to know to stay consistent?*
+Memory holds **durable truth about the world and the people in it**. It is not a diary of what happened — that's narration. It is the answer to: *if the player walks back into this NPC's life three scenes from now, what do I need to know to stay consistent?*
 
 ## Shape
 
@@ -74,8 +74,7 @@ Use these as defaults. Add fields when genuinely needed; don't pad with empty on
 
 ## What does NOT belong here
 
-- The current scene — location, weather, immediate stimulus, who's in the room right now. → state.
-- What the player is holding or wearing this moment. → state.
+- Routine scene-level details: where the player is right now, what they're holding or wearing this moment, the weather, who's in the room. These live in the narration, not here.
 - Future intentions, planned beats, plot arrows. → plot plan.
 - Routine motion: every door, every meal, every NPC greeted in passing.
 - Flavor that can be re-derived on the fly: the colour of a guard's cloak, a tavern's name when the tavern won't recur.
@@ -85,10 +84,6 @@ Use these as defaults. Add fields when genuinely needed; don't pad with empty on
 Each fact lives in exactly one entry. If Veyra became hostile *because* of the docks, her `disposition_to_player` is `"hostile"` — the *why* lives in the `betrayal_at_greyford` entry, not packed into her field. This prevents the same fact drifting into contradiction across two locations.
 
 When a fact about one entity references another, use the slug: `"knows_about_player": "present at betrayal_at_greyford"`.
-
-## Current truth, not history
-
-Fields hold the **current** state of the world. Overwrite when things change — Veyra going neutral → hostile → reconciled means `disposition_to_player` is updated each time, not appended to. If the *change itself* is dramatically significant, record it as an `event` entry; otherwise the latest value is enough.
 
 ## Reading before writing
 
