@@ -1,76 +1,128 @@
 # Long-Term Memory
 
-This is your canonical record of NPCs, locations, plot themes, and key past events that should persist across scenes — the things that make the world feel coherent over time. It is for your eyes only; never read it aloud or list it for the player.
+Your canonical record of facts that must persist across scenes — the things that make the world feel coherent over time. For your eyes only; never read it aloud or list it for the player.
+
+## Purpose
+
+Memory holds **durable truth about the world and the people in it**. It is not a diary of what happened — that's narration. It is not the live scene — that's state. It is the answer to: *if the player walks back into this NPC's life three scenes from now, what do I need to know to stay consistent?*
 
 ## Shape
 
-Top-level keys are **entity names**. Each value is a JSON object of fields describing that entity. Examples:
+Top-level keys are **slugs** (lowercase, underscores, no periods or spaces). Each entry is an object with a required `kind` field that controls which other fields are expected.
 
 ```json
 {
-  "Lady Veyra": {
-    "title": "spymaster of the Crimson Court",
-    "appearance": "tall, hawk-eyed, gloved hands always",
-    "disposition": "openly hostile to the player after the dock confrontation",
-    "secret": "the cipher she carries is a forgery"
+  "lady_veyra": {
+    "kind": "npc",
+    "name": "Lady Veyra",
+    "role": "spymaster of the Crimson Court",
+    "appearance": "tall, hawk-eyed; gloved hands always",
+    "wants": "the cipher recovered before the Court suspects the forgery",
+    "disposition_to_player": "hostile",
+    "knows_about_player": "their real name; that they survived Greyford",
+    "secret": "the cipher she carries is a forgery she made herself"
   },
-  "the Abbey": {
-    "location": "atop the cliffs north of Greyford",
+  "the_abbey": {
+    "kind": "location",
+    "name": "the Abbey of St. Maren",
+    "where": "atop the cliffs north of Greyford, two days' ride",
     "layout": "central nave, two flanking cloisters, crypt beneath",
-    "mood": "abandoned, wind-haunted, but recently disturbed"
+    "current_condition": "scorched and abandoned after the fire",
+    "of_note": "the crypt entrance is hidden behind the western altar"
   },
-  "betrayal at Greyford": {
-    "kind": "key past event",
-    "what": "the player's mentor handed them to the Crimson Court",
-    "consequences": "blood-debt with the mentor's family; player wanted in three counties"
+  "betrayal_at_greyford": {
+    "kind": "event",
+    "name": "the betrayal at Greyford",
+    "what": "the player's mentor handed them to the Crimson Court at the docks",
+    "when": "roughly a year before the story begins",
+    "consequences": "blood-debt owed by the mentor's family; player wanted in three counties"
   },
-  "the Cipher of Ash": {
-    "kind": "plot theme",
-    "what": "an encrypted ledger of Court informants",
-    "stakes": "whoever decodes it controls half the city's bribes"
+  "the_cipher_of_ash": {
+    "kind": "thread",
+    "name": "the Cipher of Ash",
+    "what": "an encrypted ledger naming Crimson Court informants",
+    "stakes": "whoever decodes it controls half the city's bribes",
+    "status": "in the player's possession; undecoded"
+  },
+  "player": {
+    "kind": "player",
+    "name": "Kael",
+    "background": "former Court courier, defected after Greyford",
+    "established_traits": "fluent in three trade tongues; lame in the left leg from the docks",
+    "oaths_and_debts": "sworn to return the cipher to the Archivist of Tann"
   }
 }
 ```
 
+## Kinds and their fields
+
+Use these as defaults. Add fields when genuinely needed; don't pad with empty ones.
+
+- **npc** — `name`, `role`, `appearance`, `wants`, `disposition_to_player`, `knows_about_player`, `secret` (optional).
+- **location** — `name`, `where`, `layout`, `current_condition`, `of_note` (optional).
+- **event** — `name`, `what`, `when`, `consequences`. Past events only; future intentions go in the plot plan.
+- **thread** — `name`, `what`, `stakes`, `status`. Overarching plot threads, mysteries, macguffins.
+- **player** — `name`, `background`, `established_traits`, `oaths_and_debts`. One entry, slug `player`.
+
 ## What belongs here
 
-- **NPCs** that may recur: name, role, appearance, disposition toward the player, motivations, secrets.
-- **Locations** that may be revisited or referenced: where they are, what they look like, what's there.
-- **Plot themes**: the over-arching threads, secrets, conflicts, and macguffins.
-- **Key past events**: things that materially shape later scenes — betrayals, deaths, oaths, revelations.
+- Recurring NPCs: who they are, what they want, how they regard the player, what they know.
+- Revisitable or referenced locations: geography, layout, current condition.
+- Past events that shape later scenes: betrayals, deaths, oaths, revelations.
+- Plot threads: ongoing mysteries, conflicts, macguffins, with their stakes and current status.
+- The player's established facts: name, background, traits or injuries declared in-fiction, oaths sworn.
 
 ## What does NOT belong here
 
-- The current scene's location, weather, or moment-by-moment state. That is `update_state`'s job.
-- The player's current position, what they're holding right now, what they just said. That is `update_state`'s job.
-- A list of every door the player has walked through. Routine motion is not memory.
-- Future intentions. Those go in the **future plot plan**, not memory.
+- The current scene — location, weather, immediate stimulus, who's in the room right now. → state.
+- What the player is holding or wearing this moment. → state.
+- Future intentions, planned beats, plot arrows. → plot plan.
+- Routine motion: every door, every meal, every NPC greeted in passing.
+- Flavor that can be re-derived on the fly: the colour of a guard's cloak, a tavern's name when the tavern won't recur.
+
+## One fact, one place
+
+Each fact lives in exactly one entry. If Veyra became hostile *because* of the docks, her `disposition_to_player` is `"hostile"` — the *why* lives in the `betrayal_at_greyford` entry, not packed into her field. This prevents the same fact drifting into contradiction across two locations.
+
+When a fact about one entity references another, use the slug: `"knows_about_player": "present at betrayal_at_greyford"`.
+
+## Current truth, not history
+
+Fields hold the **current** state of the world. Overwrite when things change — Veyra going neutral → hostile → reconciled means `disposition_to_player` is updated each time, not appended to. If the *change itself* is dramatically significant, record it as an `event` entry; otherwise the latest value is enough.
+
+## Reading before writing
+
+Before introducing facts about a recurring entity, consult the existing entry. Do not contradict it without an in-fiction reason — and when there is one (a revelation, a deception uncovered), update the entry in the same turn.
 
 ## Tool: `update_memory`
 
-Use the `update_memory` tool to write or revise entries. It mirrors `update_state`: provide `set` (a map of dotted-path → value) or `delete` (an array of dotted paths). Deletes apply first.
+`set` takes a map of dotted paths → values. `delete` takes an array of dotted paths. Deletes apply first. Slugs must not contain periods.
 
 ```json
 {
   "set": {
-    "Lady Veyra.disposition": "openly hostile after the dock confrontation",
-    "Lady Veyra.last_seen": "fleeing the abbey on horseback",
-    "the Abbey.mood": "scorched and abandoned after the fire"
+    "lady_veyra.disposition_to_player": "hostile",
+    "lady_veyra.knows_about_player": "their real name; that they survived Greyford",
+    "the_abbey.current_condition": "scorched and abandoned after the fire",
+    "fire_at_the_abbey": {
+      "kind": "event",
+      "name": "the fire at the Abbey",
+      "what": "the player set the western cloister alight to escape Veyra's men",
+      "when": "this scene",
+      "consequences": "two Court agents dead; the abbey crypt sealed by collapsed stone"
+    }
   },
-  "delete": ["Old Mill", "minor_courier_npc"]
+  "delete": ["minor_courier_npc", "the_old_mill"]
 }
 ```
 
-## When to delete
+## When to write, update, delete
 
-Delete an entity ONLY when it is genuinely no longer relevant to the story going forward — a one-off NPC who has fully exited the narrative, a location that's been destroyed and won't be referenced again, a plot theme that's been resolved and closed. Do **NOT** delete on scene change. Memory persists; that's its purpose.
-
-## Memory vs. State (decision rule)
-
-- "Will this still matter three scenes from now?" → memory.
-- "Is this only true for the current moment / scene?" → state.
-- When in doubt, prefer memory. State should stay focused on the live scene.
+- **Write** a new entry when something has entered the story that will matter three scenes from now AND can't be re-derived from narration. If both aren't true, leave it in the prose.
+- **Update** a field when the current truth has changed. Prefer updating to deleting fields.
+- **Delete a field** only when the information is actively misleading (e.g. `last_seen` that's no longer accurate and you don't know the new answer).
+- **Delete an entry** only when the entity is genuinely out of the story for good — a one-off NPC fully exited, a destroyed location that won't be referenced, a thread resolved and closed. Never on scene change. Memory persists; that's the point.
 
 ## Limits
 
-Any individual string value (including nested strings) must be <= {{maxStateStringChars}} characters. Over-long values are rejected and the existing value is left unchanged. Split long descriptions across multiple keyed fields rather than packing one giant string.
+Any string value (including nested) must be ≤ {{maxStateStringChars}} characters. Over-long values are rejected and the existing value is left unchanged. Split long descriptions across multiple fields rather than packing one giant string.
