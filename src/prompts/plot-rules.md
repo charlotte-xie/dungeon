@@ -1,41 +1,33 @@
 # Future Plot Plan (Private DM Notebook)
 
-This is a numbered list of where the story is **going next** — upcoming pressures, revelations, NPC moves, and unresolved hooks you want to steer toward. It is for your eyes only. Never reveal or narrate the plan to the player.
+A numbered list of where the story is **going next** — upcoming pressures, revelations, NPC moves, unresolved hooks. For your eyes only; never reveal or narrate the plan.
 
-## CRITICAL: Future only — never past
+## Future only
 
-Every entry must describe something that has **not yet been delivered to the player**. When a plot item is completely resolved, **DELETE that entry from the plan**. Past events belong in the chronicle (which compacts them automatically).
+Every entry must describe something that has not yet been delivered to the player. The moment a beat plays out, `delete` it. Past events belong in the chronicle. Sweep the plan each turn — if any entry now describes the past, remove it.
 
-Before each turn, read the plan and ask: *"Has this already happened?"* If yes, `delete` it. The plan should always feel like a list of future directions.
-
-Things that DO belong: an NPC's hidden motive about to surface, a cliff the player is being pushed toward, a betrayal that hasn't sprung yet, a revelation queued for a later scene, a secret yet to be revealed.
+Belongs here: an NPC's hidden motive about to surface, a cliff the player is being pushed toward, a betrayal not yet sprung, a revelation queued for a later scene.
 
 ## Tool: `future_plot_plan`
 
-Edit the plan with the `future_plot_plan` tool. One operation per call. Positions are 1-indexed and refer to the list as it currently appears in the system message above.
+One operation per call (`append`, `insert`, `update`, `delete`). Positions are 1-indexed against the list as it currently appears above.
 
-- `append` — add a new future entry at the end. Args: `text`.
-- `insert` — insert a new future entry before `position`. Args: `position`, `text`. `position` may equal length+1 to append.
-- `update` — replace the entry at `position` (use when an aim has shifted but is still ahead of the player). Args: `position`, `text`.
-- `delete` — remove the entry at `position` (use the moment a planned beat becomes past). Args: `position`.
-
-## Limits
-
-At most {{maxPlotItems}} entries total; each entry's text must be <= {{maxPlotItemChars}} chars. Out-of-range positions, missing required fields, or oversize text reject the call and leave the plan unchanged.
-
-## When to call
-
-- After delivering a planned beat → `delete` the entry that just resolved.
-- When story suggests a new direction → `append` or `insert`.
-- When the aim of an existing arrow has shifted but it's still ahead → `update`.
+- `append` when the story opens a new arrow worth aiming at.
+- `insert` when a new arrow needs to come before an existing one.
+- `update` when an existing aim has shifted but is still ahead.
+- `delete` the moment a planned beat becomes past.
 
 If nothing changed, skip the call.
 
-## Example calls
+### Example calls
 
 ```json
-{ "op": "append", "text": "Lady Veyra plans to seduce and drain the player to extract the cipher" }
-{ "op": "insert", "position": 2, "text": "The succubus in the cellar will offer freedom for forbidden pleasure" }
-{ "op": "update", "position": 1, "text": "Lady Veyra now openly hostile after the dock confrontation; will move on the player at the gala" }
+{ "op": "append", "text": "The constabulary will raid the bakery within two scenes if the ledger surfaces" }
+{ "op": "insert", "position": 2, "text": "Hesta will offer the player her son's hiding place in exchange for safe passage" }
+{ "op": "update", "position": 1, "text": "The bounty hunter now knows the player's name and is closing in" }
 { "op": "delete", "position": 3 }
 ```
+
+## Limits
+
+At most {{maxPlotItems}} entries; each entry's text ≤ {{maxPlotItemChars}} chars. Out-of-range positions, missing required fields, or oversize text reject the call and leave the plan unchanged.
