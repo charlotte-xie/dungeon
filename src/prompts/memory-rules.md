@@ -66,7 +66,7 @@ Use these as defaults. Add fields when genuinely needed; don't pad with empty on
 
 ## What belongs here
 
-- Recurring NPCs: who they are, what they want, how they regard the player, what they know.
+- Recurring NPCs: who they are, what they want, how they regard the player, what they know. Make each NPC distinctive.
 - Revisitable or referenced locations: geography, layout, current condition.
 - Past events that shape later scenes: betrayals, deaths, oaths, revelations.
 - Plot threads: ongoing mysteries, conflicts, macguffins, with their stakes and current status.

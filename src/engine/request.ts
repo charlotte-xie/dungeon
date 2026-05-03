@@ -51,13 +51,19 @@ export function buildStateSystemMessage(
       content: `${STATE_READONLY_PREAMBLE}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\``,
     }
   }
+  const auditPrompt =
+    '## Audit before writing\n\n' +
+    'Scan every key above. For each one, ask: *is this still true right now in this scene?* ' +
+    'If not, `delete` it this turn. Common stale keys: an NPC who left, an item the player dropped, ' +
+    'a stimulus that resolved, weather or mood from a past beat, scene fields from the previous location. ' +
+    'Stale state silently poisons future turns — prune every turn it appears.'
   const cleanupStatus =
     stateJson.length > stateCleanupThreshold
       ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Drop or condense stale keys this turn. Use \`update_state\` with \`delete=[...]\` for bulk cleanup.`
       : `STATUS: state size is ${stateJson.length.toLocaleString()} chars — within budget (threshold ${stateCleanupThreshold.toLocaleString()}).`
   return {
     role: 'system',
-    content: `${STATE_RULES}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\`\n\n${cleanupStatus}`,
+    content: `${STATE_RULES}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\`\n\n${auditPrompt}\n\n${cleanupStatus}`,
   }
 }
 
