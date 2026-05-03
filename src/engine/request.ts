@@ -20,11 +20,37 @@ export function buildSlotMessage(def: SlotDef, value: string): string {
   return `${def.header}\n\n${def.framing}\n\n${value}`
 }
 
+const STATE_READONLY_PREAMBLE =
+  '# Live State (current scene)\n\n' +
+  'The planner has already updated this for the turn. Read it for ' +
+  'consistency with what the player can see and feel right now. Do not ' +
+  'attempt to mutate it — no state tool is offered this turn.'
+
+const MEMORY_READONLY_PREAMBLE =
+  '# Long-Term Memory\n\n' +
+  'Durable record of NPCs, locations, plot threads, and key past events — ' +
+  'canon. The planner has already updated this for the turn. Read it for ' +
+  'consistency. Do not attempt to mutate it — no memory tool is offered ' +
+  'this turn.'
+
+const PLOT_READONLY_PREAMBLE =
+  '# Future Plot Plan\n\n' +
+  "The DM's private list of upcoming beats. The planner has already " +
+  'updated this for the turn. Use it to steer the scene. Do not attempt ' +
+  'to mutate it — no plot tool is offered this turn.'
+
 export function buildStateSystemMessage(
   currentState: WorldState,
   stateCleanupThreshold: number,
+  readOnly = false,
 ): ApiMessage {
   const stateJson = JSON.stringify(currentState, null, 2)
+  if (readOnly) {
+    return {
+      role: 'system',
+      content: `${STATE_READONLY_PREAMBLE}\n\n## Current state JSON\n\n\`\`\`json\n${stateJson}\n\`\`\``,
+    }
+  }
   const cleanupStatus =
     stateJson.length > stateCleanupThreshold
       ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Drop or condense stale keys this turn. Use \`update_state\` with \`delete=[...]\` for bulk cleanup.`
@@ -35,8 +61,20 @@ export function buildStateSystemMessage(
   }
 }
 
-export function buildMemorySystemMessage(currentMemory: Memory): ApiMessage {
+export function buildMemorySystemMessage(
+  currentMemory: Memory,
+  readOnly = false,
+): ApiMessage {
   const entries = Object.keys(currentMemory)
+  if (readOnly) {
+    const body = entries.length
+      ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
+      : '(no memory yet)'
+    return {
+      role: 'system',
+      content: `${MEMORY_READONLY_PREAMBLE}\n\n## Current memory\n\n${body}`,
+    }
+  }
   const body = entries.length
     ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
     : '(no memory yet — call `update_memory` to record any NPC, location, plot theme, or key past event that should persist across scenes)'
@@ -46,7 +84,19 @@ export function buildMemorySystemMessage(currentMemory: Memory): ApiMessage {
   }
 }
 
-export function buildPlotSystemMessage(currentPlot: string[]): ApiMessage {
+export function buildPlotSystemMessage(
+  currentPlot: string[],
+  readOnly = false,
+): ApiMessage {
+  if (readOnly) {
+    const bullets = currentPlot.length
+      ? currentPlot.map((p, i) => `${i + 1}. ${p}`).join('\n')
+      : '(no future plot plan yet)'
+    return {
+      role: 'system',
+      content: `${PLOT_READONLY_PREAMBLE}\n\n## Current future plot plan\n\n${bullets}`,
+    }
+  }
   const bullets = currentPlot.length
     ? currentPlot.map((p, i) => `${i + 1}. ${p}`).join('\n')
     : '(no future plot plan yet — call future_plot_plan with op="append" to add the first arrow when the story gives you enough to aim at)'
@@ -73,6 +123,7 @@ export function buildApiMessagesIndexed(
   includePlotOutline: boolean,
   includeMemory: boolean,
   nsfw: boolean,
+  readOnly = false,
 ): {
   messages: ApiMessage[]
   stateIndex: number
@@ -91,17 +142,17 @@ export function buildApiMessagesIndexed(
   let memoryIndex = -1
   if (includeMemory) {
     memoryIndex = messages.length
-    messages.push(buildMemorySystemMessage(currentMemory))
+    messages.push(buildMemorySystemMessage(currentMemory, readOnly))
   }
   let plotIndex = -1
   if (includePlotOutline) {
     plotIndex = messages.length
-    messages.push(buildPlotSystemMessage(currentPlot))
+    messages.push(buildPlotSystemMessage(currentPlot, readOnly))
   }
   let stateIndex = -1
   if (includeWorldState) {
     stateIndex = messages.length
-    messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold))
+    messages.push(buildStateSystemMessage(currentState, stateCleanupThreshold, readOnly))
   }
   const chronicleMessage = buildChronicleSystemMessage(chronicle)
   if (chronicleMessage) {
@@ -142,6 +193,7 @@ export function buildApiMessages(
   includePlotOutline: boolean,
   includeMemory: boolean,
   nsfw: boolean,
+  readOnly = false,
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
     systemPrompt,
@@ -157,6 +209,7 @@ export function buildApiMessages(
     includePlotOutline,
     includeMemory,
     nsfw,
+    readOnly,
   ).messages
 }
 

@@ -19,7 +19,6 @@ import {
   LS_MODEL,
   LS_SAMPLING,
   LS_SHOW_TRACE,
-  LS_SYSTEM,
   LS_TURNS,
   LS_XAI_KEY,
   LS_COMPACT_CUTOFF,
@@ -134,9 +133,7 @@ function EditableMessage({
 }
 
 function App() {
-  const [systemPrompt, setSystemPrompt] = useState(() =>
-    loadStored(LS_SYSTEM, DEFAULT_SYSTEM_PROMPT),
-  )
+  const systemPrompt = DEFAULT_SYSTEM_PROMPT
   const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
   const [xaiKey, setXaiKey] = useState(() => loadStored(LS_XAI_KEY, ''))
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
@@ -620,7 +617,6 @@ function App() {
   }
 
   function saveSettings(
-    nextSystem: string,
     nextModel: string,
     nextXaiKey: string,
     nextSlots: AdventureSlots,
@@ -628,7 +624,6 @@ function App() {
     nextContext: ContextConfig,
     nextShowTrace: boolean,
   ) {
-    setSystemPrompt(nextSystem)
     setModel(nextModel)
     setXaiKey(nextXaiKey)
     commitSlots(nextSlots)
@@ -636,7 +631,6 @@ function App() {
     setContext(nextContext)
     setShowTrace(nextShowTrace)
     try {
-      localStorage.setItem(LS_SYSTEM, nextSystem)
       if (nextXaiKey) localStorage.setItem(LS_XAI_KEY, nextXaiKey)
       else localStorage.removeItem(LS_XAI_KEY)
       if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
@@ -863,7 +857,6 @@ function App() {
       </div>
       {showSettings && (
         <SettingsPanel
-          systemPrompt={systemPrompt}
           model={model}
           xaiKey={xaiKey}
           slots={slots}
@@ -911,6 +904,7 @@ function App() {
               context.includePlotOutline,
               context.includeMemory,
               context.nsfw,
+              context.usePlanner,
             ),
             context.reminderAsSystem,
           )}

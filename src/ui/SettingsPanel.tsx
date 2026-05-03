@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { DEFAULT_SYSTEM_PROMPT } from '../prompts'
 import {
   ADVENTURE_SLOTS,
   DEFAULT_CONTEXT,
@@ -23,7 +22,6 @@ const MODEL_OPTIONS = [
 ] as const
 
 interface SettingsPanelProps {
-  systemPrompt: string
   model: string
   xaiKey: string
   slots: AdventureSlots
@@ -32,7 +30,6 @@ interface SettingsPanelProps {
   showTrace: boolean
   onClose: () => void
   onSave: (
-    systemPrompt: string,
     model: string,
     xaiKey: string,
     slots: AdventureSlots,
@@ -43,7 +40,6 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({
-  systemPrompt,
   model,
   xaiKey,
   slots,
@@ -53,7 +49,6 @@ export function SettingsPanel({
   onClose,
   onSave,
 }: SettingsPanelProps) {
-  const [draftSystem, setDraftSystem] = useState(systemPrompt)
   const [draftModel, setDraftModel] = useState(model)
   const [draftXaiKey, setDraftXaiKey] = useState(xaiKey)
   const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
@@ -77,7 +72,6 @@ export function SettingsPanel({
     const trimmed = {} as AdventureSlots
     for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
     onSave(
-      draftSystem.trim(),
       draftModel.trim(),
       draftXaiKey.trim(),
       trimmed,
@@ -89,7 +83,6 @@ export function SettingsPanel({
   }
 
   function resetDefaults() {
-    setDraftSystem(DEFAULT_SYSTEM_PROMPT)
     setDraftModel(DEFAULT_MODEL)
     setDraftSampling({ ...DEFAULT_SAMPLING })
     setDraftContext({ ...DEFAULT_CONTEXT })
@@ -137,14 +130,6 @@ export function SettingsPanel({
               spellCheck={false}
             />
           </div>
-        </label>
-        <label>
-          <span>System prompt</span>
-          <textarea
-            value={draftSystem}
-            onChange={(e) => setDraftSystem(e.target.value)}
-            rows={10}
-          />
         </label>
         {ADVENTURE_SLOTS.map((def) => (
           <label key={def.key} title={def.hint}>
@@ -342,8 +327,8 @@ export function SettingsPanel({
         </div>
 
         <p className="hint">
-          Saving persists to this browser. The system prompt and sampling take effect on
-          the next turn. Click <em>New Adventure</em> in the header to restart — the DM
+          Saving persists to this browser. Sampling and flags take effect on the next
+          turn. Click <em>New Adventure</em> in the header to restart — the DM
           will generate a fresh opening from the brief above.
         </p>
         <div className="modal-actions">

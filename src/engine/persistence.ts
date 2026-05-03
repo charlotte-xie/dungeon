@@ -18,7 +18,6 @@ import type {
   WorldState,
 } from './types'
 
-export const LS_SYSTEM = 'dm.systemPrompt'
 export const LS_MODEL = 'dm.model'
 export const LS_XAI_KEY = 'dm.xaiKey'
 export const LS_STATE = 'dm.state'

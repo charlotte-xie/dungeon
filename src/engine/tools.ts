@@ -155,6 +155,25 @@ export function executeTool(
         notes.push(`deleted ${p}`)
       }
       for (const [path, value] of setEntries) {
+        if (isMemory) {
+          const segments = path.split('.').filter(Boolean)
+          if (segments.length === 1) {
+            const isObject =
+              value !== null && typeof value === 'object' && !Array.isArray(value)
+            if (!isObject) {
+              const got = Array.isArray(value)
+                ? 'array'
+                : value === null
+                  ? 'null'
+                  : typeof value
+              notes.push(
+                `REJECTED set ${path}: top-level memory entries must be objects with a \`kind\` field (e.g. {"kind":"npc","name":"...","wants":"..."}). Got ${got}. Existing value unchanged.`,
+              )
+              failed = true
+              continue
+            }
+          }
+        }
         const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
         if (overLong !== null) {
           notes.push(

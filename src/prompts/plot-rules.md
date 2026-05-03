@@ -8,7 +8,7 @@ Every entry must describe something that has **not yet been delivered to the pla
 
 Before each turn, read the plan and ask: *"Has this already happened?"* If yes, `delete` it. The plan should always feel like a list of future directions.
 
-Things that DO belong: an NPC's hidden motive about to surface, a cliff the player is being pushed toward, a betrayal that hasn't sprung yet, a revelation queued for a later scene, a secret yet to be revealled.
+Things that DO belong: an NPC's hidden motive about to surface, a cliff the player is being pushed toward, a betrayal that hasn't sprung yet, a revelation queued for a later scene, a secret yet to be revealed.
 
 ## Tool: `future_plot_plan`
 

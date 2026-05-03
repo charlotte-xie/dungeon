@@ -79,6 +79,7 @@ the tool calls.
 
 # Order of operations
 
-Do all tool work in your FIRST response, batched. Then, in your next
-response after the tool results come back, write the three-point instruction
-and stop.
+Batch your tool work — prefer one round, two if you must. Once the
+post-tool world is in front of you, write the three-point instruction and
+stop. After a couple of rounds the tools will be withdrawn and the
+instruction is required.

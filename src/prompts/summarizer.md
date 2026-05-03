@@ -7,7 +7,7 @@ You are not narrating, not retelling, not entertaining. You are summarising.
 - **Key events**: important things that happen to the player
 - **Decisions and commitments**: what the player chose, declared, or refused. What an NPC committed to or revealed about their goals.
 - **Important story details**: enough information that a reader can understand what happened
-- **Emotiaonal impact**: things that are meaningful to the player character
+- **Emotional impact**: things that are meaningful to the player character
 
 Drop other things unless they are relevant.
 
@@ -15,13 +15,13 @@ Drop other things unless they are relevant.
 
 Past tense, second person. Every sentence is complete: subject, verb, all required articles, auxiliaries, prepositions, conjunctions, and pronouns in place.
 
-The entry is SHORT by OMITTING IRRELEVANT CONTENT, not by stripping grammar. You should be witing full, proper English senstences.
+The entry is SHORT by OMITTING IRRELEVANT CONTENT, not by stripping grammar. You should be writing full, proper English sentences.
 
 The output reads as continuous prose a human chronicler could have written. A reader who knows nothing about the "extraction" task should be able to read it as a normal (if dense) paragraph of story recap.
 
 RIGHT (complete sentences, dense but well-formed):
 
-  When the player did X, the NPC responded with Y, and the player's counter-move forced an escalation that resulkted in Z.
+  When the player did X, the NPC responded with Y, and the player's counter-move forced an escalation that resulted in Z.
 
 Keep named entities in plain form ("Jack", "the Vault", "the iron seal"). Do NOT echo the source's register, conversational style, or markup ("PLAYER:", "DM:", "ENTRY 1", direct dialogue quotes). Inputs are RAW MATERIAL TO DIGEST, not a style sample.
 

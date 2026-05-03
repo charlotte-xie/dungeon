@@ -72,6 +72,7 @@ export async function runNarrator(
   let currentState = ctx.initialState
   let currentPlot = ctx.initialPlot
   let currentMemory = ctx.initialMemory
+  const readOnly = !!ctx.disableMutationTools
   const { messages: apiMessages, stateIndex, plotIndex, memoryIndex } = buildApiMessagesIndexed(
     ctx.systemPrompt,
     ctx.slots,
@@ -86,6 +87,7 @@ export async function runNarrator(
     ctx.includePlotOutline,
     ctx.includeMemory,
     ctx.nsfw,
+    readOnly,
   )
   const tools: unknown[] = []
   if (!ctx.disableMutationTools) {
@@ -200,13 +202,13 @@ export async function runNarrator(
         pushToolResult(call, exec.result)
       }
       if (stateIndex >= 0) {
-        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold)
+        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold, readOnly)
       }
       if (plotIndex >= 0) {
-        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot, readOnly)
       }
       if (memoryIndex >= 0) {
-        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory, readOnly)
       }
       continue
     }
@@ -235,13 +237,13 @@ export async function runNarrator(
         })
       }
       if (stateIndex >= 0) {
-        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold)
+        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold, readOnly)
       }
       if (plotIndex >= 0) {
-        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
+        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot, readOnly)
       }
       if (memoryIndex >= 0) {
-        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory, readOnly)
       }
       if (cleaned)
         return {
