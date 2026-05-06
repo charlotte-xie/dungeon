@@ -85,7 +85,6 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includeWorldState: false,
   includePlotOutline: true,
   includeMemory: true,
-  usePlanner: false,
   useReviser: true,
   reviserModel: DEFAULT_REVISER_MODEL,
   nsfw: true,

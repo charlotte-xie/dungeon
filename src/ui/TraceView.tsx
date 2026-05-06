@@ -1,7 +1,7 @@
 import type { ModelCall, TraceEvent } from '../engine/types'
 
 export interface ModelCallView {
-  // Short human label shown as the section header (e.g. 'planner', 'narrator').
+  // Short human label shown as the section header (e.g. 'narrator', 'reviser').
   label: string
   call: ModelCall
   // When true, omit the call's text from the trace pane — useful for the

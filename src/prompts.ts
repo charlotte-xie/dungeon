@@ -6,7 +6,6 @@ import turnReminder from './prompts/turn-reminder.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
 import newAdventureBootstrapTemplate from './prompts/new-adventure-bootstrap.md?raw'
-import plannerSystem from './prompts/planner.md?raw'
 import reviserSystem from './prompts/reviser.md?raw'
 
 function fill(template: string, vars: Record<string, string | number>): string {
@@ -19,7 +18,6 @@ function fill(template: string, vars: Record<string, string | number>): string {
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
 export const TURN_REMINDER = turnReminder.trim()
 export const DEFAULT_SCENARIO = defaultScenario.trim()
-export const PLANNER_SYSTEM_PROMPT = plannerSystem.trim()
 export const REVISER_SYSTEM_PROMPT = reviserSystem.trim()
 
 export const NSFW_ON_PROMPT =

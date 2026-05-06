@@ -2,7 +2,6 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT, buildNewAdventureBootstrap } from './prompts'
 import { runNarrator } from './engine/agents/narrator'
-import { runPlanner } from './engine/agents/planner'
 import { buildReviserMessages, runReviser } from './engine/agents/reviser'
 import {
   chronicleNeedsCompaction,
@@ -376,49 +375,6 @@ function App() {
         setStatusText('DM is thinking…')
       }
 
-      let plannerCall: ModelCall | undefined
-      let workingState = baseState
-      let workingPlot = basePlot
-      let workingMemory = baseMemory
-      if (context.usePlanner) {
-        setStatusText('Planner thinking…')
-        const plannerResult = await runPlanner(
-          {
-            model,
-            apiKey: xaiKey,
-            slots,
-            chronicle: workingChronicle,
-            history: allTurns.slice(workingCutoff),
-            state: workingState,
-            plot: workingPlot,
-            memory: workingMemory,
-            sampling,
-            stateCleanupThreshold: context.stateCleanupChars,
-            includeWorldState: context.includeWorldState,
-            includePlotOutline: context.includePlotOutline,
-            includeMemory: context.includeMemory,
-            nsfw: context.nsfw,
-          },
-          controller.signal,
-        )
-        plannerCall = plannerResult.call
-        workingState = plannerResult.state
-        workingPlot = plannerResult.plot
-        workingMemory = plannerResult.memory
-        // Reflect planner's tool-driven state/plot/memory updates immediately
-        // so the user can see them mid-turn, and so the narrator sees the
-        // post-planner world below.
-        commitState(workingState)
-        commitPlot(workingPlot)
-        commitMemory(workingMemory)
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === pendingTurn.id ? { ...t, planner: plannerCall } : t,
-          ),
-        )
-        setStatusText('DM is thinking…')
-      }
-
       const result = await runNarrator(
         {
           systemPrompt,
@@ -427,9 +383,9 @@ function App() {
           slots,
           chronicle: workingChronicle,
           history: allTurns.slice(workingCutoff),
-          initialState: workingState,
-          initialPlot: workingPlot,
-          initialMemory: workingMemory,
+          initialState: baseState,
+          initialPlot: basePlot,
+          initialMemory: baseMemory,
           sampling,
           stateCleanupThreshold: context.stateCleanupChars,
           includePriorPlayerTurns: context.includePriorPlayerTurns,
@@ -438,8 +394,6 @@ function App() {
           includePlotOutline: context.includePlotOutline,
           includeMemory: context.includeMemory,
           nsfw: context.nsfw,
-          disableMutationTools: context.usePlanner,
-          plannerInstruction: plannerCall?.text,
         },
         controller.signal,
       )
@@ -460,7 +414,6 @@ function App() {
             t.id === pendingTurn.id
               ? {
                   ...t,
-                  planner: plannerCall ?? t.planner,
                   narrator: narratorCall,
                 }
               : t,
@@ -473,7 +426,6 @@ function App() {
             apiKey: xaiKey,
             slots,
             draft: result.text,
-            authorNotes: plannerCall?.text,
             sampling,
           },
           controller.signal,
@@ -491,7 +443,6 @@ function App() {
             t.id === pendingTurn.id
               ? {
                   ...t,
-                  planner: plannerCall ?? t.planner,
                   narrator: undefined,
                   reply: {
                     ...t.reply,
@@ -873,11 +824,10 @@ function App() {
                       )
                     }
                   />
-                  {showTrace && (t.reply.trace !== undefined || t.planner || t.narrator) && (
+                  {showTrace && (t.reply.trace !== undefined || t.narrator) && (
                     <TraceView
-                      calls={[
-                        ...(t.planner ? [{ label: 'planner', call: t.planner }] : []),
-                        ...(t.narrator
+                      calls={
+                        t.narrator
                           ? [
                               { label: 'narrator (draft)', call: t.narrator, hideText: true },
                               {
@@ -886,8 +836,8 @@ function App() {
                                 diffAgainst: t.narrator.text ?? '',
                               },
                             ]
-                          : [{ label: 'narrator', call: t.reply, hideText: true }]),
-                      ]}
+                          : [{ label: 'narrator', call: t.reply, hideText: true }]
+                      }
                       expanded={expandedTraces.has(t.id)}
                       onToggle={() => toggleTrace(t.id)}
                     />
@@ -976,19 +926,15 @@ function App() {
       {showContext && (() => {
         const lastTurn = [...turns].reverse().find((t) => t.reply.text || t.narrator?.text)
         const lastDraft = lastTurn?.narrator?.text ?? lastTurn?.reply.text ?? ''
-        const lastNotes = lastTurn?.planner?.text
         const reviserPreview = context.useReviser
           ? {
               messages: buildReviserMessages(
                 slots,
                 lastDraft || '(placeholder draft — take one turn to see the real reviser request)',
-                lastNotes,
               ),
               model: context.reviserModel,
               source: lastDraft ? ('last-turn' as const) : ('no-draft' as const),
-              note: lastTurn
-                ? `Draft from turn #${turns.indexOf(lastTurn) + 1}${lastNotes ? ', planner notes included' : ', no planner notes'}.`
-                : '',
+              note: lastTurn ? `Draft from turn #${turns.indexOf(lastTurn) + 1}.` : '',
             }
           : undefined
         return (
@@ -1008,19 +954,14 @@ function App() {
                 context.includePlotOutline,
                 context.includeMemory,
                 context.nsfw,
-                context.usePlanner,
               ),
               context.reminderAsSystem,
             )}
-            tools={
-              context.usePlanner
-                ? []
-                : [
-                    ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
-                    ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
-                    ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL] : []),
-                  ]
-            }
+            tools={[
+              ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
+              ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
+              ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL] : []),
+            ]}
             sampling={sampling}
             reviser={reviserPreview}
             onClose={() => setShowContext(false)}

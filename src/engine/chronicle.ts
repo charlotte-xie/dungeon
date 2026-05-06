@@ -213,16 +213,16 @@ export function buildChronicleSystemMessage(chronicle: Chronicle): ApiMessage | 
 export function stripTracesBefore(turns: Turn[], cutoff: number): Turn[] {
   let changed = false
   const next = turns.map((t, i) => {
-    if (i >= cutoff || (!t.reply.trace && !t.planner?.trace)) return t
+    if (i >= cutoff || (!t.reply.trace && !t.narrator?.trace)) return t
     changed = true
     const reply = { ...t.reply }
     delete reply.trace
-    let planner = t.planner
-    if (planner?.trace) {
-      planner = { ...planner }
-      delete planner.trace
+    let narrator = t.narrator
+    if (narrator?.trace) {
+      narrator = { ...narrator }
+      delete narrator.trace
     }
-    return { ...t, reply, planner }
+    return { ...t, reply, narrator }
   })
   return changed ? next : turns
 }

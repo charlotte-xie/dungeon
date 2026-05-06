@@ -335,18 +335,7 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When on, a planner pass runs before the narrator each turn: it reads the chronicle, recent turns, and current state, then writes a director's-note instruction (visible in the trace) and handles all update_state / update_memory / future_plot_plan calls. The instruction is then injected into the narrator's prompt as a labeled PLANNER INPUT system message, and the narrator's mutation tools are suppressed (planner already covered them). Roughly doubles tokens and latency per turn. Default ${DEFAULT_CONTEXT.usePlanner ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.usePlanner}
-              onChange={(e) => setContextField('usePlanner', e.target.checked)}
-            />
-            <strong>Run planner before narrator</strong>
-          </label>
-          <label
-            className="flag-field"
-            title={`When on, a reviser pass runs after the narrator: the model picked above (Reviser model) takes the narrator's draft (and the planner's notes, if any) and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`}
+            title={`When on, a reviser pass runs after the narrator: the model picked above (Reviser model) takes the narrator's draft and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`}
           >
             <input
               type="checkbox"

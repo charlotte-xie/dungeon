@@ -1,7 +1,6 @@
-// Reviser agent. Takes the narrator's draft and (optionally) the planner's
-// author notes, runs a single non-reasoning pass to polish the prose into
-// fluent English without changing what happens, and returns the revised text
-// as the final reply for the turn.
+// Reviser agent. Takes the narrator's draft, runs a single non-reasoning
+// pass to polish the prose into fluent English without changing what happens,
+// and returns the revised text as the final reply for the turn.
 //
 // One-shot: no tool use, no iteration loop. The reviser never mutates state,
 // plot, or memory — it only rewrites prose.
@@ -21,7 +20,6 @@ export interface ReviserContext {
   apiKey: string
   slots: AdventureSlots
   draft: string
-  authorNotes?: string
   sampling: SamplingParams
 }
 
@@ -30,7 +28,6 @@ export interface ReviserContext {
 export function buildReviserMessages(
   slots: AdventureSlots,
   draft: string,
-  authorNotes?: string,
 ): ApiMessage[] {
   const styleGuide = slots.styleGuide?.trim() ?? ''
   const messages: ApiMessage[] = [
@@ -46,20 +43,12 @@ export function buildReviserMessages(
         `Your job is grammar and clarity, not stylization.`,
     })
   }
-  const userParts: string[] = []
-  if (authorNotes && authorNotes.trim()) {
-    userParts.push(
-      `--- AUTHOR NOTES (context only — do not reproduce) ---\n\n` +
-        authorNotes.trim(),
-    )
-  }
-  userParts.push(`--- DRAFT (revise this) ---\n\n${draft}`)
-  userParts.push(
+  const userText =
+    `--- DRAFT (revise this) ---\n\n${draft}\n\n` +
     `--- TASK ---\n\nReturn the full revised passage. Preserve every event, ` +
-      `dialogue line, and named entity exactly. Fix grammar, awkward phrasing, ` +
-      `and broken sentences. No preamble, no labels — just the prose.`,
-  )
-  messages.push({ role: 'user', content: userParts.join('\n\n') })
+    `dialogue line, and named entity exactly. Fix grammar, awkward phrasing, ` +
+    `and broken sentences. No preamble, no labels — just the prose.`
+  messages.push({ role: 'user', content: userText })
   return messages
 }
 
@@ -71,7 +60,7 @@ export async function runReviser(
   const startedAt = Date.now()
   const trace: TraceEvent[] = []
 
-  const messages = buildReviserMessages(ctx.slots, ctx.draft, ctx.authorNotes)
+  const messages = buildReviserMessages(ctx.slots, ctx.draft)
 
   const body: Record<string, unknown> = {
     model: ctx.model,

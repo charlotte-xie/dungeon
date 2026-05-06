@@ -226,10 +226,6 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.includeMemory === 'boolean'
           ? parsed.includeMemory
           : DEFAULT_CONTEXT.includeMemory,
-      usePlanner:
-        typeof parsed.usePlanner === 'boolean'
-          ? parsed.usePlanner
-          : DEFAULT_CONTEXT.usePlanner,
       useReviser:
         typeof parsed.useReviser === 'boolean'
           ? parsed.useReviser

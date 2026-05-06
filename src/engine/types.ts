@@ -22,7 +22,6 @@ export interface Turn {
   id: string
   kind: TurnKind
   input?: string
-  planner?: ModelCall
   // The Narrator's raw draft. Populated only when the reviser pass ran;
   // otherwise the narrator's output is `reply` and this is undefined. Kept
   // separate so the trace can show draft → revised side by side.
@@ -85,7 +84,6 @@ export interface ContextConfig {
   includeWorldState: boolean
   includePlotOutline: boolean
   includeMemory: boolean
-  usePlanner: boolean
   // When true, run a non-reasoning model after the narrator to polish its
   // draft into clean English. The revised text replaces the narrator output
   // as the visible reply; the original draft is preserved on Turn.narrator.

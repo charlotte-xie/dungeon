@@ -5,8 +5,8 @@ export interface ReviserPreview {
   messages: ApiMessage[]
   model: string
   source: 'last-turn' | 'no-draft'
-  // Short note about where the draft / author notes came from (e.g. "draft
-  // from turn #4, planner notes included") — purely informational.
+  // Short note about where the draft came from (e.g. "Draft from turn #4.")
+  // — purely informational.
   note: string
 }
 

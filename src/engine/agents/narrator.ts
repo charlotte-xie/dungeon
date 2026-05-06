@@ -1,6 +1,5 @@
 // The single-call DM path: one xAI request that does everything — prose +
-// state/plot tool calls in a single tool-use loop. The original "askDungeonMaster".
-// Coexists with the planner+writer experimental path.
+// state/plot tool calls in a single tool-use loop.
 
 import {
   applyTurnReminder,
@@ -46,14 +45,6 @@ export interface NarratorContext {
   includePlotOutline: boolean
   includeMemory: boolean
   nsfw: boolean
-  // When true, drop update_state / future_plot_plan / update_memory from the
-  // offered tool set — the planner already handled mutations for this turn
-  // and the narrator is purely a writer.
-  disableMutationTools?: boolean
-  // Director's-note from the planner. Injected as the final system message
-  // (after the turn reminder) so it's the freshest guidance the model sees
-  // before generating prose. Omit when running the single-call path.
-  plannerInstruction?: string
 }
 
 export interface NarratorResult {
@@ -72,7 +63,6 @@ export async function runNarrator(
   let currentState = ctx.initialState
   let currentPlot = ctx.initialPlot
   let currentMemory = ctx.initialMemory
-  const readOnly = !!ctx.disableMutationTools
   const { messages: apiMessages, stateIndex, plotIndex, memoryIndex } = buildApiMessagesIndexed(
     ctx.systemPrompt,
     ctx.slots,
@@ -87,39 +77,11 @@ export async function runNarrator(
     ctx.includePlotOutline,
     ctx.includeMemory,
     ctx.nsfw,
-    readOnly,
   )
   const tools: unknown[] = []
-  if (!ctx.disableMutationTools) {
-    if (ctx.includeMemory) tools.push(UPDATE_MEMORY_TOOL)
-    if (ctx.includeWorldState) tools.push(UPDATE_STATE_TOOL)
-    if (ctx.includePlotOutline) tools.push(FUTURE_PLOT_PLAN_TOOL)
-  }
-
-  const plannerSystemMessage = ctx.plannerInstruction
-    ? {
-        role: 'system' as const,
-        content:
-          `# PLANNER INPUT\n\n` +
-          `A planner has analyzed this turn and produced the directive below. It tells you ` +
-          `WHAT must happen this turn — the consequence, the next situation, and where the ` +
-          `story is aiming. It does NOT tell you how to write it.\n\n` +
-          `The directive is intentionally terse and telegraphic. It is RAW STRATEGIC MATERIAL ` +
-          `for you to render, NOT a style template. Your prose must NOT echo its register, ` +
-          `labeled-line format, fragment phrasing, or compression. Do not begin sentences with ` +
-          `"Consequence:" or any other label from the directive. Do not quote it. Do not refer ` +
-          `to "the planner" or any director. The player never sees the directive — they see ` +
-          `only your prose.\n\n` +
-          `You are the Narrator. Write in the voice and register established by the system ` +
-          `prompt and style guide above: complete grammatical sentences, varied rhythm, ` +
-          `fiction prose with all articles, auxiliaries, and conjunctions in place. Render ` +
-          `the directive's intent through scene, sensory detail, NPC behavior, and dialogue ` +
-          `of your own choosing.\n\n` +
-          `--- BEGIN DIRECTIVE ---\n\n` +
-          ctx.plannerInstruction +
-          `\n\n--- END DIRECTIVE ---`,
-      }
-    : null
+  if (ctx.includeMemory) tools.push(UPDATE_MEMORY_TOOL)
+  if (ctx.includeWorldState) tools.push(UPDATE_STATE_TOOL)
+  if (ctx.includePlotOutline) tools.push(FUTURE_PLOT_PLAN_TOOL)
 
   const trace: TraceEvent[] = []
   let totalReasoningTokens = 0
@@ -136,12 +98,9 @@ export async function runNarrator(
   let nudged = false
   for (let iter = 0; iter < 8; iter++) {
     const reminded = applyTurnReminder(apiMessages, ctx.reminderAsSystem)
-    const finalMessages = plannerSystemMessage
-      ? [...reminded, plannerSystemMessage]
-      : reminded
     const body: Record<string, unknown> = {
       model: ctx.model,
-      messages: finalMessages,
+      messages: reminded,
       stream: false,
     }
     if (tools.length) body.tools = tools
@@ -202,13 +161,13 @@ export async function runNarrator(
         pushToolResult(call, exec.result)
       }
       if (stateIndex >= 0) {
-        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold, readOnly)
+        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold)
       }
       if (plotIndex >= 0) {
-        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot, readOnly)
+        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
       }
       if (memoryIndex >= 0) {
-        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory, readOnly)
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
       }
       continue
     }
@@ -237,13 +196,13 @@ export async function runNarrator(
         })
       }
       if (stateIndex >= 0) {
-        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold, readOnly)
+        apiMessages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold)
       }
       if (plotIndex >= 0) {
-        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot, readOnly)
+        apiMessages[plotIndex] = buildPlotSystemMessage(currentPlot)
       }
       if (memoryIndex >= 0) {
-        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory, readOnly)
+        apiMessages[memoryIndex] = buildMemorySystemMessage(currentMemory)
       }
       if (cleaned)
         return {

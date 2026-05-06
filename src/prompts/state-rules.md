@@ -8,7 +8,7 @@ It is **not a transcript** of the scene. Routine motion, single gestures, passin
 
 State is **rebuilt every turn** from two explicit lists you provide:
 
-1. **`keep`** — a whitelist of dotted paths from the CURRENT state that should survive into the next turn unchanged. Their existing values carry forward.
+1. **`keep`** — a whitelist of dotted paths from the CURRENT state that should survive into the next turn. Their existing values carry forward.
 2. **`set`** — a map of dotted-path → value applied on top of the kept paths. Adds new paths, or overwrites a kept path whose value is now different.
 
 There is no separate `delete` operation. **Anything in the current state that is not in `keep` and not in `set` is dropped.** Omission is deletion.
@@ -30,7 +30,7 @@ Before adding anything to `set` (or keeping anything via `keep`), ask: *would th
 - The current location and immediate surroundings (what room, what time of day, what weather) — when these will still be true next turn.
 - The player's current position when it persists (sat down, knelt, took cover) and what they're visibly holding or wearing right now.
 - Which NPCs are physically present and the postures or stances the next turn must respect (weapon drawn, hand on the player's arm, blocking the door).
-- The active stimulus the scene is built around (an open conversation thread, an unresolved demand, a noise the player just heard).
+- The active point of tension in the scene (e.g. what an NPC is trying to persuade the player to do).
 
 ## What does NOT belong here
 
@@ -42,11 +42,11 @@ Before adding anything to `set` (or keeping anything via `keep`), ask: *would th
 - **Re-derivable flavor**: the colour of a guard's cloak, the wording of a warning, the tavern's name when it won't recur. These live in narration only.
 - **Event log**: state mirrors what's true *right now*, not a record of what happened. "Player drew the sword" → put `player.holding: "drawn longsword"` in `set`, do not append to a history.
 
-If you find yourself writing to state about something that will still matter three scenes from now, write it to memory instead.
+If you find yourself writing to state about something that will matter in future screnes, write it to memory instead.
 
 ## Tool
 
-Call `update_state` with both `keep` and `set` (either may be empty, but both must be present).
+Call `update_state` with both `keep` and `set` (either may be empty).
 
 ```json
 {
