@@ -879,7 +879,7 @@ function App() {
                         ...(t.planner ? [{ label: 'planner', call: t.planner }] : []),
                         ...(t.narrator
                           ? [
-                              { label: 'narrator (draft)', call: t.narrator },
+                              { label: 'narrator (draft)', call: t.narrator, hideText: true },
                               {
                                 label: 'reviser',
                                 call: t.reply,

@@ -143,46 +143,64 @@ export function TraceView({ calls, expanded, onToggle }: TraceViewProps) {
         className="trace-toggle"
         onClick={onToggle}
         aria-expanded={expanded}
-        title="Show reasoning, tool calls, and intermediate model output for this turn"
+        title="Open the trace pane in a modal — reasoning, tool calls, and the reviser diff for this turn"
       >
-        {expanded ? '▾' : '▸'} trace ({summary})
+        ▸ trace ({summary})
       </button>
       {expanded && (
-        <div className="trace-pane">
-          {calls.map((view, i) => {
-            const trace = view.call.trace ?? []
-            const showText = !view.hideText && !!view.call.text
-            const empty = trace.length === 0 && !showText
-            return (
-              <div key={i} className="trace-section">
-                <div className="trace-section-head">
-                  <span className="trace-section-label">{view.label}</span>
-                  {view.call.model && (
-                    <code className="trace-section-model">{view.call.model}</code>
-                  )}
-                </div>
-                {showText && (
-                  <div className="trace-event trace-output">
-                    <span className="trace-label">
-                      {view.diffAgainst !== undefined ? 'diff' : 'output'}
-                    </span>
-                    {view.diffAgainst !== undefined && view.call.text ? (
-                      <DiffBlock from={view.diffAgainst} to={view.call.text} />
+        <div
+          className="modal-backdrop"
+          onClick={(e) => {
+            // Backdrop click closes; clicks inside the modal don't bubble here.
+            if (e.target === e.currentTarget) onToggle()
+          }}
+        >
+          <div className="modal modal-wide trace-modal">
+            <div className="modal-header">
+              <h2>Trace ({summary})</h2>
+              <button className="modal-close" aria-label="Close" onClick={onToggle}>×</button>
+            </div>
+            <div className="trace-pane">
+              {calls.map((view, i) => {
+                const trace = view.call.trace ?? []
+                const showText = !view.hideText && !!view.call.text
+                const empty = trace.length === 0 && !showText
+                return (
+                  <div key={i} className="trace-section">
+                    <div className="trace-section-head">
+                      <span className="trace-section-label">{view.label}</span>
+                      {view.call.model && (
+                        <code className="trace-section-model">{view.call.model}</code>
+                      )}
+                    </div>
+                    {showText && (
+                      <div className="trace-event trace-output">
+                        <span className="trace-label">
+                          {view.diffAgainst !== undefined ? 'diff' : 'output'}
+                        </span>
+                        {view.diffAgainst !== undefined && view.call.text ? (
+                          <DiffBlock from={view.diffAgainst} to={view.call.text} />
+                        ) : (
+                          <p>{view.call.text}</p>
+                        )}
+                      </div>
+                    )}
+                    {empty ? (
+                      <div className="trace-event trace-empty">
+                        <span className="trace-label">no events recorded</span>
+                      </div>
                     ) : (
-                      <p>{view.call.text}</p>
+                      trace.map((e, j) => <TraceEventView key={j} event={e} />)
                     )}
                   </div>
-                )}
-                {empty ? (
-                  <div className="trace-event trace-empty">
-                    <span className="trace-label">no events recorded</span>
-                  </div>
-                ) : (
-                  trace.map((e, j) => <TraceEventView key={j} event={e} />)
-                )}
-              </div>
-            )
-          })}
+                )
+              })}
+            </div>
+            <div className="modal-actions">
+              <span className="spacer" />
+              <button onClick={onToggle}>Close</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
