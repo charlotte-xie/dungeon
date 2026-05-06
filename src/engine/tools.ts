@@ -8,9 +8,11 @@ import type { InlineToolCall, JsonValue, Memory, WorldState } from './types'
 export const MAX_PLOT_ITEMS = 10
 export const MAX_PLOT_ITEM_CHARS = 300
 
+export const MAX_MEMORY_STRING_CHARS = 500
+
 export const PLOT_RULES = buildPlotRules(MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS)
 
-export const MEMORY_RULES = buildMemoryRules(MAX_STATE_STRING_CHARS)
+export const MEMORY_RULES = buildMemoryRules(MAX_MEMORY_STRING_CHARS)
 
 export const UPDATE_STATE_TOOL = {
   type: 'function',
@@ -82,25 +84,25 @@ export const UPDATE_MEMORY_TOOL = {
   function: {
     name: 'update_memory',
     description:
-      `Update long-term memory — your canonical record of NPCs, locations, plot themes, and key past events that should persist across scenes. Provide \`set\` (a map of dotted-path → value to assign), \`delete\` (an array of dotted paths to remove), or both. Deletes apply first, then sets — so a path that appears in both ends up with the set value. Intermediate objects on a set path are auto-created. ` +
-      `STRUCTURE: top-level keys are entity names; their values are JSON objects of fields. Examples: \`"Lady Veyra"\` → \`{title, disposition, secret, ...}\`; \`"the Abbey"\` → \`{location, layout, mood, ...}\`; \`"the betrayal at Greyford"\` → \`{when, who, what, consequences, ...}\`. ` +
+      `Update long-term memory — your canonical record of NPCs, locations, plot themes, and key past events that should persist across scenes. Provide \`set\` (a map of slug → string description), \`delete\` (an array of slugs to remove), or both. Deletes apply first, then sets — so a slug that appears in both ends up with the set value. ` +
+      `STRUCTURE: each key is a slug (lowercase, underscores, no periods or spaces) and each value is a single complete English description that captures everything important about that entity. Setting a slug REPLACES its description in full — write the whole updated description, not a delta. Example: \`{"lady_veyra":"spymaster of the Crimson Court; tall, silver-haired, soft-spoken; wants the courier ledger destroyed; openly hostile to the player after the dock confrontation; secretly the Duke's half-sister"}\`. ` +
       `WHEN TO USE: use \`update_memory\` IN PREFERENCE TO \`update_state\` for anything that should be remembered beyond the current scene — recurring NPCs, named places, plot themes, secrets, important past events. Use \`update_state\` only for the live current scene (current location, what the player is doing right now, immediate sensory details). ` +
       `WHEN TO DELETE: only when an entity is genuinely no longer relevant to the story (a one-off NPC who has fully left the narrative, a location that's been abandoned permanently, a plot theme that's been resolved and won't return). Do NOT delete on scene change — memory persists. ` +
-      `STRING VALUES must be complete English phrases (e.g. "spymaster of the Crimson Court, openly hostile to the player after the dock confrontation"), NOT telegraphic fragments. ` +
-      `HARD LIMIT: any individual string value must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value is rejected and the existing value at that path is left unchanged. Split long descriptions across multiple keyed fields.`,
+      `VALUES must be complete English prose — sentences or semicolon-joined clauses with all articles, prepositions, and verbs in place — NOT telegraphic fragments, NOT JSON, NOT bullet lists. ` +
+      `HARD LIMIT: each value must be <= ${MAX_MEMORY_STRING_CHARS} characters. An over-long value is rejected and the existing value is left unchanged. If an entity needs more than that, split it across two slugs (e.g. \`lady_veyra\` and \`lady_veyra_secret\`).`,
     parameters: {
       type: 'object',
       properties: {
         set: {
           type: 'object',
-          description: `Map of dotted paths to values. Top-level key should be an entity name; the second component should be a field on that entity (e.g. "Lady Veyra.disposition"). String values must be complete phrases, <= ${MAX_STATE_STRING_CHARS} chars (including nested strings).`,
-          additionalProperties: true,
+          description: `Map of slug → string description. Slugs are lowercase with underscores, no periods or spaces. Each value is a single complete English description, <= ${MAX_MEMORY_STRING_CHARS} chars. Setting a slug fully replaces its existing description.`,
+          additionalProperties: { type: 'string' },
         },
         delete: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Dotted paths to remove. Whole entries (e.g. "Old Mill") or single fields (e.g. "Lady Veyra.disguise"). Applied before sets. Only delete when the target is genuinely no longer relevant to the story.',
+            'Slugs to remove entirely. Applied before sets. Only delete when the target is genuinely no longer relevant to the story.',
         },
       },
     },
@@ -121,10 +123,7 @@ export function executeTool(
   plot: string[],
   memory: Memory,
 ): ToolExecResult {
-  if (name === 'update_state' || name === 'update_memory') {
-    const isMemory = name === 'update_memory'
-    const target = isMemory ? memory : state
-    const label = isMemory ? 'memory' : 'state'
+  if (name === 'update_state') {
     try {
       const args = JSON.parse(rawArgs) as {
         set?: Record<string, JsonValue>
@@ -144,36 +143,17 @@ export function executeTool(
           state,
           plot,
           memory,
-          result: `error: ${name} requires a non-empty \`set\` map, a non-empty \`delete\` array, or both.`,
+          result: 'error: update_state requires a non-empty `set` map, a non-empty `delete` array, or both.',
         }
       }
       const notes: string[] = []
       let failed = false
-      let nextTarget: WorldState | Memory = target
+      let nextState: WorldState = state
       for (const p of deletePaths) {
-        nextTarget = deleteByPath(nextTarget, p)
+        nextState = deleteByPath(nextState, p)
         notes.push(`deleted ${p}`)
       }
       for (const [path, value] of setEntries) {
-        if (isMemory) {
-          const segments = path.split('.').filter(Boolean)
-          if (segments.length === 1) {
-            const isObject =
-              value !== null && typeof value === 'object' && !Array.isArray(value)
-            if (!isObject) {
-              const got = Array.isArray(value)
-                ? 'array'
-                : value === null
-                  ? 'null'
-                  : typeof value
-              notes.push(
-                `REJECTED set ${path}: top-level memory entries must be objects with a \`kind\` field (e.g. {"kind":"npc","name":"...","wants":"..."}). Got ${got}. Existing value unchanged.`,
-              )
-              failed = true
-              continue
-            }
-          }
-        }
         const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
         if (overLong !== null) {
           notes.push(
@@ -181,14 +161,91 @@ export function executeTool(
           )
           failed = true
         } else {
-          nextTarget = setByPath(nextTarget, path, value)
+          nextState = setByPath(nextState, path, value)
           notes.push(`set ${path}`)
         }
       }
-      const result = `${failed ? 'partial' : 'ok'} — ${label}: ${notes.join('; ')}`
-      return isMemory
-        ? { state, plot, memory: nextTarget, result }
-        : { state: nextTarget, plot, memory, result }
+      const result = `${failed ? 'partial' : 'ok'} — state: ${notes.join('; ')}`
+      return { state: nextState, plot, memory, result }
+    } catch (err) {
+      return { state, plot, memory, result: `error: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  }
+  if (name === 'update_memory') {
+    try {
+      const args = JSON.parse(rawArgs) as {
+        set?: Record<string, unknown>
+        delete?: string[]
+      }
+      const setEntries: [string, unknown][] =
+        args.set && typeof args.set === 'object' && !Array.isArray(args.set)
+          ? Object.entries(args.set).filter(
+              (e): e is [string, unknown] => typeof e[0] === 'string' && e[0].length > 0,
+            )
+          : []
+      const deleteSlugs = Array.isArray(args.delete)
+        ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
+        : []
+      if (setEntries.length === 0 && deleteSlugs.length === 0) {
+        return {
+          state,
+          plot,
+          memory,
+          result: 'error: update_memory requires a non-empty `set` map, a non-empty `delete` array, or both.',
+        }
+      }
+      const notes: string[] = []
+      let failed = false
+      let nextMemory: Memory = memory
+      for (const slug of deleteSlugs) {
+        if (slug.includes('.')) {
+          notes.push(
+            `REJECTED delete ${slug}: memory slugs cannot contain periods. Use the bare slug (e.g. "lady_veyra"). Existing value unchanged.`,
+          )
+          failed = true
+          continue
+        }
+        if (slug in nextMemory) {
+          const copy = { ...nextMemory }
+          delete copy[slug]
+          nextMemory = copy
+          notes.push(`deleted ${slug}`)
+        } else {
+          notes.push(`deleted ${slug} (no-op; not present)`)
+        }
+      }
+      for (const [slug, value] of setEntries) {
+        if (slug.includes('.')) {
+          notes.push(
+            `REJECTED set ${slug}: memory slugs cannot contain periods. Use the bare slug (e.g. "lady_veyra"). Existing value unchanged.`,
+          )
+          failed = true
+          continue
+        }
+        if (typeof value !== 'string') {
+          const got = Array.isArray(value)
+            ? 'array'
+            : value === null
+              ? 'null'
+              : typeof value
+          notes.push(
+            `REJECTED set ${slug}: memory values must be strings (a single complete English description). Got ${got}. Existing value unchanged.`,
+          )
+          failed = true
+          continue
+        }
+        if (value.length > MAX_MEMORY_STRING_CHARS) {
+          notes.push(
+            `REJECTED set ${slug}: description too long (${value.length} chars, max ${MAX_MEMORY_STRING_CHARS}). Existing value unchanged. Split across two slugs or rewrite tighter.`,
+          )
+          failed = true
+          continue
+        }
+        nextMemory = { ...nextMemory, [slug]: value }
+        notes.push(`set ${slug}`)
+      }
+      const result = `${failed ? 'partial' : 'ok'} — memory: ${notes.join('; ')}`
+      return { state, plot, memory: nextMemory, result }
     } catch (err) {
       return { state, plot, memory, result: `error: ${err instanceof Error ? err.message : String(err)}` }
     }

@@ -13,6 +13,20 @@ import type {
 
 export const XAI_BASE_URL = 'https://api.x.ai/v1'
 export const DEFAULT_MODEL = 'grok-4-1-fast-reasoning'
+export const DEFAULT_REVISER_MODEL = 'grok-4-1-fast-non-reasoning'
+
+// Single source of truth for the model preset dropdown(s). Free-text input
+// next to each picker still accepts any model id the provider supports.
+export const MODEL_OPTIONS = [
+  'grok-4-1-fast-reasoning',
+  'grok-4-1-fast-non-reasoning',
+  'grok-4.3',
+  'grok-4.20-0309-reasoning',
+  'grok-4',
+  'grok-4-fast',
+  'grok-4-fast-reasoning',
+  'grok-code-fast',
+] as const
 
 export const DEFAULT_STYLE_GUIDE = ''
 
@@ -72,6 +86,8 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includePlotOutline: true,
   includeMemory: true,
   usePlanner: false,
+  useReviser: true,
+  reviserModel: DEFAULT_REVISER_MODEL,
   nsfw: true,
 }
 

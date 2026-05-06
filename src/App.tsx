@@ -3,6 +3,7 @@ import './App.css'
 import { DEFAULT_SYSTEM_PROMPT, buildNewAdventureBootstrap } from './prompts'
 import { runNarrator } from './engine/agents/narrator'
 import { runPlanner } from './engine/agents/planner'
+import { buildReviserMessages, runReviser } from './engine/agents/reviser'
 import {
   chronicleNeedsCompaction,
   compactCascade,
@@ -442,25 +443,67 @@ function App() {
         },
         controller.signal,
       )
-      setTurns((ts) =>
-        ts.map((t) =>
-          t.id === pendingTurn.id
-            ? {
-                ...t,
-                planner: plannerCall ?? t.planner,
-                reply: {
-                  ...t.reply,
-                  text: result.text,
-                  trace: result.trace,
-                  reasoningTokens: result.reasoningTokens,
-                },
-              }
-            : t,
-        ),
-      )
       commitState(result.state)
       commitPlot(result.plot)
       commitMemory(result.memory)
+
+      const narratorCall: ModelCall = {
+        id: crypto.randomUUID(),
+        model,
+        text: result.text,
+        trace: result.trace,
+        reasoningTokens: result.reasoningTokens,
+      }
+      if (context.useReviser) {
+        setTurns((ts) =>
+          ts.map((t) =>
+            t.id === pendingTurn.id
+              ? {
+                  ...t,
+                  planner: plannerCall ?? t.planner,
+                  narrator: narratorCall,
+                }
+              : t,
+          ),
+        )
+        setStatusText('Reviser polishing…')
+        const reviserCall = await runReviser(
+          {
+            model: context.reviserModel,
+            apiKey: xaiKey,
+            slots,
+            draft: result.text,
+            authorNotes: plannerCall?.text,
+            sampling,
+          },
+          controller.signal,
+        )
+        setTurns((ts) =>
+          ts.map((t) =>
+            t.id === pendingTurn.id
+              ? { ...t, reply: reviserCall }
+              : t,
+          ),
+        )
+      } else {
+        setTurns((ts) =>
+          ts.map((t) =>
+            t.id === pendingTurn.id
+              ? {
+                  ...t,
+                  planner: plannerCall ?? t.planner,
+                  narrator: undefined,
+                  reply: {
+                    ...t.reply,
+                    text: result.text,
+                    trace: result.trace,
+                    reasoningTokens: result.reasoningTokens,
+                  },
+                }
+              : t,
+          ),
+        )
+      }
     } catch (err) {
       if (controller.signal.aborted) {
         if (abortRef.current === controller) onAbortRestore()
@@ -685,20 +728,54 @@ function App() {
         },
         controller.signal,
       )
-      setTurns([
-        {
-          ...pendingTurn,
-          reply: {
-            ...pendingTurn.reply,
-            text: result.text,
-            trace: result.trace,
-            reasoningTokens: result.reasoningTokens,
-          },
-        },
-      ])
       commitState(result.state)
       commitPlot(result.plot)
       commitMemory(result.memory)
+      const narratorCall: ModelCall = {
+        id: crypto.randomUUID(),
+        model,
+        text: result.text,
+        trace: result.trace,
+        reasoningTokens: result.reasoningTokens,
+      }
+      if (context.useReviser) {
+        setTurns([
+          {
+            ...pendingTurn,
+            narrator: narratorCall,
+          },
+        ])
+        setStatusText('Reviser polishing…')
+        const reviserCall = await runReviser(
+          {
+            model: context.reviserModel,
+            apiKey: xaiKey,
+            slots: nextSlots,
+            draft: result.text,
+            sampling,
+          },
+          controller.signal,
+        )
+        setTurns([
+          {
+            ...pendingTurn,
+            narrator: narratorCall,
+            reply: reviserCall,
+          },
+        ])
+      } else {
+        setTurns([
+          {
+            ...pendingTurn,
+            reply: {
+              ...pendingTurn.reply,
+              text: result.text,
+              trace: result.trace,
+              reasoningTokens: result.reasoningTokens,
+            },
+          },
+        ])
+      }
     } catch (err) {
       if (controller.signal.aborted) {
         setTurns([])
@@ -796,11 +873,20 @@ function App() {
                       )
                     }
                   />
-                  {showTrace && (t.reply.trace !== undefined || t.planner) && (
+                  {showTrace && (t.reply.trace !== undefined || t.planner || t.narrator) && (
                     <TraceView
                       calls={[
                         ...(t.planner ? [{ label: 'planner', call: t.planner }] : []),
-                        { label: 'narrator', call: t.reply, hideText: true },
+                        ...(t.narrator
+                          ? [
+                              { label: 'narrator (draft)', call: t.narrator },
+                              {
+                                label: 'reviser',
+                                call: t.reply,
+                                diffAgainst: t.narrator.text ?? '',
+                              },
+                            ]
+                          : [{ label: 'narrator', call: t.reply, hideText: true }]),
                       ]}
                       expanded={expandedTraces.has(t.id)}
                       onToggle={() => toggleTrace(t.id)}
@@ -887,40 +973,60 @@ function App() {
           }}
         />
       )}
-      {showContext && (
-        <ContextViewer
-          apiMessages={applyTurnReminder(
-            buildApiMessages(
-              systemPrompt,
-              slots,
-              chronicle,
-              turns.slice(compactCutoff),
-              state,
-              plot,
-              memory,
-              context.stateCleanupChars,
-              context.includePriorPlayerTurns,
-              context.includeWorldState,
-              context.includePlotOutline,
-              context.includeMemory,
-              context.nsfw,
-              context.usePlanner,
-            ),
-            context.reminderAsSystem,
-          )}
-          tools={
-            context.usePlanner
-              ? []
-              : [
-                  ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
-                  ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
-                  ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL] : []),
-                ]
-          }
-          sampling={sampling}
-          onClose={() => setShowContext(false)}
-        />
-      )}
+      {showContext && (() => {
+        const lastTurn = [...turns].reverse().find((t) => t.reply.text || t.narrator?.text)
+        const lastDraft = lastTurn?.narrator?.text ?? lastTurn?.reply.text ?? ''
+        const lastNotes = lastTurn?.planner?.text
+        const reviserPreview = context.useReviser
+          ? {
+              messages: buildReviserMessages(
+                slots,
+                lastDraft || '(placeholder draft — take one turn to see the real reviser request)',
+                lastNotes,
+              ),
+              model: context.reviserModel,
+              source: lastDraft ? ('last-turn' as const) : ('no-draft' as const),
+              note: lastTurn
+                ? `Draft from turn #${turns.indexOf(lastTurn) + 1}${lastNotes ? ', planner notes included' : ', no planner notes'}.`
+                : '',
+            }
+          : undefined
+        return (
+          <ContextViewer
+            apiMessages={applyTurnReminder(
+              buildApiMessages(
+                systemPrompt,
+                slots,
+                chronicle,
+                turns.slice(compactCutoff),
+                state,
+                plot,
+                memory,
+                context.stateCleanupChars,
+                context.includePriorPlayerTurns,
+                context.includeWorldState,
+                context.includePlotOutline,
+                context.includeMemory,
+                context.nsfw,
+                context.usePlanner,
+              ),
+              context.reminderAsSystem,
+            )}
+            tools={
+              context.usePlanner
+                ? []
+                : [
+                    ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
+                    ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
+                    ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL] : []),
+                  ]
+            }
+            sampling={sampling}
+            reviser={reviserPreview}
+            onClose={() => setShowContext(false)}
+          />
+        )
+      })()}
       {showNewAdventure && (
         <NewAdventurePrompt
           slots={slots}

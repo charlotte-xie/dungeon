@@ -262,6 +262,34 @@ header h1 {
   background: #131313;
 }
 
+.ctx-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid #2a2a2a;
+  padding-bottom: 0.4rem;
+}
+
+.ctx-tab {
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #aaa;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.ctx-tab.active {
+  background: #1a1a1a;
+  color: #d8d2c0;
+  border-color: #3a3a3a;
+}
+
+.ctx-tab:hover:not(.active) {
+  color: #d8d2c0;
+}
+
 .ctx-head {
   display: flex;
   align-items: center;
@@ -609,6 +637,37 @@ textarea.state-json-editor {
   font-size: 0.82rem;
   color: #d8d2c0;
   white-space: pre-wrap;
+}
+
+.trace-diff {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #d8d2c0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.trace-diff-add {
+  background: rgba(74, 158, 86, 0.28);
+  color: #c8efc8;
+  text-decoration: none;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.trace-diff-del {
+  background: rgba(180, 70, 70, 0.22);
+  color: #d8a0a0;
+  text-decoration: line-through;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.trace-diff-fallback {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #888;
+  font-style: italic;
 }
 
 .chronicle-levels {

@@ -9,7 +9,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3000, click the gear icon, paste your xAI key into **Settings → xAI API key**, and start playing.
+Open http://localhost:3003, click the gear icon, paste your xAI key into **Settings → xAI API key**, and start playing.
 
 ## How keys are handled
 

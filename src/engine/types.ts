@@ -23,6 +23,10 @@ export interface Turn {
   kind: TurnKind
   input?: string
   planner?: ModelCall
+  // The Narrator's raw draft. Populated only when the reviser pass ran;
+  // otherwise the narrator's output is `reply` and this is undefined. Kept
+  // separate so the trace can show draft → revised side by side.
+  narrator?: ModelCall
   reply: ModelCall
 }
 
@@ -44,10 +48,10 @@ export type JsonValue =
 
 export type WorldState = { [key: string]: JsonValue }
 
-// Long-term memory: a name → fields map of canonical entities (NPCs,
-// locations, plot themes, key events) that persist across scenes. Same JSON
-// shape as WorldState but conceptually stable rather than scene-local.
-export type Memory = { [key: string]: JsonValue }
+// Long-term memory: a slug → freeform string description of canonical entities
+// (NPCs, locations, plot themes, key events) that persist across scenes. Each
+// value is a single complete English description for that entity.
+export type Memory = { [key: string]: string }
 
 export type SlotKey = 'scenario' | 'styleGuide'
 export type AdventureSlots = Record<SlotKey, string>
@@ -82,6 +86,13 @@ export interface ContextConfig {
   includePlotOutline: boolean
   includeMemory: boolean
   usePlanner: boolean
+  // When true, run a non-reasoning model after the narrator to polish its
+  // draft into clean English. The revised text replaces the narrator output
+  // as the visible reply; the original draft is preserved on Turn.narrator.
+  useReviser: boolean
+  // Model id passed to xAI for the reviser pass. Should be a non-reasoning
+  // variant from the same provider as `model` (cheaper, faster, no thinking).
+  reviserModel: string
   nsfw: boolean
 }
 

@@ -3,7 +3,9 @@ import {
   ADVENTURE_SLOTS,
   DEFAULT_CONTEXT,
   DEFAULT_MODEL,
+  DEFAULT_REVISER_MODEL,
   DEFAULT_SAMPLING,
+  MODEL_OPTIONS,
 } from '../engine/config'
 import type {
   AdventureSlots,
@@ -11,15 +13,6 @@ import type {
   SamplingParams,
   SlotKey,
 } from '../engine/types'
-
-const MODEL_OPTIONS = [
-  'grok-4-1-fast-reasoning',
-  'grok-4.20-0309-reasoning',
-  'grok-4',
-  'grok-4-fast',
-  'grok-4-fast-reasoning',
-  'grok-code-fast',
-] as const
 
 interface SettingsPanelProps {
   model: string
@@ -128,6 +121,33 @@ export function SettingsPanel({
               onChange={(e) => setDraftModel(e.target.value)}
               placeholder={DEFAULT_MODEL}
               spellCheck={false}
+            />
+          </div>
+        </label>
+        <label
+          title={`Model id used for the reviser pass (toggle in Experimental flags below). Should be a non-reasoning xAI model — the reviser does not benefit from chain-of-thought and reasoning models reject the temperature/penalty params. Default: ${DEFAULT_REVISER_MODEL}.`}
+        >
+          <span>Reviser model</span>
+          <div className="model-picker">
+            <select
+              value={MODEL_OPTIONS.includes(draftContext.reviserModel) ? draftContext.reviserModel : ''}
+              onChange={(e) => {
+                if (e.target.value) setContextField('reviserModel', e.target.value)
+              }}
+              disabled={!draftContext.useReviser}
+            >
+              <option value="">— pick a preset —</option>
+              {MODEL_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={draftContext.reviserModel}
+              onChange={(e) => setContextField('reviserModel', e.target.value)}
+              placeholder={DEFAULT_REVISER_MODEL}
+              spellCheck={false}
+              disabled={!draftContext.useReviser}
             />
           </div>
         </label>
@@ -323,6 +343,17 @@ export function SettingsPanel({
               onChange={(e) => setContextField('usePlanner', e.target.checked)}
             />
             <strong>Run planner before narrator</strong>
+          </label>
+          <label
+            className="flag-field"
+            title={`When on, a reviser pass runs after the narrator: the model picked above (Reviser model) takes the narrator's draft (and the planner's notes, if any) and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`}
+          >
+            <input
+              type="checkbox"
+              checked={draftContext.useReviser}
+              onChange={(e) => setContextField('useReviser', e.target.checked)}
+            />
+            <strong>Run reviser after narrator</strong>
           </label>
         </div>
 

@@ -133,8 +133,14 @@ export function StateViewer({
       return
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      setMemoryError('Memory must be a JSON object (e.g. { "Lady Veyra": {...} }).')
+      setMemoryError('Memory must be a JSON object mapping slugs to string descriptions.')
       return
+    }
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v !== 'string') {
+        setMemoryError(`Memory value for "${k}" must be a string description.`)
+        return
+      }
     }
     setMemoryError(null)
     onSaveMemory(parsed as Memory)
@@ -154,8 +160,8 @@ export function StateViewer({
             <p className="hint">
               The DM maintains this JSON via the <code>update_memory</code> tool — the
               canonical record of <strong>NPCs, locations, plot themes, and key past events</strong>{' '}
-              that persist across scenes. Top-level keys are entity names; values are
-              objects of fields. Current: {memoryEntries} entr
+              that persist across scenes. Each key is a slug; each value is a single
+              string description of that entity. Current: {memoryEntries} entr
               {memoryEntries === 1 ? 'y' : 'ies'}.
             </p>
             <textarea

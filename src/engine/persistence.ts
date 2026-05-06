@@ -230,6 +230,14 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.usePlanner === 'boolean'
           ? parsed.usePlanner
           : DEFAULT_CONTEXT.usePlanner,
+      useReviser:
+        typeof parsed.useReviser === 'boolean'
+          ? parsed.useReviser
+          : DEFAULT_CONTEXT.useReviser,
+      reviserModel:
+        typeof parsed.reviserModel === 'string' && parsed.reviserModel.trim()
+          ? parsed.reviserModel
+          : DEFAULT_CONTEXT.reviserModel,
       nsfw:
         typeof parsed.nsfw === 'boolean'
           ? parsed.nsfw

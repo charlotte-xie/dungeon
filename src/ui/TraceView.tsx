@@ -7,6 +7,73 @@ export interface ModelCallView {
   // When true, omit the call's text from the trace pane — useful for the
   // narrator's reply, since its text is already shown in the message bubble.
   hideText?: boolean
+  // When set, render the call's text as a word-level diff against this
+  // baseline string (deletions struck through, insertions highlighted) in
+  // place of the plain output block.
+  diffAgainst?: string
+}
+
+type DiffOp = { kind: 'eq' | 'add' | 'del'; text: string }
+
+// Word-level LCS diff. Tokenizes on word/whitespace boundaries so paragraph
+// breaks survive. Skipped (returns null) when either side is too long — LCS
+// is O(m·n) and a runaway DM reply shouldn't lock the UI.
+function diffWords(a: string, b: string): DiffOp[] | null {
+  const aTokens = a.match(/\S+|\s+/g) ?? []
+  const bTokens = b.match(/\S+|\s+/g) ?? []
+  const m = aTokens.length
+  const n = bTokens.length
+  if (m * n > 1_500_000) return null
+  const lcs: Uint16Array = new Uint16Array((m + 1) * (n + 1))
+  const w = n + 1
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      lcs[i * w + j] =
+        aTokens[i] === bTokens[j]
+          ? lcs[(i + 1) * w + (j + 1)] + 1
+          : Math.max(lcs[(i + 1) * w + j], lcs[i * w + (j + 1)])
+    }
+  }
+  const out: DiffOp[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (aTokens[i] === bTokens[j]) {
+      out.push({ kind: 'eq', text: aTokens[i] })
+      i++
+      j++
+    } else if (lcs[(i + 1) * w + j] >= lcs[i * w + (j + 1)]) {
+      out.push({ kind: 'del', text: aTokens[i++] })
+    } else {
+      out.push({ kind: 'add', text: bTokens[j++] })
+    }
+  }
+  while (i < m) out.push({ kind: 'del', text: aTokens[i++] })
+  while (j < n) out.push({ kind: 'add', text: bTokens[j++] })
+  // Coalesce consecutive ops of the same kind for fewer DOM nodes.
+  const merged: DiffOp[] = []
+  for (const op of out) {
+    const last = merged[merged.length - 1]
+    if (last && last.kind === op.kind) last.text += op.text
+    else merged.push({ ...op })
+  }
+  return merged
+}
+
+function DiffBlock({ from, to }: { from: string; to: string }) {
+  const ops = diffWords(from, to)
+  if (!ops) {
+    return <p className="trace-diff-fallback">(diff skipped — passage too long)</p>
+  }
+  return (
+    <p className="trace-diff">
+      {ops.map((op, k) => {
+        if (op.kind === 'eq') return <span key={k}>{op.text}</span>
+        if (op.kind === 'add') return <ins key={k} className="trace-diff-add">{op.text}</ins>
+        return <del key={k} className="trace-diff-del">{op.text}</del>
+      })}
+    </p>
+  )
 }
 
 interface TraceViewProps {
@@ -96,8 +163,14 @@ export function TraceView({ calls, expanded, onToggle }: TraceViewProps) {
                 </div>
                 {showText && (
                   <div className="trace-event trace-output">
-                    <span className="trace-label">output</span>
-                    <p>{view.call.text}</p>
+                    <span className="trace-label">
+                      {view.diffAgainst !== undefined ? 'diff' : 'output'}
+                    </span>
+                    {view.diffAgainst !== undefined && view.call.text ? (
+                      <DiffBlock from={view.diffAgainst} to={view.call.text} />
+                    ) : (
+                      <p>{view.call.text}</p>
+                    )}
                   </div>
                 )}
                 {empty ? (
