@@ -120,7 +120,7 @@ export async function runPlanner(
   const MAX_ITER = 12
   // After this many iterations of tool-calling-without-text, strip the tools
   // and demand the instruction. Some models will otherwise spin until the
-  // ceiling, calling update_state path-by-path or re-checking themselves.
+  // ceiling, calling update_state then re-checking themselves over and over.
   const FORCE_WRAP_AT = 3
   for (let iter = 0; iter < MAX_ITER; iter++) {
     const offerTools = tools.length > 0 && iter < FORCE_WRAP_AT

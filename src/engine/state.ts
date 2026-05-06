@@ -41,6 +41,21 @@ export function deleteByPath(state: WorldState, path: string): WorldState {
   return next
 }
 
+// Returns the value at `path` in `state`, or undefined if the path does not
+// exist. Used by the keep-list semantics: each kept path's current value is
+// copied forward into the next turn's state.
+export function getByPath(state: WorldState, path: string): JsonValue | undefined {
+  const keys = path.split('.').filter(Boolean)
+  if (keys.length === 0) return undefined
+  let cur: JsonValue = state
+  for (const k of keys) {
+    if (cur === null || typeof cur !== 'object' || Array.isArray(cur)) return undefined
+    cur = (cur as { [key: string]: JsonValue })[k]
+    if (cur === undefined) return undefined
+  }
+  return cur
+}
+
 export function findOverLongString(value: JsonValue, limit: number): number | null {
   if (typeof value === 'string') {
     return value.length > limit ? value.length : null

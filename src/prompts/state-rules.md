@@ -4,9 +4,26 @@ Live state is your **consistency cache** for the current scene — the structura
 
 It is **not a transcript** of the scene. Routine motion, single gestures, passing dialogue, and atmospheric detail belong in the prose, not here. State holds only what the next turn needs to look up.
 
+## How state changes — keep + set, every turn
+
+State is **rebuilt every turn** from two explicit lists you provide:
+
+1. **`keep`** — a whitelist of dotted paths from the CURRENT state that should survive into the next turn unchanged. Their existing values carry forward.
+2. **`set`** — a map of dotted-path → value applied on top of the kept paths. Adds new paths, or overwrites a kept path whose value is now different.
+
+There is no separate `delete` operation. **Anything in the current state that is not in `keep` and not in `set` is dropped.** Omission is deletion.
+
+Every turn, walk the current state and decide for each existing key:
+
+- **Still true and unchanged?** → list its path in `keep`.
+- **Still true but the value is different?** → put the new value in `set` (no need to also list it in `keep`).
+- **No longer true / scene moved on?** → omit it from both lists. It will be gone from next turn's state.
+
+Then in `set`, add any brand-new facts the turn established.
+
 ## The necessity test
 
-Before recording anything, ask: *would the next turn produce a consistency error if this fact were missing?* If no, leave it in the prose. State is the smallest set of facts that keeps the scene coherent — not the largest.
+Before adding anything to `set` (or keeping anything via `keep`), ask: *would the next turn produce a consistency error if this fact were missing?* If no, leave it in the prose. State is the smallest set of facts that keeps the scene coherent — not the largest.
 
 ## What belongs here
 
@@ -23,26 +40,28 @@ Before recording anything, ask: *would the next turn produce a consistency error
 - Where the story is going next → **future plot plan** (`future_plot_plan`).
 - **Pure narration**: a one-off gesture, a passing remark, an atmospheric detail, a single line of dialogue, a step taken across the room. If the next turn does not need this fact to stay consistent, it stays in the prose.
 - **Re-derivable flavor**: the colour of a guard's cloak, the wording of a warning, the tavern's name when it won't recur. These live in narration only.
-- **Event log**: state is a mirror of what's true *right now*, not a record of what happened. "Player drew the sword" → set `player.holding: "drawn longsword"`, do not append to a history.
+- **Event log**: state mirrors what's true *right now*, not a record of what happened. "Player drew the sword" → put `player.holding: "drawn longsword"` in `set`, do not append to a history.
 
 If you find yourself writing to state about something that will still matter three scenes from now, write it to memory instead.
 
 ## Tool
 
-Call `update_state` with changes batched. Provide `set` (dotted-path → value) and/or `delete` (array of paths). On scene change, aggressively `delete` keys from the previous scene that no longer apply.
+Call `update_state` with both `keep` and `set` (either may be empty, but both must be present).
 
 ```json
 {
+  "keep": ["scene.location", "scene.mood", "npcs.priest.posture"],
   "set": {
-    "scene.location": "the priest's study, candle-lit, after midnight",
-    "scene.mood": "tense; an open ledger sits on the desk between you",
-    "player.position": "leaning against the cold stone fireplace",
-    "player.holding": "the iron seal you lifted from the altar"
-  },
-  "delete": ["scene.weather", "npcs_present.acolyte"]
+    "player.position": "seated in the high-backed chair across from the priest",
+    "player.holding": "a slim boot-knife, blade flat against the thigh"
+  }
 }
 ```
 
+Above: `scene.location`, `scene.mood`, and `npcs.priest.posture` carry their previous values into the next turn unchanged. The player's position and what they're holding are updated. Any other path that existed last turn (e.g. a `scene.weather` from before the scene began, or an old `npcs.acolyte.*` who has left) is dropped because it appears in neither list.
+
+To clear state entirely between scenes when nothing carries forward: `{"keep": [], "set": {}}`.
+
 ## Limits
 
-Any individual string value (including nested strings) must be <= {{maxStateStringChars}} characters. Over-long values are rejected. Split long descriptions across multiple short keyed fields, each a complete English phrase.
+Any individual string value in `set` (including nested strings) must be <= {{maxStateStringChars}} characters. An over-long value rejects the **entire** `update_state` call and the previous state is left unchanged — split long descriptions across multiple short keyed fields, each a complete English phrase, and resubmit.

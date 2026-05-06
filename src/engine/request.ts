@@ -22,9 +22,11 @@ export function buildSlotMessage(def: SlotDef, value: string): string {
 
 const STATE_READONLY_PREAMBLE =
   '# Live State (current scene)\n\n' +
-  'The planner has already updated this for the turn. Read it for ' +
-  'consistency with what the player can see and feel right now. Do not ' +
-  'attempt to mutate it — no state tool is offered this turn.'
+  'The planner has already updated this for the turn (state is rebuilt each ' +
+  'turn from a `keep` whitelist plus `set` overrides — anything not listed ' +
+  'below is intentionally gone). Read it for consistency with what the ' +
+  'player can see and feel right now. Do not attempt to mutate it — no ' +
+  'state tool is offered this turn.'
 
 const MEMORY_READONLY_PREAMBLE =
   '# Long-Term Memory\n\n' +
@@ -53,13 +55,15 @@ export function buildStateSystemMessage(
   }
   const auditPrompt =
     '## Audit before writing\n\n' +
-    'Scan every key above. For each one, ask: *is this still true right now in this scene?* ' +
-    'If not, `delete` it this turn. Common stale keys: an NPC who left, an item the player dropped, ' +
-    'a stimulus that resolved, weather or mood from a past beat, scene fields from the previous location. ' +
-    'Stale state silently poisons future turns — prune every turn it appears.'
+    'State is REBUILT each turn from your `keep` list + `set` map; anything in neither is dropped. Walk every key above and classify it for the next turn:\n' +
+    '- **Still true, value unchanged?** → list its path in `keep`.\n' +
+    '- **Still true, but value has changed?** → put the new value in `set` (kept paths and set paths can overlap; `set` wins).\n' +
+    '- **No longer applies?** → leave it out of both. It will be gone next turn.\n\n' +
+    'Common keys to drop by omission: an NPC who left, an item the player dropped, a stimulus that resolved, weather or mood from a past beat, scene fields from the previous location. ' +
+    'Forgetting to keep or re-set a load-bearing key silently erases it — be deliberate about what carries forward.'
   const cleanupStatus =
     stateJson.length > stateCleanupThreshold
-      ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Drop or condense stale keys this turn. Use \`update_state\` with \`delete=[...]\` for bulk cleanup.`
+      ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Tighten the next \`update_state\` call: drop stale keys by omitting them from both \`keep\` and \`set\`, and condense any value that's grown bloated.`
       : `STATUS: state size is ${stateJson.length.toLocaleString()} chars — within budget (threshold ${stateCleanupThreshold.toLocaleString()}).`
   return {
     role: 'system',

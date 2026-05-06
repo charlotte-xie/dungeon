@@ -2,7 +2,7 @@
 // parser for inline <function_call> XML the model sometimes emits as prose.
 
 import { buildMemoryRules, buildPlotRules } from '../prompts'
-import { MAX_STATE_STRING_CHARS, deleteByPath, findOverLongString, setByPath } from './state'
+import { MAX_STATE_STRING_CHARS, findOverLongString, getByPath, setByPath } from './state'
 import type { InlineToolCall, JsonValue, Memory, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
@@ -19,26 +19,31 @@ export const UPDATE_STATE_TOOL = {
   function: {
     name: 'update_state',
     description:
-      `Make updates to the world state JSON. Provide \`set\` (a map of dotted-path → value to assign), \`delete\` (an array of dotted paths to remove), or both. Deletes apply first, then sets — so a path that appears in both ends up with the set value. Intermediate objects on a set path are auto-created. ` +
-      `STRING VALUES must be complete English phrases or short clauses with all articles, prepositions, and verbs in place — NOT telegraphic fragments, NOT single keywords, NOT label-shorthand. ` +
+      `Rewrite the world state JSON for the next turn. The previous state is FIRST cleared in full; then the paths you list in \`keep\` are restored from the previous state (carrying forward their existing values); then your \`set\` map is applied on top, creating or overwriting paths. There is NO separate delete — omission is deletion. ` +
+      `EVERY TURN you must pass BOTH parameters together. \`keep\` is a whitelist of dotted paths from the CURRENT state that should survive into the next turn unchanged; anything not in \`keep\` is gone unless you also re-set it via \`set\`. \`set\` carries new or updated values on top of the kept paths. ` +
+      `Use this each turn to (a) carry forward facts whose value is unchanged (cheap — just list the path in \`keep\`), (b) update facts whose value has changed (put the new value in \`set\`), and (c) drop facts that no longer apply (simply omit them from both lists). ` +
+      `STRING VALUES in \`set\` must be complete English phrases or short clauses with all articles, prepositions, and verbs in place — NOT telegraphic fragments, NOT single keywords, NOT label-shorthand. ` +
       `RIGHT: "standing at the edge of the dock", "wary of the player and unwilling to speak openly", "a heavy iron seal in his coat pocket". ` +
       `Compactness comes from picking the right level of detail and splitting long facts across multiple keys, not from dropping grammar. ` +
-      `Example call: {set:{"scene.location":"on the abbey steps after sundown","npcs.jack.attitude":"resentful but cooperative for now","player.status.injury":"a shallow cut on the left forearm, bleeding lightly"}, delete:["npcs.oldGuard","topics.resolved"]}. ` +
-      `HARD LIMIT: any individual string value (including nested strings) must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value is rejected and the existing value at that path is left unchanged. Split long descriptions into multiple short keys, each a complete phrase.`,
+      `Example call (the priest's study scene continues; the player just sat down and drew a knife; the earlier "weather" key from the street scene no longer applies): {keep:["scene.location","scene.mood","npcs.priest.posture"], set:{"player.position":"seated in the high-backed chair across from the priest","player.holding":"a slim boot-knife, blade flat against the thigh"}}. The previous state's \`scene.weather\` and any old \`player.*\` values are dropped because they aren't in \`keep\` and aren't reset. ` +
+      `Calling with empty \`keep\` and empty \`set\` clears all state (between-scenes reset). ` +
+      `HARD LIMIT: any individual string value in \`set\` (including nested strings) must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value rejects the WHOLE call and the previous state is left unchanged. Split long descriptions into multiple short keys, each a complete phrase.`,
     parameters: {
       type: 'object',
       properties: {
-        set: {
-          type: 'object',
-          description: `Map of dotted paths to values to assign. Any JSON value type. String values must be <= ${MAX_STATE_STRING_CHARS} chars (including nested strings).`,
-          additionalProperties: true,
-        },
-        delete: {
+        keep: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Array of dotted paths to remove. Applied first.',
+          description:
+            'Whitelist of dotted paths from the CURRENT state to carry into the next turn unchanged. Paths not listed (and not re-set via `set`) are dropped. Paths that do not exist in the current state are silently no-ops.',
+        },
+        set: {
+          type: 'object',
+          description: `Map of dotted paths → values to assign on top of the kept paths. Creates new paths or overwrites kept ones. String values must be <= ${MAX_STATE_STRING_CHARS} chars (including nested strings).`,
+          additionalProperties: true,
         },
       },
+      required: ['keep', 'set'],
     },
   },
 }
@@ -126,47 +131,82 @@ export function executeTool(
   if (name === 'update_state') {
     try {
       const args = JSON.parse(rawArgs) as {
+        keep?: unknown
         set?: Record<string, JsonValue>
-        delete?: string[]
       }
-      const setEntries: [string, JsonValue][] =
-        args.set && typeof args.set === 'object' && !Array.isArray(args.set)
-          ? Object.entries(args.set).filter(
-              (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
-            )
-          : []
-      const deletePaths = Array.isArray(args.delete)
-        ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
-        : []
-      if (setEntries.length === 0 && deletePaths.length === 0) {
+      if (!Array.isArray(args.keep)) {
         return {
           state,
           plot,
           memory,
-          result: 'error: update_state requires a non-empty `set` map, a non-empty `delete` array, or both.',
+          result:
+            'error: update_state requires `keep` (array of dotted paths to carry forward from the current state — empty array `[]` is valid). Previous state unchanged.',
         }
       }
-      const notes: string[] = []
-      let failed = false
-      let nextState: WorldState = state
-      for (const p of deletePaths) {
-        nextState = deleteByPath(nextState, p)
-        notes.push(`deleted ${p}`)
+      if (!args.set || typeof args.set !== 'object' || Array.isArray(args.set)) {
+        return {
+          state,
+          plot,
+          memory,
+          result:
+            'error: update_state requires `set` (map of dotted-path → value to assign on top of kept paths — empty object `{}` is valid). Previous state unchanged.',
+        }
       }
+      const keepPaths = args.keep.filter(
+        (p): p is string => typeof p === 'string' && p.length > 0,
+      )
+      const setEntries: [string, JsonValue][] = Object.entries(args.set).filter(
+        (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
+      )
+      // Validate string lengths up-front. A bad value in `set` rejects the
+      // whole call so we don't half-clear state.
       for (const [path, value] of setEntries) {
         const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
         if (overLong !== null) {
-          notes.push(
-            `REJECTED set ${path}: string value too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Existing value unchanged. Rewrite shorter.`,
-          )
-          failed = true
-        } else {
-          nextState = setByPath(nextState, path, value)
-          notes.push(`set ${path}`)
+          return {
+            state,
+            plot,
+            memory,
+            result: `error: update_state rejected — value at \`${path}\` is too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Previous state unchanged. Rewrite that value shorter (or split across multiple keys) and resubmit.`,
+          }
         }
       }
-      const result = `${failed ? 'partial' : 'ok'} — state: ${notes.join('; ')}`
-      return { state: nextState, plot, memory, result }
+      // Build the new state from scratch: first re-apply each kept path's
+      // existing value, then apply `set` on top. Sort both lists by depth so
+      // a shallow assignment doesn't clobber a deeper one written first.
+      const sortByDepth = <T extends { path: string }>(entries: T[]): T[] =>
+        entries.slice().sort((a, b) => a.path.split('.').length - b.path.split('.').length)
+      let nextState: WorldState = {}
+      const keepNotes: string[] = []
+      for (const { path, value } of sortByDepth(
+        keepPaths
+          .map((path) => ({ path, value: getByPath(state, path) }))
+          .filter((e): e is { path: string; value: JsonValue } => e.value !== undefined),
+      )) {
+        nextState = setByPath(nextState, path, value)
+      }
+      const missingKeeps = keepPaths.filter((p) => getByPath(state, p) === undefined)
+      if (missingKeeps.length) {
+        keepNotes.push(`kept paths missing from previous state (no-op): ${missingKeeps.join(', ')}`)
+      }
+      for (const { path, value } of sortByDepth(
+        setEntries.map(([path, value]) => ({ path, value })),
+      )) {
+        nextState = setByPath(nextState, path, value)
+      }
+      const prevTopKeys = Object.keys(state).length
+      const newTopKeys = Object.keys(nextState).length
+      const summary =
+        keepPaths.length === 0 && setEntries.length === 0
+          ? `state cleared (was ${prevTopKeys} top-level key${prevTopKeys === 1 ? '' : 's'}, now empty)`
+          : `kept ${keepPaths.length} path${keepPaths.length === 1 ? '' : 's'}, set ${setEntries.length} path${setEntries.length === 1 ? '' : 's'}; ${newTopKeys} top-level key${newTopKeys === 1 ? '' : 's'} now`
+      const notes = keepNotes.length ? `; ${keepNotes.join('; ')}` : ''
+      return {
+        state: nextState,
+        plot,
+        memory,
+        result: `ok — ${summary}${notes}. Anything not in \`keep\` and not in \`set\` has been dropped.`,
+      }
     } catch (err) {
       return { state, plot, memory, result: `error: ${err instanceof Error ? err.message : String(err)}` }
     }
