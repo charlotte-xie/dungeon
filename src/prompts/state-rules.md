@@ -34,15 +34,13 @@ Before adding anything to `set` (or keeping anything via `keep`), ask: *would th
 
 ## What does NOT belong here
 
-- Recurring NPCs' personalities, secrets, or relationships across the story → that's **memory** (`update_memory`).
-- Named locations the player may revisit later → memory.
-- Plot themes, macguffins, key past events → memory.
-- Where the story is going next → **future plot plan** (`future_plot_plan`).
+- Recurring NPCs' personalities, secrets, or relationships across the story
+- Named locations the player may revisit later.
+- Plot themes, macguffins, key past events.
+- Where the story is going next
 - **Pure narration**: a one-off gesture, a passing remark, an atmospheric detail, a single line of dialogue, a step taken across the room. If the next turn does not need this fact to stay consistent, it stays in the prose.
-- **Re-derivable flavor**: the colour of a guard's cloak, the wording of a warning, the tavern's name when it won't recur. These live in narration only.
+- **Re-derivable flavor**: the colour of a stranger's cloak, the wording of a warning, the tavern's name when it won't recur. These live in narration.
 - **Event log**: state mirrors what's true *right now*, not a record of what happened. "Player drew the sword" → put `player.holding: "drawn longsword"` in `set`, do not append to a history.
-
-If you find yourself writing to state about something that will matter in future screnes, write it to memory instead.
 
 ## Tool
 
