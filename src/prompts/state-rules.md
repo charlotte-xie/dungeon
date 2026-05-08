@@ -2,7 +2,7 @@
 
 Live state is your **consistency cache** for the current scene — the structural facts you need to remember so the next turn doesn't contradict the last. It is short-lived and ephemeral; once the scene ends, most of it is overwritten or cleared.
 
-It is **not a transcript** of the scene. Routine motion, single gestures, passing dialogue, and atmospheric detail belong in the prose, not here. State holds only what the next turn needs to look up.
+It is **not a transcript** of the scene. Routine motion, single gestures, passing dialogue, and atmospheric detail belong in the prose, not here. State holds only what the next turn needs to maintain consistency.
 
 ## How state changes — keep + set, every turn
 
@@ -30,7 +30,7 @@ Before adding anything to `set` (or keeping anything via `keep`), ask: *would th
 - The current location and immediate surroundings (what room, what time of day, what weather) — when these will still be true next turn.
 - The player's current position when it persists (sat down, knelt, took cover) and what they're visibly holding or wearing right now.
 - Which NPCs are physically present and the postures or stances the next turn must respect (weapon drawn, hand on the player's arm, blocking the door).
-- The active point of tension in the scene (e.g. what an NPC is trying to persuade the player to do).
+- Active points of tension in the scene (e.g. what an NPC is trying to persuade the player to do).
 
 ## What does NOT belong here
 

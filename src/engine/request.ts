@@ -26,13 +26,7 @@ export function buildStateSystemMessage(
 ): ApiMessage {
   const stateJson = JSON.stringify(currentState, null, 2)
   const auditPrompt =
-    '## Audit before writing\n\n' +
-    'State is REBUILT each turn from your `keep` list + `set` map; anything in neither is dropped. Walk every key above and classify it for the next turn:\n' +
-    '- **Still true, value unchanged?** → list its path in `keep`.\n' +
-    '- **Still true, but value has changed?** → put the new value in `set` (kept paths and set paths can overlap; `set` wins).\n' +
-    '- **No longer applies?** → leave it out of both. It will be gone next turn.\n\n' +
-    'Common keys to drop by omission: an NPC who left, an item the player dropped, a stimulus that resolved, weather or mood from a past beat, scene fields from the previous location. ' +
-    'Forgetting to keep or re-set a load-bearing key silently erases it — be deliberate about what carries forward.'
+    'Reminder: did this turn change the live scene — player position, NPCs present, what is held or worn, the active stimulus? If yes, call `update_state` (passing both `keep` and `set`; anything not in either is dropped). If the scene is unchanged, skip the call and the current state carries forward unchanged.'
   const cleanupStatus =
     stateJson.length > stateCleanupThreshold
       ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Tighten the next \`update_state\` call: drop stale keys by omitting them from both \`keep\` and \`set\`, and condense any value that's grown bloated.`
@@ -50,9 +44,11 @@ export function buildMemorySystemMessage(
   const body = entries.length
     ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
     : '(no memory yet — call `update_memory` to record any NPC, location, plot theme, or key past event that should persist across scenes)'
+  const reminder =
+    '\n\nReminder: did this turn introduce a recurring NPC, location, or thread, or meaningfully change an existing entry? If yes, call `update_memory` before writing. If nothing notable changed, skip it.'
   return {
     role: 'system',
-    content: `${MEMORY_RULES}\n\n## Current memory\n\n${body}`,
+    content: `${MEMORY_RULES}\n\n## Current memory\n\n${body}${reminder}`,
   }
 }
 
