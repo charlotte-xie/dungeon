@@ -53,11 +53,11 @@ export const FUTURE_PLOT_PLAN_TOOL = {
   function: {
     name: 'future_plot_plan',
     description:
-      `Edit the numbered FUTURE plot plan — your private DM notebook of what the story is aiming AT, not what has already happened. Every entry must describe an upcoming pressure, revelation, NPC move, or unresolved hook. As soon as something is delivered to the player, DELETE that entry — past events do not belong here (the chronicle records them). Exactly one operation per call via \`op\`. Positions are 1-indexed and refer to the list as it appears in the system message. ` +
+      `Edit the numbered FUTURE plot plan — your private DM notebook of the directions the story is heading in, not what has already happened. Keeping the plot interesting and engaging is YOUR responsibility; this tool is how you do it. Every entry must describe an upcoming pressure, revelation, NPC move, or unresolved hook. As soon as something is delivered to the player, DELETE that entry — past events do not belong here (the chronicle records them). Exactly one operation per call via \`op\`. Positions are 1-indexed and refer to the list as it appears in the system message. ` +
       `OPERATIONS: ` +
       `\`append\` adds a new future entry at the end (\`text\` required); ` +
       `\`insert\` inserts a new future entry before \`position\`; ` +
-      `\`update\` rewrites the entry at \`position\` (use this when an aim has shifted but the thread is still ahead of the player); ` +
+      `\`update\` rewrites the entry at \`position\` (use this when a direction has shifted but the thread is still ahead of the player); ` +
       `\`delete\` removes the entry at \`position\` (use this the moment a planned beat becomes past). ` +
       `LIMITS: at most ${MAX_PLOT_ITEMS} entries total; each entry's \`text\` must be <= ${MAX_PLOT_ITEM_CHARS} chars. Out-of-range positions, missing required fields, or oversize text reject the call and leave the list unchanged.`,
     parameters: {

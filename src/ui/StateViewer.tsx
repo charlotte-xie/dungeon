@@ -200,9 +200,10 @@ export function StateViewer({
             <p className="hint">
               The DM maintains this numbered list via the <code>future_plot_plan</code> tool
               (append/insert/update/delete by 1-indexed position) — a short private notebook
-              of arrows the story is aiming at. <strong>Future only:</strong> entries should
-              describe what is still ahead of the player; past events should be deleted as
-              they play out. One entry per line; leading <code>-</code>, <code>*</code>, or{' '}
+              of plot directions the story is heading in. Keeping it lively is the DM's job.{' '}
+              <strong>Future only:</strong> entries should describe what is still ahead of the
+              player; past events should be deleted as they play out. One entry per line;
+              leading <code>-</code>, <code>*</code>, or{' '}
               <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
               each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
               {plot.length === 1 ? 'y' : 'ies'}.

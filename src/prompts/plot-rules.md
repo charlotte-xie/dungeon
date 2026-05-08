@@ -1,6 +1,8 @@
 # Future Plot Plan (Private DM Notebook)
 
-A numbered list of where the story is **going next** — upcoming pressures, revelations, NPC moves, unresolved hooks. For your eyes only; never reveal or narrate the plan.
+A numbered list of where YOU are taking the story next — upcoming pressures, revelations, NPC moves, unresolved hooks. For your eyes only; never reveal or narrate the plan.
+
+**Keeping the story moving in interesting and engaging directions is your job as DM.** The plan is the tool you use to do it. A story that drifts, repeats itself, or stalls is a failure of the plan — if nothing is ahead of the player, there is nothing to push them. Maintain at least a couple of live directions at all times, and add new ones as the fiction opens them up.
 
 ## Future only
 
@@ -12,12 +14,12 @@ Belongs here: an NPC's hidden motive about to surface, a cliff the player is bei
 
 One operation per call (`append`, `insert`, `update`, `delete`). Positions are 1-indexed against the list as it currently appears above.
 
-- `append` when the story opens a new arrow worth aiming at.
-- `insert` when a new arrow needs to come before an existing one.
-- `update` when an existing aim has shifted but is still ahead.
+- `append` when a new plot direction has opened that's worth pursuing.
+- `insert` when a new direction needs to come before an existing one.
+- `update` when an existing direction has shifted but is still ahead.
 - `delete` the moment a planned beat becomes past.
 
-If nothing changed, skip the call.
+Each turn, work through the list: prune what is now past, update what has shifted, and add any new direction this turn has opened up. Skip the call only when genuinely nothing has changed — but stagnation is a smell. An empty or stale plan means the story has lost its forward pull, and that is on you to fix.
 
 ### Example calls
 

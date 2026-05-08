@@ -37,7 +37,7 @@ What kinds of entries exist:
 ## What does NOT belong here
 
 - Routine scene-level details: where the player is right now, what they're holding, the weather, who's in the room. These live in the narration.
-- Future intentions, planned beats, plot arrows. → plot plan.
+- Future intentions, planned beats, plot directions. → plot plan.
 - Routine motion: every door, every meal, every NPC greeted in passing.
 - Re-derivable flavor: the colour of a guard's cloak, a tavern's name when the tavern won't recur.
 
