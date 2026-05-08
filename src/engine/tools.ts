@@ -2,7 +2,7 @@
 // parser for inline <function_call> XML the model sometimes emits as prose.
 
 import { buildMemoryRules, buildPlotRules } from '../prompts'
-import { MAX_STATE_STRING_CHARS, findOverLongString, getByPath, setByPath } from './state'
+import { getByPath, setByPath } from './state'
 import type { InlineToolCall, JsonValue, Memory, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
@@ -26,8 +26,7 @@ export const UPDATE_STATE_TOOL = {
       `RIGHT: "standing at the edge of the dock", "wary of the player and unwilling to speak openly", "a heavy iron seal in his coat pocket". ` +
       `Compactness comes from picking the right level of detail and splitting long facts across multiple keys, not from dropping grammar. ` +
       `Example call (the priest's study scene continues; the player just sat down and drew a knife; the earlier "weather" key from the street scene no longer applies): {keep:["scene.location","scene.mood","npcs.priest.posture"], set:{"player.position":"seated in the high-backed chair across from the priest","player.holding":"a slim boot-knife, blade flat against the thigh"}}. The previous state's \`scene.weather\` and any old \`player.*\` values are dropped because they aren't in \`keep\` and aren't reset. ` +
-      `Calling with empty \`keep\` and empty \`set\` clears all state (between-scenes reset). ` +
-      `HARD LIMIT: any individual string value in \`set\` (including nested strings) must be <= ${MAX_STATE_STRING_CHARS} characters; an over-long value rejects the WHOLE call and the previous state is left unchanged. Split long descriptions into multiple short keys, each a complete phrase.`,
+      `Calling with empty \`keep\` and empty \`set\` clears all state (between-scenes reset).`,
     parameters: {
       type: 'object',
       properties: {
@@ -39,7 +38,8 @@ export const UPDATE_STATE_TOOL = {
         },
         set: {
           type: 'object',
-          description: `Map of dotted paths → values to assign on top of the kept paths. Creates new paths or overwrites kept ones. String values must be <= ${MAX_STATE_STRING_CHARS} chars (including nested strings).`,
+          description:
+            'Map of dotted paths → values to assign on top of the kept paths. Creates new paths or overwrites kept ones.',
           additionalProperties: true,
         },
       },
@@ -158,19 +158,6 @@ export function executeTool(
       const setEntries: [string, JsonValue][] = Object.entries(args.set).filter(
         (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
       )
-      // Validate string lengths up-front. A bad value in `set` rejects the
-      // whole call so we don't half-clear state.
-      for (const [path, value] of setEntries) {
-        const overLong = findOverLongString(value, MAX_STATE_STRING_CHARS)
-        if (overLong !== null) {
-          return {
-            state,
-            plot,
-            memory,
-            result: `error: update_state rejected — value at \`${path}\` is too long (${overLong} chars, max ${MAX_STATE_STRING_CHARS}). Previous state unchanged. Rewrite that value shorter (or split across multiple keys) and resubmit.`,
-          }
-        }
-      }
       // Build the new state from scratch: first re-apply each kept path's
       // existing value, then apply `set` on top. Sort both lists by depth so
       // a shallow assignment doesn't clobber a deeper one written first.

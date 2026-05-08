@@ -112,8 +112,6 @@ export type Chronicle = ChronicleEntry[][]
 
 export interface SamplingParams {
   temperature: number
-  frequencyPenalty: number
-  presencePenalty: number
 }
 
 export interface TurnSnapshot {

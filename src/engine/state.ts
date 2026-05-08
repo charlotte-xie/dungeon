@@ -1,11 +1,9 @@
-// World-state primitives: defaults, value-size limits, immutable path ops.
+// World-state primitives: immutable path ops.
 
 import { buildStateRules } from '../prompts'
 import type { JsonValue, WorldState } from './types'
 
-export const MAX_STATE_STRING_CHARS = 200
-
-export const STATE_RULES = buildStateRules(MAX_STATE_STRING_CHARS)
+export const STATE_RULES = buildStateRules()
 
 export function setByPath(state: WorldState, path: string, value: JsonValue): WorldState {
   const keys = path.split('.').filter(Boolean)
@@ -56,22 +54,3 @@ export function getByPath(state: WorldState, path: string): JsonValue | undefine
   return cur
 }
 
-export function findOverLongString(value: JsonValue, limit: number): number | null {
-  if (typeof value === 'string') {
-    return value.length > limit ? value.length : null
-  }
-  if (Array.isArray(value)) {
-    for (const v of value) {
-      const found = findOverLongString(v, limit)
-      if (found !== null) return found
-    }
-    return null
-  }
-  if (value !== null && typeof value === 'object') {
-    for (const v of Object.values(value)) {
-      const found = findOverLongString(v, limit)
-      if (found !== null) return found
-    }
-  }
-  return null
-}

@@ -70,8 +70,6 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
           {
             model: tab === 'reviser' ? reviser?.model : '(see Settings)',
             temperature: sampling.temperature,
-            frequency_penalty: sampling.frequencyPenalty,
-            presence_penalty: sampling.presencePenalty,
           },
           null,
           2,

@@ -69,8 +69,6 @@ export async function runReviser(
   }
   if (modelSupportsSampling(ctx.model)) {
     body.temperature = ctx.sampling.temperature
-    body.frequency_penalty = ctx.sampling.frequencyPenalty
-    body.presence_penalty = ctx.sampling.presencePenalty
   }
 
   console.debug('[reviser] xAI request', { model: ctx.model, body })

@@ -43,10 +43,9 @@ under-editing. Make the changes.
 - Do not push toward a different voice. Match the draft's register; if it's
   plain and direct, keep it plain and direct — make it *correct*, not
   ornate.
-- Do not change what a character says or means. You may fix grammar inside
-  quoted speech, but preserve verbal tics, stutters, slang, and
-  characterisation ("Um…", "ain't", "innit", trailing "…", broken syntax
-  if it's clearly intentional for that speaker).
+- Do not change the meaning of what a NPC says. You may fix grammar inside
+  quoted speech and expand to full sentences, but preserve verbal tics, stutters, slang, and
+  characterisation ("Um…", "ain't", "innit", trailing "…").
 - Do not address the reader, the writer, or yourself. No commentary, no
   "Here is the revised passage", no notes.
 - Do not collapse, insert, or rearrange paragraph breaks unless a break is

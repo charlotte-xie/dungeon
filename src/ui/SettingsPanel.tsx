@@ -178,34 +178,6 @@ export function SettingsPanel({
               onChange={(e) => setSamplingField('temperature', Number(e.target.value))}
             />
           </label>
-          <label
-            className="sampling-field"
-            title={`Discourages repeated phrases and sentence shapes. Default ${DEFAULT_SAMPLING.frequencyPenalty}.`}
-          >
-            <span>Frequency penalty</span>
-            <input
-              type="number"
-              min={-2}
-              max={2}
-              step={0.05}
-              value={draftSampling.frequencyPenalty}
-              onChange={(e) => setSamplingField('frequencyPenalty', Number(e.target.value))}
-            />
-          </label>
-          <label
-            className="sampling-field"
-            title={`Pushes toward new topics / fresh turns. Default ${DEFAULT_SAMPLING.presencePenalty}.`}
-          >
-            <span>Presence penalty</span>
-            <input
-              type="number"
-              min={-2}
-              max={2}
-              step={0.05}
-              value={draftSampling.presencePenalty}
-              onChange={(e) => setSamplingField('presencePenalty', Number(e.target.value))}
-            />
-          </label>
         </div>
 
         <div className="sampling-grid">

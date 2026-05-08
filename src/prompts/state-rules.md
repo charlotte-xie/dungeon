@@ -61,7 +61,3 @@ Call `update_state` with both `keep` and `set` (either may be empty).
 Above: `scene.location`, `scene.mood`, and `npcs.priest.posture` carry their previous values into the next turn unchanged. The player's position and what they're holding are updated. Any other path that existed last turn (e.g. a `scene.weather` from before the scene began, or an old `npcs.acolyte.*` who has left) is dropped because it appears in neither list.
 
 To clear state entirely between scenes when nothing carries forward: `{"keep": [], "set": {}}`.
-
-## Limits
-
-Any individual string value in `set` (including nested strings) must be <= {{maxStateStringChars}} characters. An over-long value rejects the **entire** `update_state` call and the previous state is left unchanged — split long descriptions across multiple short keyed fields, each a complete English phrase, and resubmit.

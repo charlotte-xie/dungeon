@@ -106,8 +106,6 @@ export async function runNarrator(
     if (tools.length) body.tools = tools
     if (modelSupportsSampling(ctx.model)) {
       body.temperature = ctx.sampling.temperature
-      body.frequency_penalty = ctx.sampling.frequencyPenalty
-      body.presence_penalty = ctx.sampling.presencePenalty
     }
     console.debug('[dm] xAI request', { iter, model: ctx.model, toolCount: (body.tools as unknown[])?.length, body })
     const res = await xaiChat(body, ctx.apiKey, signal)

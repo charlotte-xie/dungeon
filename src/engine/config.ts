@@ -92,6 +92,4 @@ export const DEFAULT_CONTEXT: ContextConfig = {
 
 export const DEFAULT_SAMPLING: SamplingParams = {
   temperature: 0.75,
-  frequencyPenalty: 0,
-  presencePenalty: 0,
 }
