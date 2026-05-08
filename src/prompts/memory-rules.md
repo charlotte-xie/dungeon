@@ -22,8 +22,6 @@ What kinds of entries exist:
 {
   "the_baker": "Hesta the baker; stout, flour-dusted apron, grey hair tied back; owns the bakery on Mill Lane and wants to be left alone and keep the shop open; wary of the player, willing to help if it costs nothing; saw them argue with a constable last week; secretly hiding her son upstairs after a robbery gone wrong.",
   "mill_lane": "Mill Lane runs along the south side of town, two streets back from the river; narrow cobbled street with the bakery, a smithy, and a boarded-up tannery; quiet during the day and unpatrolled after dusk.",
-  "the_failed_robbery": "Three nights before the story begins, Hesta's son and two friends tried to rob a courier and the courier was killed; constables are now hunting the gang and the courier's employer is offering a bounty.",
-  "the_courier_ledger": "A notebook the dead courier carried, listing all his clients; names in it could implicate the wrong people if it surfaces; currently missing, last seen at the failed robbery.",
   "player": "Veteran of the border wars; carries a chipped sabre and a slight limp; sworn to repay a debt to the woman who hid them in Greyford last winter."
 }
 ```
