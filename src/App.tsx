@@ -640,6 +640,16 @@ function App() {
     const nextSlots: AdventureSlots = { ...slots, ...slotsOverride }
     nextSlots.scenario = nextSlots.scenario.trim()
     if (!nextSlots.scenario) return
+    console.debug('[dm] newAdventure BEFORE clear', {
+      reactMemoryKeys: Object.keys(memory),
+      reactPlotLength: plot.length,
+      reactStateKeys: Object.keys(state),
+      lsMemory: localStorage.getItem('dm.memory'),
+      lsPlot: localStorage.getItem('dm.plot'),
+      lsState: localStorage.getItem('dm.state'),
+      lsChronicle: localStorage.getItem('dm.chronicle'),
+      lsTurns: localStorage.getItem('dm.turns'),
+    })
     commitSlots(nextSlots)
     abortRef.current?.abort()
     setInput('')
@@ -650,6 +660,15 @@ function App() {
     commitMemory({})
     commitChronicle([])
     commitCompactCutoff(0)
+    console.debug('[dm] newAdventure AFTER clear (localStorage)', {
+      lsMemory: localStorage.getItem('dm.memory'),
+      lsPlot: localStorage.getItem('dm.plot'),
+      lsState: localStorage.getItem('dm.state'),
+      lsChronicle: localStorage.getItem('dm.chronicle'),
+      lsTurns: localStorage.getItem('dm.turns'),
+      lsStyleGuide: localStorage.getItem('dm.styleGuide'),
+      slotsBeingPassed: nextSlots,
+    })
     setThinking(true)
     setStatusText('DM is thinking…')
     const controller = new AbortController()

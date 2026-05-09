@@ -1,12 +1,10 @@
 # Long-Term Memory
 
-Your canonical record of NPCs, locations, plot threads, and key past events that persist across scenes. For your eyes only — never read it aloud or list it for the player.
-
-The test for an entry: *if the player walks back into this NPC's life three scenes from now, what do I need to know to stay consistent?*
+Manage a memory of NPCs, locations, plot threads, and key past events that persist across scenes. For your eyes only — never read it aloud or list it for the player.
 
 ## Shape
 
-A flat map. Each key is a slug (lowercase, underscores, no periods or spaces). Each value is a single string — a complete English description of that entity in prose, written so a future turn can re-read it and stay consistent. No nested objects, no JSON, no bullet lists. Pack what matters into one paragraph; clauses can be joined with semicolons.
+A flat map. Each value is a single string — a complete English description of that entity in prose, written so a future turn can re-read it and stay consistent. Pack what matters into one paragraph.
 
 What kinds of entries exist:
 
@@ -61,8 +59,4 @@ What kinds of entries exist:
 - Read before writing about a recurring entity — don't contradict an existing entry without an in-fiction reason.
 - **Write** a new entry when something has entered the story that will matter in the future.
 - **Update** an entry by re-writing the whole description with the change folded in.
-- **Delete** an entry only when the entity is genuinely out of the story for good.
-
-## Limits
-
-Each value must be ≤ {{maxMemoryStringChars}} characters. Over-long values are rejected and the existing value is left unchanged. If an entity needs more than that, split it across two slugs (e.g. `lady_veyra` and `lady_veyra_secret`).
+- **Delete** an entry when the memory is no longer needed.

@@ -107,6 +107,17 @@ export async function runNarrator(
     if (modelSupportsSampling(ctx.model)) {
       body.temperature = ctx.sampling.temperature
     }
+    if (iter === 0) {
+      console.debug('[dm] narrator iter 0 — memory/plot/state slices the model sees', {
+        initialMemory: ctx.initialMemory,
+        initialMemoryKeys: Object.keys(ctx.initialMemory),
+        initialPlot: ctx.initialPlot,
+        initialState: ctx.initialState,
+        memorySystemMessage: memoryIndex >= 0 ? apiMessages[memoryIndex]?.content : '(disabled)',
+        plotSystemMessage: plotIndex >= 0 ? apiMessages[plotIndex]?.content : '(disabled)',
+        stateSystemMessage: stateIndex >= 0 ? apiMessages[stateIndex]?.content : '(disabled)',
+      })
+    }
     console.debug('[dm] xAI request', { iter, model: ctx.model, toolCount: (body.tools as unknown[])?.length, body })
     const res = await xaiChat(body, ctx.apiKey, signal)
 
