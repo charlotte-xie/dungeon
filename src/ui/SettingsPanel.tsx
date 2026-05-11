@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import {
   ADVENTURE_SLOTS,
+  DEFAULT_BASE_URL,
   DEFAULT_CONTEXT,
   DEFAULT_MODEL,
   DEFAULT_REVISER_MODEL,
   DEFAULT_SAMPLING,
+  LMSTUDIO_BASE_URL,
   MODEL_OPTIONS,
+  XAI_BASE_URL,
 } from '../engine/config'
+import { listModels } from '../engine/xai'
 import type {
   AdventureSlots,
   ContextConfig,
@@ -17,6 +21,7 @@ import type {
 interface SettingsPanelProps {
   model: string
   xaiKey: string
+  baseUrl: string
   slots: AdventureSlots
   sampling: SamplingParams
   context: ContextConfig
@@ -25,6 +30,7 @@ interface SettingsPanelProps {
   onSave: (
     model: string,
     xaiKey: string,
+    baseUrl: string,
     slots: AdventureSlots,
     sampling: SamplingParams,
     context: ContextConfig,
@@ -35,6 +41,7 @@ interface SettingsPanelProps {
 export function SettingsPanel({
   model,
   xaiKey,
+  baseUrl,
   slots,
   sampling,
   context,
@@ -44,10 +51,32 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const [draftModel, setDraftModel] = useState(model)
   const [draftXaiKey, setDraftXaiKey] = useState(xaiKey)
+  const [draftBaseUrl, setDraftBaseUrl] = useState(baseUrl || DEFAULT_BASE_URL)
   const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
   const [draftShowTrace, setDraftShowTrace] = useState<boolean>(showTrace)
+  const [detectedModels, setDetectedModels] = useState<string[] | null>(null)
+  const [detecting, setDetecting] = useState(false)
+  const [detectError, setDetectError] = useState<string | null>(null)
+  const isLocalEndpoint = !/(^|\/\/)[^/]*\bx\.ai\b/i.test(draftBaseUrl)
+
+  async function detectModels() {
+    setDetecting(true)
+    setDetectError(null)
+    try {
+      const ids = await listModels(draftBaseUrl.trim() || DEFAULT_BASE_URL, draftXaiKey.trim())
+      setDetectedModels(ids)
+      if (ids.length === 0) setDetectError('Endpoint reachable but reported no models.')
+    } catch (err) {
+      setDetectedModels(null)
+      setDetectError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  const modelChoices = detectedModels && detectedModels.length > 0 ? detectedModels : MODEL_OPTIONS
 
   function setSlotField(key: SlotKey, value: string) {
     setDraftSlots((s) => ({ ...s, [key]: value }))
@@ -67,6 +96,7 @@ export function SettingsPanel({
     onSave(
       draftModel.trim(),
       draftXaiKey.trim(),
+      draftBaseUrl.trim() || DEFAULT_BASE_URL,
       trimmed,
       draftSampling,
       draftContext,
@@ -77,6 +107,7 @@ export function SettingsPanel({
 
   function resetDefaults() {
     setDraftModel(DEFAULT_MODEL)
+    setDraftBaseUrl(DEFAULT_BASE_URL)
     setDraftSampling({ ...DEFAULT_SAMPLING })
     setDraftContext({ ...DEFAULT_CONTEXT })
   }
@@ -88,30 +119,87 @@ export function SettingsPanel({
           <h2>Settings</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
-        <label title="Stored in this browser's localStorage and sent directly to api.x.ai on each turn. Get one at https://console.x.ai/">
-          <span>xAI API key</span>
+        <label
+          title={`OpenAI-compatible chat completions endpoint. Default: ${DEFAULT_BASE_URL} (xAI). For LM Studio, click the LM Studio button — make sure the local server is running on the same port. Any other server that exposes /chat/completions in OpenAI shape works too.`}
+        >
+          <span>API base URL</span>
+          <div className="model-picker">
+            <input
+              type="text"
+              value={draftBaseUrl}
+              onChange={(e) => setDraftBaseUrl(e.target.value)}
+              placeholder={DEFAULT_BASE_URL}
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setDraftBaseUrl(XAI_BASE_URL)}
+              title="Use the default xAI API endpoint"
+            >
+              xAI
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setDraftBaseUrl(LMSTUDIO_BASE_URL)}
+              title="Use LM Studio's default local server URL (port 1234)"
+            >
+              LM Studio
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => void detectModels()}
+              disabled={detecting}
+              title="Query <baseUrl>/v1/models and populate the model pickers below with the exact identifiers the server reports."
+            >
+              {detecting ? 'Detecting…' : 'Detect models'}
+            </button>
+          </div>
+          {detectedModels && detectedModels.length > 0 && (
+            <p className="hint">
+              Detected {detectedModels.length} model{detectedModels.length === 1 ? '' : 's'}:
+              the pickers below now show what this endpoint is actually serving.
+            </p>
+          )}
+          {detectError && (
+            <p className="error-text">
+              Detect failed: {detectError}
+            </p>
+          )}
+        </label>
+        <label
+          title={
+            isLocalEndpoint
+              ? 'Optional for local servers (LM Studio etc. ignore the Authorization header). Stored in this browser.'
+              : "Stored in this browser's localStorage and sent directly to api.x.ai on each turn. Get one at https://console.x.ai/"
+          }
+        >
+          <span>API key{isLocalEndpoint ? ' (optional for local)' : ''}</span>
           <input
             type="password"
             value={draftXaiKey}
             onChange={(e) => setDraftXaiKey(e.target.value)}
-            placeholder="xai-…"
+            placeholder={isLocalEndpoint ? '(leave blank if local server takes no key)' : 'xai-…'}
             spellCheck={false}
             autoComplete="off"
           />
         </label>
         <label
-          title={`Pick a preset on the left or type any xAI model id on the right. Sent to /chat/completions. Default: ${DEFAULT_MODEL}. Applies on the next turn — reasoning variants skip temperature/penalty.`}
+          title={`Pick a preset on the left or type any model id on the right. Sent to /chat/completions. Default: ${DEFAULT_MODEL}. Click "Detect models" above to populate this list from your endpoint. Applies on the next turn — reasoning variants skip temperature/penalty.`}
         >
           <span>Model</span>
           <div className="model-picker">
             <select
-              value={MODEL_OPTIONS.includes(draftModel) ? draftModel : ''}
+              value={modelChoices.includes(draftModel) ? draftModel : ''}
               onChange={(e) => {
                 if (e.target.value) setDraftModel(e.target.value)
               }}
             >
               <option value="">— pick a preset —</option>
-              {MODEL_OPTIONS.map((m) => (
+              {modelChoices.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
@@ -130,14 +218,14 @@ export function SettingsPanel({
           <span>Reviser model</span>
           <div className="model-picker">
             <select
-              value={MODEL_OPTIONS.includes(draftContext.reviserModel) ? draftContext.reviserModel : ''}
+              value={modelChoices.includes(draftContext.reviserModel) ? draftContext.reviserModel : ''}
               onChange={(e) => {
                 if (e.target.value) setContextField('reviserModel', e.target.value)
               }}
               disabled={!draftContext.useReviser}
             >
               <option value="">— pick a preset —</option>
-              {MODEL_OPTIONS.map((m) => (
+              {modelChoices.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>

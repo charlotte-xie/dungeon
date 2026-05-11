@@ -15,6 +15,7 @@ export interface SummarizerInput {
   systemPrompt: string
   model: string
   apiKey: string
+  baseUrl: string
   slots: AdventureSlots
   // The texts to compress into one summary. For level-0 folds these are raw
   // turn renderings ("PLAYER: ...\n\nDM: ..."); for level promotions these
@@ -69,6 +70,7 @@ export async function runSummarizer(
     },
     input.apiKey,
     signal,
+    input.baseUrl,
   )
 
   if (!res.ok) {

@@ -18,6 +18,7 @@ import type {
 export interface ReviserContext {
   model: string
   apiKey: string
+  baseUrl: string
   slots: AdventureSlots
   draft: string
   sampling: SamplingParams
@@ -72,7 +73,7 @@ export async function runReviser(
   }
 
   console.debug('[reviser] xAI request', { model: ctx.model, body })
-  const res = await xaiChat(body, ctx.apiKey, signal)
+  const res = await xaiChat(body, ctx.apiKey, signal, ctx.baseUrl)
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')
     throw new Error(`reviser ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)

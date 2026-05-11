@@ -47,6 +47,7 @@ export interface ChronicleAgentArgs {
   systemPrompt: string
   model: string
   apiKey: string
+  baseUrl: string
   slots: AdventureSlots
 }
 
@@ -94,6 +95,7 @@ export async function compactCascade(
           systemPrompt: agent.systemPrompt,
           model: agent.model,
           apiKey: agent.apiKey,
+          baseUrl: agent.baseUrl,
           slots: agent.slots,
           inputs,
           targetChars: targetForInputs(inputs, M),
@@ -125,6 +127,7 @@ export async function compactCascade(
           systemPrompt: agent.systemPrompt,
           model: agent.model,
           apiKey: agent.apiKey,
+          baseUrl: agent.baseUrl,
           slots: agent.slots,
           inputs,
           targetChars: targetForInputs(inputs, M),

@@ -31,6 +31,7 @@ export interface NarratorContext {
   systemPrompt: string
   model: string
   apiKey: string
+  baseUrl: string
   slots: AdventureSlots
   chronicle: Chronicle
   history: Turn[]
@@ -119,11 +120,11 @@ export async function runNarrator(
       })
     }
     console.debug('[dm] xAI request', { iter, model: ctx.model, toolCount: (body.tools as unknown[])?.length, body })
-    const res = await xaiChat(body, ctx.apiKey, signal)
+    const res = await xaiChat(body, ctx.apiKey, signal, ctx.baseUrl)
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => '')
-      throw new Error(`xAI ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
+      throw new Error(`API ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
     }
 
     const rawData = (await res.json()) as unknown

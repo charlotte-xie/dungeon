@@ -10,11 +10,13 @@ import {
   totalChronicleEntries,
 } from './engine/chronicle'
 import {
+  DEFAULT_BASE_URL,
   DEFAULT_MODEL,
   DEFAULT_STATE,
   defaultSlots,
 } from './engine/config'
 import {
+  LS_BASE_URL,
   LS_CONTEXT,
   LS_MODEL,
   LS_SAMPLING,
@@ -136,6 +138,7 @@ function App() {
   const systemPrompt = DEFAULT_SYSTEM_PROMPT
   const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
   const [xaiKey, setXaiKey] = useState(() => loadStored(LS_XAI_KEY, ''))
+  const [baseUrl, setBaseUrl] = useState(() => loadStored(LS_BASE_URL, DEFAULT_BASE_URL))
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
   const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
@@ -363,7 +366,7 @@ function App() {
           workingCutoff,
           workingChronicle,
           settings,
-          { systemPrompt, model, apiKey: xaiKey, slots },
+          { systemPrompt, model, apiKey: xaiKey, baseUrl, slots },
           controller.signal,
           (label) => setStatusText(label),
         )
@@ -380,6 +383,7 @@ function App() {
           systemPrompt,
           model,
           apiKey: xaiKey,
+          baseUrl,
           slots,
           chronicle: workingChronicle,
           history: allTurns.slice(workingCutoff),
@@ -424,6 +428,7 @@ function App() {
           {
             model: context.reviserModel,
             apiKey: xaiKey,
+            baseUrl,
             slots,
             draft: result.text,
             sampling,
@@ -554,7 +559,7 @@ function App() {
         compactCutoff,
         chronicle,
         settings,
-        { systemPrompt, model, apiKey: xaiKey, slots },
+        { systemPrompt, model, apiKey: xaiKey, baseUrl, slots },
         controller.signal,
         (label) => setStatusText(label),
       )
@@ -613,6 +618,7 @@ function App() {
   function saveSettings(
     nextModel: string,
     nextXaiKey: string,
+    nextBaseUrl: string,
     nextSlots: AdventureSlots,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
@@ -620,6 +626,7 @@ function App() {
   ) {
     setModel(nextModel)
     setXaiKey(nextXaiKey)
+    setBaseUrl(nextBaseUrl)
     commitSlots(nextSlots)
     setSampling(nextSampling)
     setContext(nextContext)
@@ -629,6 +636,9 @@ function App() {
       else localStorage.removeItem(LS_XAI_KEY)
       if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
       else localStorage.removeItem(LS_MODEL)
+      if (nextBaseUrl && nextBaseUrl !== DEFAULT_BASE_URL)
+        localStorage.setItem(LS_BASE_URL, nextBaseUrl)
+      else localStorage.removeItem(LS_BASE_URL)
       localStorage.setItem(LS_SAMPLING, JSON.stringify(nextSampling))
       localStorage.setItem(LS_CONTEXT, JSON.stringify(nextContext))
     } catch {
@@ -681,6 +691,7 @@ function App() {
           systemPrompt,
           model,
           apiKey: xaiKey,
+          baseUrl,
           slots: nextSlots,
           chronicle: [],
           history: [pendingTurn],
@@ -720,6 +731,7 @@ function App() {
           {
             model: context.reviserModel,
             apiKey: xaiKey,
+            baseUrl,
             slots: nextSlots,
             draft: result.text,
             sampling,
@@ -914,6 +926,7 @@ function App() {
         <SettingsPanel
           model={model}
           xaiKey={xaiKey}
+          baseUrl={baseUrl}
           slots={slots}
           sampling={sampling}
           context={context}

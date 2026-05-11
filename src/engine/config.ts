@@ -12,6 +12,10 @@ import type {
 } from './types'
 
 export const XAI_BASE_URL = 'https://api.x.ai/v1'
+// LM Studio's OpenAI-compatible server defaults to localhost:1234. Same shape
+// works for other local OpenAI-compat servers — change the port to match.
+export const LMSTUDIO_BASE_URL = 'http://localhost:1234/v1'
+export const DEFAULT_BASE_URL = XAI_BASE_URL
 export const DEFAULT_MODEL = 'grok-4-1-fast-reasoning'
 export const DEFAULT_REVISER_MODEL = 'grok-4-1-fast-non-reasoning'
 

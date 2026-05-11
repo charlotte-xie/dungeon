@@ -20,6 +20,7 @@ import type {
 
 export const LS_MODEL = 'dm.model'
 export const LS_XAI_KEY = 'dm.xaiKey'
+export const LS_BASE_URL = 'dm.baseUrl'
 export const LS_STATE = 'dm.state'
 export const LS_PLOT = 'dm.plot'
 export const LS_MEMORY = 'dm.memory'
