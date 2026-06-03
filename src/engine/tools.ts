@@ -2,7 +2,7 @@
 // parser for inline <function_call> XML the model sometimes emits as prose.
 
 import { buildMemoryRules, buildPlotRules } from '../prompts'
-import { getByPath, setByPath } from './state'
+import { deleteByPath, getByPath, setByPath } from './state'
 import type { InlineToolCall, JsonValue, Memory, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
@@ -19,7 +19,7 @@ export const UPDATE_STATE_TOOL = {
   function: {
     name: 'update_state',
     description:
-      `Rewrite the world state JSON for the next turn. The previous state is FIRST cleared in full; then the paths you list in \`keep\` are restored from the previous state (carrying forward their existing values); then your \`set\` map is applied on top, creating or overwriting paths. There is NO separate delete — omission is deletion. ` +
+      `Rewrite the world state JSON for the next turn. The previous state is FIRST cleared in full; then the paths you list in \`keep\` are restored from the previous state (carrying forward their existing values); then your \`set\` map is applied on top, creating or overwriting paths. There is NO separate delete — omission is deletion. (As a convenience, a path whose value in \`set\` is \`null\` is treated as omission: that path is dropped from the next turn, even if it appears in \`keep\`. State never stores null.) ` +
       `EVERY TURN you must pass BOTH parameters together. \`keep\` is a whitelist of dotted paths from the CURRENT state that should survive into the next turn unchanged; anything not in \`keep\` is gone unless you also re-set it via \`set\`. \`set\` carries new or updated values on top of the kept paths. ` +
       `Use this each turn to (a) carry forward facts whose value is unchanged (cheap — just list the path in \`keep\`), (b) update facts whose value has changed (put the new value in \`set\`), and (c) drop facts that no longer apply (simply omit them from both lists). ` +
       `STRING VALUES in \`set\` must be complete English phrases or short clauses with all articles, prepositions, and verbs in place — NOT telegraphic fragments, NOT single keywords, NOT label-shorthand. ` +
@@ -155,38 +155,64 @@ export function executeTool(
       const keepPaths = args.keep.filter(
         (p): p is string => typeof p === 'string' && p.length > 0,
       )
-      const setEntries: [string, JsonValue][] = Object.entries(args.set).filter(
+      const rawSetEntries: [string, JsonValue][] = Object.entries(args.set).filter(
         (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
       )
+      // null/undefined in `set` means delete: drop the path instead of writing
+      // it. (JSON.parse never produces undefined, but we accept it defensively.)
+      const setWrites: [string, JsonValue][] = []
+      const setDeletes: string[] = []
+      for (const [path, value] of rawSetEntries) {
+        if (value === null || value === undefined) setDeletes.push(path)
+        else setWrites.push([path, value])
+      }
       // Build the new state from scratch: first re-apply each kept path's
-      // existing value, then apply `set` on top. Sort both lists by depth so
-      // a shallow assignment doesn't clobber a deeper one written first.
+      // existing value, then apply `set` writes on top, then apply `set`
+      // deletes (so a path that's both kept and null-set is dropped). Sort
+      // both write lists by depth so a shallow assignment doesn't clobber a
+      // deeper one written first.
       const sortByDepth = <T extends { path: string }>(entries: T[]): T[] =>
         entries.slice().sort((a, b) => a.path.split('.').length - b.path.split('.').length)
       let nextState: WorldState = {}
       const keepNotes: string[] = []
+      // Filter null values out of kept paths too: state should never contain
+      // null, so any null leaking through from a prior turn is treated as
+      // already-deleted (heals legacy pollution silently).
       for (const { path, value } of sortByDepth(
         keepPaths
           .map((path) => ({ path, value: getByPath(state, path) }))
-          .filter((e): e is { path: string; value: JsonValue } => e.value !== undefined),
+          .filter(
+            (e): e is { path: string; value: JsonValue } =>
+              e.value !== undefined && e.value !== null,
+          ),
       )) {
         nextState = setByPath(nextState, path, value)
       }
-      const missingKeeps = keepPaths.filter((p) => getByPath(state, p) === undefined)
+      const missingKeeps = keepPaths.filter((p) => {
+        const v = getByPath(state, p)
+        return v === undefined || v === null
+      })
       if (missingKeeps.length) {
         keepNotes.push(`kept paths missing from previous state (no-op): ${missingKeeps.join(', ')}`)
       }
       for (const { path, value } of sortByDepth(
-        setEntries.map(([path, value]) => ({ path, value })),
+        setWrites.map(([path, value]) => ({ path, value })),
       )) {
         nextState = setByPath(nextState, path, value)
       }
+      for (const path of setDeletes) {
+        nextState = deleteByPath(nextState, path)
+      }
       const prevTopKeys = Object.keys(state).length
       const newTopKeys = Object.keys(nextState).length
+      const totalSetOps = setWrites.length + setDeletes.length
+      const deleteNote = setDeletes.length
+        ? `, deleted ${setDeletes.length} path${setDeletes.length === 1 ? '' : 's'} via null`
+        : ''
       const summary =
-        keepPaths.length === 0 && setEntries.length === 0
+        keepPaths.length === 0 && totalSetOps === 0
           ? `state cleared (was ${prevTopKeys} top-level key${prevTopKeys === 1 ? '' : 's'}, now empty)`
-          : `kept ${keepPaths.length} path${keepPaths.length === 1 ? '' : 's'}, set ${setEntries.length} path${setEntries.length === 1 ? '' : 's'}; ${newTopKeys} top-level key${newTopKeys === 1 ? '' : 's'} now`
+          : `kept ${keepPaths.length} path${keepPaths.length === 1 ? '' : 's'}, set ${setWrites.length} path${setWrites.length === 1 ? '' : 's'}${deleteNote}; ${newTopKeys} top-level key${newTopKeys === 1 ? '' : 's'} now`
       const notes = keepNotes.length ? `; ${keepNotes.join('; ')}` : ''
       return {
         state: nextState,

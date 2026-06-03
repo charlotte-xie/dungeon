@@ -11,7 +11,7 @@ State is **rebuilt every turn** from two explicit lists you provide:
 1. **`keep`** — a whitelist of dotted paths from the CURRENT state that should survive into the next turn. Their existing values carry forward.
 2. **`set`** — a map of dotted-path → value applied on top of the kept paths. Adds new paths, or overwrites a kept path whose value is now different.
 
-There is no separate `delete` operation. **Anything in the current state that is not in `keep` and not in `set` is dropped.** Omission is deletion.
+There is no separate `delete` operation. **Anything in the current state that is not in `keep` and not in `set` is dropped.** Omission is deletion. As a convenience, writing `null` for a path in `set` also deletes it (the path is dropped from the next turn even if it appears in `keep`). State never stores `null`.
 
 Every turn, walk the current state and decide for each existing key:
 
