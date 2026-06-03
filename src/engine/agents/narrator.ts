@@ -116,6 +116,20 @@ export async function runNarrator(
       result: content,
     })
   }
+  // Re-prompt the model for prose when a turn produced tool calls / reasoning
+  // but no narrative. Honors ctx.reminderAsSystem (same convention as the turn
+  // reminder): a true system message when asSystem, otherwise an in-channel
+  // (OOC: ...) user message. The trace records the exact text sent.
+  const pushNudge = (instruction: string) => {
+    const message = ctx.reminderAsSystem
+      ? { role: 'system' as const, content: instruction }
+      : { role: 'user' as const, content: `(OOC: ${instruction})` }
+    apiMessages.push(message)
+    trace.push({
+      kind: 'thought',
+      text: `(nudge → ${message.role}) ${message.content}`,
+    })
+  }
 
   let nudged = false
   for (let iter = 0; iter < 8; iter++) {
@@ -246,15 +260,9 @@ export async function runNarrator(
         }
       if (!nudged) {
         nudged = true
-        trace.push({
-          kind: 'thought',
-          text: '(nudge) Inline tool calls extracted — asked the DM to now write the narrative prose.',
-        })
-        apiMessages.push({
-          role: 'user',
-          content:
-            '(OOC: Inline tool calls extracted. Use the structured tool API next time. Now provide the narrative reply — 2-4 short paragraphs, no XML tags.)',
-        })
+        pushNudge(
+          'Inline tool calls extracted. Use the structured tool API next time. Now provide the narrative reply — 2-4 short paragraphs, no XML tags.',
+        )
         continue
       }
       throw new Error('Narrative reply was entirely inline tool calls with no remaining prose')
@@ -272,15 +280,9 @@ export async function runNarrator(
     console.warn('[dm] empty xAI message', { iter, finishReason, data })
     if (!nudged) {
       nudged = true
-      trace.push({
-        kind: 'thought',
-        text: '(nudge) State recorded but no prose — asked the DM to now write the narrative reply.',
-      })
-      apiMessages.push({
-        role: 'user',
-        content:
-          '(OOC: State updates recorded. Now provide the narrative reply in character — 2-4 short paragraphs.)',
-      })
+      pushNudge(
+        'State updates recorded. Now provide the narrative reply in character — 2-4 short paragraphs.',
+      )
       continue
     }
     throw new EmptyNarrativeError(finishReason, trace, totalReasoningTokens || undefined)
