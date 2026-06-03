@@ -57,6 +57,27 @@ export interface NarratorResult {
   reasoningTokens?: number
 }
 
+/**
+ * Thrown when the model ends its turn (finish_reason=stop) with tool calls
+ * and/or reasoning but no narrative prose, even after being nudged. Carries
+ * the trace so the UI can still surface what the DM was thinking instead of
+ * just a bare error line.
+ */
+export class EmptyNarrativeError extends Error {
+  readonly trace: TraceEvent[]
+  readonly reasoningTokens?: number
+  constructor(
+    finishReason: string | undefined,
+    trace: TraceEvent[],
+    reasoningTokens?: number,
+  ) {
+    super(`Empty narrative reply (finish_reason=${finishReason ?? 'unknown'})`)
+    this.name = 'EmptyNarrativeError'
+    this.trace = trace
+    this.reasoningTokens = reasoningTokens
+  }
+}
+
 export async function runNarrator(
   ctx: NarratorContext,
   signal: AbortSignal,
@@ -254,7 +275,7 @@ export async function runNarrator(
       })
       continue
     }
-    throw new Error(`Empty narrative reply (finish_reason=${finishReason ?? 'unknown'})`)
+    throw new EmptyNarrativeError(finishReason, trace, totalReasoningTokens || undefined)
   }
   throw new Error('Tool-call loop exceeded max iterations')
 }

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT, buildNewAdventureBootstrap } from './prompts'
-import { runNarrator } from './engine/agents/narrator'
+import { EmptyNarrativeError, runNarrator } from './engine/agents/narrator'
 import { buildReviserMessages, runReviser } from './engine/agents/reviser'
 import {
   chronicleNeedsCompaction,
@@ -466,10 +466,23 @@ function App() {
         return
       }
       const failureText = `(The dungeon master falters: ${err instanceof Error ? err.message : String(err)})`
+      // If the model thought but never produced prose, keep its trace so the
+      // player can still see what the DM was reasoning about.
+      const failureTrace = err instanceof EmptyNarrativeError ? err.trace : undefined
+      const failureReasoningTokens =
+        err instanceof EmptyNarrativeError ? err.reasoningTokens : undefined
       setTurns((ts) =>
         ts.map((t) =>
           t.id === pendingTurn.id
-            ? { ...t, reply: { ...t.reply, text: failureText } }
+            ? {
+                ...t,
+                reply: {
+                  ...t.reply,
+                  text: failureText,
+                  trace: failureTrace,
+                  reasoningTokens: failureReasoningTokens,
+                },
+              }
             : t,
         ),
       )
@@ -764,8 +777,20 @@ function App() {
         return
       }
       const failureText = `(The dungeon master falters: ${err instanceof Error ? err.message : String(err)})`
+      // Preserve the DM's thinking even when no prose came back (see above).
+      const failureTrace = err instanceof EmptyNarrativeError ? err.trace : undefined
+      const failureReasoningTokens =
+        err instanceof EmptyNarrativeError ? err.reasoningTokens : undefined
       setTurns([
-        { ...pendingTurn, reply: { ...pendingTurn.reply, text: failureText } },
+        {
+          ...pendingTurn,
+          reply: {
+            ...pendingTurn.reply,
+            text: failureText,
+            trace: failureTrace,
+            reasoningTokens: failureReasoningTokens,
+          },
+        },
       ])
     } finally {
       if (abortRef.current === controller) abortRef.current = null
