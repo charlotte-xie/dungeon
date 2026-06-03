@@ -246,6 +246,10 @@ export async function runNarrator(
         }
       if (!nudged) {
         nudged = true
+        trace.push({
+          kind: 'thought',
+          text: '(nudge) Inline tool calls extracted — asked the DM to now write the narrative prose.',
+        })
         apiMessages.push({
           role: 'user',
           content:
@@ -268,6 +272,10 @@ export async function runNarrator(
     console.warn('[dm] empty xAI message', { iter, finishReason, data })
     if (!nudged) {
       nudged = true
+      trace.push({
+        kind: 'thought',
+        text: '(nudge) State recorded but no prose — asked the DM to now write the narrative reply.',
+      })
       apiMessages.push({
         role: 'user',
         content:
