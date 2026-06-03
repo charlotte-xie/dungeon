@@ -76,7 +76,8 @@ export function SettingsPanel({
     }
   }
 
-  const modelChoices = detectedModels && detectedModels.length > 0 ? detectedModels : MODEL_OPTIONS
+  const modelChoices: readonly string[] =
+    detectedModels && detectedModels.length > 0 ? detectedModels : MODEL_OPTIONS
 
   function setSlotField(key: SlotKey, value: string) {
     setDraftSlots((s) => ({ ...s, [key]: value }))
