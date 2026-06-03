@@ -205,4 +205,4 @@ export interface InlineToolCall {
 }
 
 export const CONTINUE_DIRECTIVE =
-  '(OOC: Continue the scene without waiting for a new player action. Push the narrative forward — time passing, an NPC making a move, a revelation, a pressure mounting — until the player faces a concrete decision. End on a narrated stimulus as usual.)'
+  '(OOC: The player pressed Continue instead of acting — usually a sign the previous turn stopped short of a satisfying decision point. Narrate more, not less: carry the scene forward with real momentum — time passing, an NPC making a move, a revelation surfacing, pressure mounting — and push well past the previous stopping place rather than lingering. Keep going until the player faces a concrete, meaningful choice; err toward narrating further rather than halting at a flat or premature moment. End on a strong narrated stimulus.)'
