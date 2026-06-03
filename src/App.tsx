@@ -60,6 +60,7 @@ import {
   type SavedGame,
   type SavedGameV1,
   type SavedGameV2,
+  type TraceEvent,
   type Turn,
   type TurnKind,
   type TurnSnapshot,
@@ -72,6 +73,20 @@ import { SavesPanel } from './ui/SavesPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { StateViewer } from './ui/StateViewer'
 import { TraceView } from './ui/TraceView'
+
+// When the reviser pass fails, fall back to the narrator's draft rather than
+// losing an otherwise-good turn. Append a trace note so it's visible that the
+// reviser was skipped and the unrevised prose is being shown.
+function withReviserFailureNote(trace: TraceEvent[], err: unknown): TraceEvent[] {
+  const msg = err instanceof Error ? err.message : String(err)
+  return [
+    ...trace,
+    {
+      kind: 'thought',
+      text: `(reviser failed: ${msg} — showing the unrevised narrator draft)`,
+    },
+  ]
+}
 
 function EditableMessage({
   text,
@@ -424,24 +439,45 @@ function App() {
           ),
         )
         setStatusText('Reviser polishing…')
-        const reviserCall = await runReviser(
-          {
-            model: context.reviserModel,
-            apiKey: xaiKey,
-            baseUrl,
-            slots,
-            draft: result.text,
-            sampling,
-          },
-          controller.signal,
-        )
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === pendingTurn.id
-              ? { ...t, reply: reviserCall }
-              : t,
-          ),
-        )
+        try {
+          const reviserCall = await runReviser(
+            {
+              model: context.reviserModel,
+              apiKey: xaiKey,
+              baseUrl,
+              slots,
+              draft: result.text,
+              sampling,
+            },
+            controller.signal,
+          )
+          setTurns((ts) =>
+            ts.map((t) =>
+              t.id === pendingTurn.id
+                ? { ...t, reply: reviserCall }
+                : t,
+            ),
+          )
+        } catch (reviserErr) {
+          if (controller.signal.aborted) throw reviserErr
+          // Reviser failed — show the narrator's draft instead of losing the turn.
+          setTurns((ts) =>
+            ts.map((t) =>
+              t.id === pendingTurn.id
+                ? {
+                    ...t,
+                    narrator: undefined,
+                    reply: {
+                      ...t.reply,
+                      text: result.text,
+                      trace: withReviserFailureNote(result.trace, reviserErr),
+                      reasoningTokens: result.reasoningTokens,
+                    },
+                  }
+                : t,
+            ),
+          )
+        }
       } else {
         setTurns((ts) =>
           ts.map((t) =>
@@ -740,24 +776,40 @@ function App() {
           },
         ])
         setStatusText('Reviser polishing…')
-        const reviserCall = await runReviser(
-          {
-            model: context.reviserModel,
-            apiKey: xaiKey,
-            baseUrl,
-            slots: nextSlots,
-            draft: result.text,
-            sampling,
-          },
-          controller.signal,
-        )
-        setTurns([
-          {
-            ...pendingTurn,
-            narrator: narratorCall,
-            reply: reviserCall,
-          },
-        ])
+        try {
+          const reviserCall = await runReviser(
+            {
+              model: context.reviserModel,
+              apiKey: xaiKey,
+              baseUrl,
+              slots: nextSlots,
+              draft: result.text,
+              sampling,
+            },
+            controller.signal,
+          )
+          setTurns([
+            {
+              ...pendingTurn,
+              narrator: narratorCall,
+              reply: reviserCall,
+            },
+          ])
+        } catch (reviserErr) {
+          if (controller.signal.aborted) throw reviserErr
+          // Reviser failed — show the narrator's draft instead of losing the turn.
+          setTurns([
+            {
+              ...pendingTurn,
+              reply: {
+                ...pendingTurn.reply,
+                text: result.text,
+                trace: withReviserFailureNote(result.trace, reviserErr),
+                reasoningTokens: result.reasoningTokens,
+              },
+            },
+          ])
+        }
       } else {
         setTurns([
           {
