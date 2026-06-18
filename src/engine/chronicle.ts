@@ -195,7 +195,7 @@ export function buildChronicleSystemMessage(chronicle: Chronicle): ApiMessage | 
     const entries = chronicle[level]
     if (entries.length === 0) continue
     const isTop = level === chronicle.length - 1
-    const header = isTop ? '## Top level' : '## More recent'
+    const header = isTop ? '## Earliest (most compressed)' : '## More recent'
     const body = entries.map((e) => e.text).join('\n\n')
     sections.push(`${header}\n\n${body}`)
   }

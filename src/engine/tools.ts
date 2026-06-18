@@ -53,7 +53,7 @@ export const FUTURE_PLOT_PLAN_TOOL = {
   function: {
     name: 'future_plot_plan',
     description:
-      `Edit the numbered FUTURE plot plan — your private DM notebook of the directions the story is heading in, not what has already happened. Keeping the plot interesting and engaging is YOUR responsibility; this tool is how you do it. Every entry must describe an upcoming pressure, revelation, NPC move, or unresolved hook. As soon as something is delivered to the player, DELETE that entry — past events do not belong here (the chronicle records them). Exactly one operation per call via \`op\`. Positions are 1-indexed and refer to the list as it appears in the system message. ` +
+      `Edit the numbered FUTURE plot plan — your private notebook of the directions the story is heading in, not what has already happened. Keeping the plot interesting and engaging is YOUR responsibility; this tool is how you do it. Every entry must describe an upcoming pressure, revelation, NPC move, or unresolved hook. As soon as something is delivered to the player, DELETE that entry — past events do not belong here (the chronicle records them). Exactly one operation per call via \`op\`. Positions are 1-indexed and refer to the list as it appears in the system message. ` +
       `OPERATIONS: ` +
       `\`append\` adds a new future entry at the end (\`text\` required); ` +
       `\`insert\` inserts a new future entry before \`position\`; ` +

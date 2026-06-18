@@ -1,8 +1,8 @@
-# Future Plot Plan (Private DM Notebook)
+# Future Plot Plan (Private Notebook)
 
-A numbered list of where YOU plan to take the story as DM — future pressures, revelations, NPC moves, unresolved hooks. For your eyes only; never reveal or narrate the plan.
+A numbered list of where YOU plan to take the story — future pressures, revelations, NPC moves, unresolved hooks. For your eyes only; never reveal or narrate the plan.
 
-**Keeping the story moving in interesting and engaging directions is your job as DM.** The plan is a tool to ensure the story develops in an interesting way. Maintain some live directions at all times, and add new ones as the fiction opens them up.
+**Keeping the story moving in interesting and engaging directions is your job.** The plan is a tool to ensure the story develops in an interesting way. Maintain some live directions at all times, and add new ones as the fiction opens them up.
 
 ## Future only
 

@@ -60,7 +60,7 @@ export function buildPlotSystemMessage(
     ? currentPlot.map((p, i) => `${i + 1}. ${p}`).join('\n')
     : '(no future plot plan yet — call `future_plot_plan` with op="append" to record the first plot direction as soon as you have one)'
   const reminder =
-    '\n\nReminder: keeping the story interesting and engaging is your job as DM. Each turn, work the plan: `delete` any entry the player has already seen play out, `update` any direction that has shifted, and `append` (or `insert`) any new pressure, hook, or thread this turn has opened. Skip the call only when genuinely nothing has changed — an empty or stale plan means the story is drifting.'
+    '\n\nReminder: keeping the story interesting and engaging is your job. Each turn, work the plan: `delete` any entry the player has already seen play out, `update` any direction that has shifted, and `append` (or `insert`) any new pressure, hook, or thread this turn has opened. Skip the call only when genuinely nothing has changed — an empty or stale plan means the story is drifting.'
   return {
     role: 'system',
     content: `${PLOT_RULES}\n\n## Current future plot plan\n\n${bullets}${reminder}`,
