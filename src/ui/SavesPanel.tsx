@@ -7,6 +7,7 @@ interface SavesPanelProps {
   turnCount: number
   onClose: () => void
   onSave: (name: string) => void
+  onOverwrite: (id: string) => void
   onLoad: (id: string) => void
   onDelete: (id: string) => void
   onExport: (id: string) => void
@@ -30,6 +31,7 @@ export function SavesPanel({
   turnCount,
   onClose,
   onSave,
+  onOverwrite,
   onLoad,
   onDelete,
   onExport,
@@ -98,6 +100,9 @@ export function SavesPanel({
                 </div>
                 <div className="saves-item-actions">
                   <button onClick={() => onLoad(s.id)}>Load</button>
+                  <button className="ghost" onClick={() => onOverwrite(s.id)} disabled={!canSave}>
+                    Overwrite
+                  </button>
                   <button className="ghost" onClick={() => onExport(s.id)}>Export</button>
                   <button className="ghost" onClick={() => onDelete(s.id)}>Delete</button>
                 </div>

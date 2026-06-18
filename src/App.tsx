@@ -279,6 +279,26 @@ function App() {
     commitSaves([entry, ...saves])
   }
 
+  function overwriteSavedGame(id: string) {
+    const target = saves.find((s) => s.id === id)
+    if (!target) return
+    if (!confirm(`Overwrite "${target.name}" with the current adventure? This cannot be undone.`)) {
+      return
+    }
+    const updated: SavedGame = {
+      ...target,
+      savedAt: Date.now(),
+      slots: { ...slots },
+      state: structuredClone(state),
+      plot: [...plot],
+      memory: structuredClone(memory),
+      chronicle: structuredClone(chronicle),
+      turns: structuredClone(turns),
+      compactCutoff,
+    }
+    commitSaves(saves.map((s) => (s.id === id ? updated : s)))
+  }
+
   function loadSavedGame(id: string) {
     const target = saves.find((s) => s.id === id)
     if (!target) return
@@ -1095,6 +1115,7 @@ function App() {
           turnCount={turns.length}
           onClose={() => setShowSaves(false)}
           onSave={saveCurrentGame}
+          onOverwrite={overwriteSavedGame}
           onLoad={loadSavedGame}
           onDelete={deleteSavedGame}
           onExport={exportSavedGame}
