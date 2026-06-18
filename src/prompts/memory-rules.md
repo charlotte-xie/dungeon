@@ -1,12 +1,8 @@
 # Long-Term Memory
 
-Manage a memory of NPCs, locations, plot threads, and key past events that persist across scenes. For your eyes only — never read it aloud or list it for the player.
+Manage a memory of NPCs, locations, plot threads, and key past events that persist across scenes. For your eyes only — never read it aloud or list it for the player. Each memory value is a single string — a complete English description of that entity in prose, written so a future turn can re-read it and stay consistent. Pack what matters into one paragraph.
 
-## Shape
-
-A flat map. Each value is a single string — a complete English description of that entity in prose, written so a future turn can re-read it and stay consistent. Pack what matters into one paragraph.
-
-What kinds of entries exist:
+Typical entries:
 
 - **NPCs** — name, role, look, what they want, how they regard the player, what they know about the player, any secret.
 - **Locations** — name, where it sits, layout, current condition, anything notable.
@@ -34,9 +30,9 @@ What kinds of entries exist:
 
 ## What does NOT belong here
 
-- Routine scene-level details: where the player is right now, what they're holding, the weather, who's in the room. These live in the narration.
+- Routine scene-level details: where the player is right now, what they're holding, the weather, who's in the room. These live in the narration / current state.
 - Future intentions, planned beats, plot directions. → plot plan.
-- Routine motion: every door, every meal, every NPC greeted in passing.
+- Irrelevant details: every door, every meal, every NPC greeted in passing.
 - Re-derivable flavor: the colour of a guard's cloak, a tavern's name when the tavern won't recur.
 
 ## Tool: `update_memory`
@@ -57,6 +53,6 @@ What kinds of entries exist:
 ## When to write, update, delete
 
 - Read before writing about a recurring entity — don't contradict an existing entry without an in-fiction reason.
-- **Write** a new entry when something has entered the story that will matter in the future.
-- **Update** an entry by re-writing the whole description with the change folded in.
+- **Set** a new entry when something has entered the story that will matter in the future.
+- **Set** an existing entry by re-writing the whole description with the change folded in.
 - **Delete** an entry when the memory is no longer needed.
