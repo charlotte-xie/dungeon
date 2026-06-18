@@ -12,6 +12,7 @@ import type {
   Chronicle,
   Memory,
   SlotDef,
+  ToolCall,
   Turn,
   WorldState,
 } from './types'
@@ -66,6 +67,38 @@ export function buildPlotSystemMessage(
   }
 }
 
+// Reconstruct a past live turn's tool activity as wire messages: one assistant
+// message carrying the structured tool_calls, followed by a matching `tool`
+// result message per call. Reasoning/thought events are intentionally dropped —
+// vendor guidance is that prior turns' reasoning is ephemeral and should not be
+// replayed; only the call→result cadence is durable history. The calls live on
+// the narrator trace when a reviser ran, else on the reply trace. Inline-call
+// names (suffixed " (inline)") are normalized to the real tool name so the
+// demonstrated cadence uses the structured tool API.
+export function buildHistoricalToolMessages(turn: Turn): ApiMessage[] {
+  const trace = turn.narrator?.trace ?? turn.reply.trace
+  if (!trace) return []
+  const calls = trace.filter(
+    (e): e is Extract<typeof e, { kind: 'call' }> => e.kind === 'call',
+  )
+  if (!calls.length) return []
+  const toolCalls: ToolCall[] = calls.map((e, i) => ({
+    id: `${turn.id}-call-${i}`,
+    type: 'function',
+    function: {
+      name: e.name.replace(/\s*\(inline\)\s*$/i, ''),
+      arguments: e.arguments,
+    },
+  }))
+  const messages: ApiMessage[] = [
+    { role: 'assistant', content: '', tool_calls: toolCalls },
+  ]
+  calls.forEach((e, i) => {
+    messages.push({ role: 'tool', tool_call_id: `${turn.id}-call-${i}`, content: e.result })
+  })
+  return messages
+}
+
 export function buildApiMessagesIndexed(
   systemPrompt: string,
   slots: AdventureSlots,
@@ -79,6 +112,7 @@ export function buildApiMessagesIndexed(
   includeWorldState: boolean,
   includePlotOutline: boolean,
   includeMemory: boolean,
+  includeToolCallHistory: boolean,
   nsfw: boolean,
 ): {
   messages: ApiMessage[]
@@ -129,6 +163,11 @@ export function buildApiMessagesIndexed(
       messages.push({ role: 'user', content: t.input ?? '' })
     }
     if (hasReply) {
+      // Replay this turn's tool calls + results (reasoning stripped) before its
+      // prose, so recent live turns demonstrate the narrate-and-call cadence.
+      if (includeToolCallHistory) {
+        for (const m of buildHistoricalToolMessages(t)) messages.push(m)
+      }
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
     }
   }
@@ -148,6 +187,7 @@ export function buildApiMessages(
   includeWorldState: boolean,
   includePlotOutline: boolean,
   includeMemory: boolean,
+  includeToolCallHistory: boolean,
   nsfw: boolean,
 ): ApiMessage[] {
   return buildApiMessagesIndexed(
@@ -163,6 +203,7 @@ export function buildApiMessages(
     includeWorldState,
     includePlotOutline,
     includeMemory,
+    includeToolCallHistory,
     nsfw,
   ).messages
 }

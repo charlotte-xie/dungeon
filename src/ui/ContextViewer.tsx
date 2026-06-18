@@ -24,11 +24,12 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
   const [tab, setTab] = useState<Tab>('narrator')
   const active = tab === 'reviser' && reviser ? reviser.messages : apiMessages
   const totalBytes = active.reduce((n, m) => n + (m.content?.length ?? 0), 0)
+  const toolsJson = JSON.stringify(tools, null, 2)
   return (
     <div className="modal-backdrop">
       <div className="modal modal-wide">
         <div className="modal-header">
-          <h2>{tab === 'narrator' ? 'Next DM request' : 'Reviser request (preview)'}</h2>
+          <h2>{tab === 'narrator' ? 'Context for next DM request' : 'Context for reviser request (preview)'}</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
         {reviser && (
@@ -65,15 +66,17 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
             {reviser?.note}
           </p>
         )}
-        <h2>Sampling</h2>
-        <pre className="state-json">{JSON.stringify(
-          {
-            model: tab === 'reviser' ? reviser?.model : '(see Settings)',
-            temperature: sampling.temperature,
-          },
-          null,
-          2,
-        )}</pre>
+        <details className="ctx-section">
+          <summary>Sampling</summary>
+          <pre className="state-json ctx-section-json">{JSON.stringify(
+            {
+              model: tab === 'reviser' ? reviser?.model : '(see Settings)',
+              temperature: sampling.temperature,
+            },
+            null,
+            2,
+          )}</pre>
+        </details>
         <div className="context-list">
           {active.map((m, i) => (
             <div key={i} className={`context-item ctx-${m.role}`}>
@@ -83,7 +86,9 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
                 {m.tool_calls?.length ? <span className="ctx-tag">{m.tool_calls.length} tool_call(s)</span> : null}
                 <span className="ctx-len">{m.content.length.toLocaleString()} chars</span>
               </div>
-              <pre className="state-json">{m.content || '(empty)'}</pre>
+              {(m.content || !m.tool_calls?.length) && (
+                <pre className="state-json">{m.content || '(empty)'}</pre>
+              )}
               {m.tool_calls?.length ? (
                 <pre className="state-json">{JSON.stringify(m.tool_calls, null, 2)}</pre>
               ) : null}
@@ -91,10 +96,15 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
           ))}
         </div>
         {tab === 'narrator' && (
-          <>
-            <h2>Tools</h2>
-            <pre className="state-json">{JSON.stringify(tools, null, 2)}</pre>
-          </>
+          <details className="ctx-section">
+            <summary>
+              Tools
+              <span className="ctx-len">
+                {tools.length} schema{tools.length === 1 ? '' : 's'} · {toolsJson.length.toLocaleString()} chars
+              </span>
+            </summary>
+            <pre className="state-json ctx-section-json">{toolsJson}</pre>
+          </details>
         )}
         <div className="modal-actions">
           <span className="spacer" />
