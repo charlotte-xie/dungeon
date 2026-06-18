@@ -401,7 +401,7 @@ function App() {
           workingCutoff,
           workingChronicle,
           settings,
-          { systemPrompt, model, apiKey: xaiKey, baseUrl, slots },
+          { model, apiKey: xaiKey, baseUrl, slots },
           controller.signal,
           (label) => setStatusText(label),
         )
@@ -629,7 +629,7 @@ function App() {
         compactCutoff,
         chronicle,
         settings,
-        { systemPrompt, model, apiKey: xaiKey, baseUrl, slots },
+        { model, apiKey: xaiKey, baseUrl, slots },
         controller.signal,
         (label) => setStatusText(label),
       )

@@ -12,7 +12,6 @@ import { xaiChat } from '../xai'
 import type { AdventureSlots, ApiMessage } from '../types'
 
 export interface SummarizerInput {
-  systemPrompt: string
   model: string
   apiKey: string
   baseUrl: string
@@ -46,9 +45,8 @@ export async function runSummarizer(
     .join('\n\n')
 
   const userContent =
-    `DM system prompt (rules the narrator follows):\n\n${input.systemPrompt}\n\n` +
     `${slotsBlock}\n\n` +
-    `--- BEGIN INPUTS (${input.inputs.length} entries to fold into one summary) ---\n\n` +
+    `--- BEGIN INPUTS (${input.inputs.length} ${input.inputs.length === 1 ? 'entry' : 'entries'} to fold into one summary) ---\n\n` +
     `${joined}\n\n` +
     `--- END INPUTS ---\n\n` +
     `Produce a single unified retelling that covers everything in the inputs above. ` +

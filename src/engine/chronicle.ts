@@ -44,7 +44,6 @@ function targetForInputs(inputs: string[], M: number): number {
 }
 
 export interface ChronicleAgentArgs {
-  systemPrompt: string
   model: string
   apiKey: string
   baseUrl: string
@@ -92,7 +91,6 @@ export async function compactCascade(
       const inputs = batch.map(renderTurnForSummary).filter(Boolean)
       const result = await runSummarizer(
         {
-          systemPrompt: agent.systemPrompt,
           model: agent.model,
           apiKey: agent.apiKey,
           baseUrl: agent.baseUrl,
@@ -124,7 +122,6 @@ export async function compactCascade(
       const inputs = batch.map((e) => e.text)
       const result = await runSummarizer(
         {
-          systemPrompt: agent.systemPrompt,
           model: agent.model,
           apiKey: agent.apiKey,
           baseUrl: agent.baseUrl,
