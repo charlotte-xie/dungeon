@@ -1,189 +1,40 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
-import { DEFAULT_SYSTEM_PROMPT, buildNewAdventureBootstrap } from './prompts'
-import { EmptyNarrativeError, runNarrator } from './engine/agents/narrator'
-import { buildReviserMessages, runReviser } from './engine/agents/reviser'
-import {
-  chronicleNeedsCompaction,
-  compactCascade,
-  stripTracesBefore,
-  totalChronicleEntries,
-} from './engine/chronicle'
-import {
-  DEFAULT_BASE_URL,
-  DEFAULT_MODEL,
-  DEFAULT_STATE,
-  defaultSlots,
-} from './engine/config'
-import {
-  LS_BASE_URL,
-  LS_CONTEXT,
-  LS_MODEL,
-  LS_SAMPLING,
-  LS_SHOW_TRACE,
-  LS_TURNS,
-  LS_XAI_KEY,
-  LS_COMPACT_CUTOFF,
-  loadStored,
-  loadStoredChronicle,
-  loadStoredContext,
-  loadStoredMemory,
-  loadStoredPlot,
-  loadStoredSampling,
-  loadStoredSaves,
-  loadStoredSlots,
-  loadStoredState,
-  loadStoredTurnsAndCutoff,
-  isSavedGameLike,
-  makeSaveId,
-  normalizeSavedGame,
-  persistChronicle,
-  persistMemory,
-  persistPlot,
-  persistSaves,
-  persistSlots,
-  persistState,
-} from './engine/persistence'
+import { DEFAULT_SYSTEM_PROMPT } from './prompts'
+import { buildReviserMessages } from './engine/agents/reviser'
+import { totalChronicleEntries } from './engine/chronicle'
+import { DEFAULT_STATE } from './engine/config'
 import { applyTurnReminder, buildApiMessages } from './engine/request'
 import { FUTURE_PLOT_PLAN_TOOL, UPDATE_MEMORY_TOOL, UPDATE_STATE_TOOL } from './engine/tools'
-import {
-  CONTINUE_DIRECTIVE,
-  type AdventureSlots,
-  type Chronicle,
-  type ContextConfig,
-  type Memory,
-  type ModelCall,
-  type SamplingParams,
-  type SaveFile,
-  type SaveFileV1,
-  type SaveFileV2,
-  type SavedGame,
-  type SavedGameV1,
-  type SavedGameV2,
-  type TraceEvent,
-  type Turn,
-  type TurnKind,
-  type TurnSnapshot,
-  type WorldState,
-  SAVE_FILE_MARKER,
-} from './engine/types'
+import { useGameController } from './hooks/useGameController'
+import { useSaves } from './hooks/useSaves'
+import { useSettings } from './hooks/useSettings'
 import { ContextViewer } from './ui/ContextViewer'
+import { EditableMessage } from './ui/EditableMessage'
 import { NewAdventurePrompt } from './ui/NewAdventurePrompt'
 import { SavesPanel } from './ui/SavesPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { StateViewer } from './ui/StateViewer'
 import { TraceView } from './ui/TraceView'
 
-// When the reviser pass fails, fall back to the narrator's draft rather than
-// losing an otherwise-good turn. Append a trace note so it's visible that the
-// reviser was skipped and the unrevised prose is being shown.
-function withReviserFailureNote(trace: TraceEvent[], err: unknown): TraceEvent[] {
-  const msg = err instanceof Error ? err.message : String(err)
-  return [
-    ...trace,
-    {
-      kind: 'thought',
-      text: `(reviser failed: ${msg} — showing the unrevised narrator draft)`,
-    },
-  ]
-}
-
-function EditableMessage({
-  text,
-  onSave,
-}: {
-  text: string
-  onSave: (next: string) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(text)
-
-  if (!editing) {
-    return (
-      <p
-        title="Double-click to edit"
-        onDoubleClick={() => {
-          setDraft(text)
-          setEditing(true)
-        }}
-      >
-        {text}
-      </p>
-    )
-  }
-
-  const autosize = (el: HTMLTextAreaElement) => {
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  }
-
-  return (
-    <textarea
-      className="msg-edit"
-      value={draft}
-      autoFocus
-      onChange={(e) => {
-        setDraft(e.target.value)
-        autosize(e.currentTarget)
-      }}
-      onFocus={(e) => {
-        autosize(e.currentTarget)
-        const len = e.currentTarget.value.length
-        e.currentTarget.setSelectionRange(len, len)
-      }}
-      onBlur={() => {
-        if (draft !== text) onSave(draft)
-        setEditing(false)
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          setDraft(text)
-          setEditing(false)
-        } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault()
-          e.currentTarget.blur()
-        }
-      }}
-    />
-  )
-}
-
 function App() {
   const systemPrompt = DEFAULT_SYSTEM_PROMPT
-  const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
-  const [xaiKey, setXaiKey] = useState(() => loadStored(LS_XAI_KEY, ''))
-  const [baseUrl, setBaseUrl] = useState(() => loadStored(LS_BASE_URL, DEFAULT_BASE_URL))
-  const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
-  const [state, setState] = useState<WorldState>(() => loadStoredState())
-  const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
-  const [memory, setMemory] = useState<Memory>(() => loadStoredMemory())
-  const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
-  const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
-  const [turns, setTurns] = useState<Turn[]>(initialTurns)
-  const [compactCutoff, setCompactCutoff] = useState<number>(initialCutoff)
-  const [sampling, setSampling] = useState<SamplingParams>(() => loadStoredSampling())
-  const [context, setContext] = useState<ContextConfig>(() => loadStoredContext())
-  const [input, setInput] = useState('')
-  const [thinking, setThinking] = useState(false)
-  const [statusText, setStatusText] = useState('DM is thinking…')
+  const settings = useSettings()
+  const { model, xaiKey, baseUrl, sampling, context, showTrace } = settings
+  const game = useGameController({ systemPrompt, model, xaiKey, baseUrl, sampling, context })
+  const saves = useSaves({
+    captureGame: game.captureGame,
+    restoreGame: game.restoreGame,
+    hasProgress: game.turns.length > 0 || totalChronicleEntries(game.chronicle) > 0,
+  })
+  const { turns, compactCutoff, input, thinking, statusText } = game
+
   const [showSettings, setShowSettings] = useState(false)
   const [showState, setShowState] = useState(false)
   const [showContext, setShowContext] = useState(false)
   const [showNewAdventure, setShowNewAdventure] = useState(false)
   const [showSaves, setShowSaves] = useState(false)
-  const [saves, setSaves] = useState<SavedGame[]>(() => loadStoredSaves())
-  const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(() => new Set())
-  const [showTrace, setShowTrace] = useState<boolean>(() => {
-    try {
-      const raw = localStorage.getItem(LS_SHOW_TRACE)
-      if (raw === null) return true
-      return raw === 'true'
-    } catch {
-      return true
-    }
-  })
 
   function toggleTrace(id: string) {
     setExpandedTraces((s) => {
@@ -194,681 +45,15 @@ function App() {
     })
   }
   const logRef = useRef<HTMLDivElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
-
-  const canCompact = chronicleNeedsCompaction(turns, compactCutoff, chronicle, {
-    compactionThreshold: context.compactionThreshold,
-    compactionBatch: context.compactionBatch,
-  })
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns, thinking])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_TURNS, JSON.stringify(turns))
-    } catch {
-      // ignore quota / disabled storage
-    }
-  }, [turns])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_SHOW_TRACE, String(showTrace))
-    } catch {
-      // ignore quota / disabled storage
-    }
-  }, [showTrace])
-
-  useEffect(() => () => abortRef.current?.abort(), [])
-
-  function commitState(next: WorldState) {
-    setState(next)
-    persistState(next)
-  }
-
-  function commitPlot(next: string[]) {
-    setPlot(next)
-    persistPlot(next)
-  }
-
-  function commitMemory(next: Memory) {
-    setMemory(next)
-    persistMemory(next)
-  }
-
-  function commitSlots(next: AdventureSlots) {
-    setSlots(next)
-    persistSlots(next)
-  }
-
-  function commitChronicle(next: Chronicle) {
-    setChronicle(next)
-    persistChronicle(next)
-  }
-
-  function commitCompactCutoff(next: number) {
-    setCompactCutoff(next)
-    try {
-      if (next > 0) localStorage.setItem(LS_COMPACT_CUTOFF, String(next))
-      else localStorage.removeItem(LS_COMPACT_CUTOFF)
-    } catch {
-      // ignore
-    }
-  }
-
-  function commitSaves(next: SavedGame[]) {
-    setSaves(next)
-    persistSaves(next)
-  }
-
-  function saveCurrentGame(name: string) {
-    const entry: SavedGame = {
-      id: makeSaveId(),
-      name: name.trim() || 'Untitled save',
-      savedAt: Date.now(),
-      slots: { ...slots },
-      state: structuredClone(state),
-      plot: [...plot],
-      memory: structuredClone(memory),
-      chronicle: structuredClone(chronicle),
-      turns: structuredClone(turns),
-      compactCutoff,
-    }
-    commitSaves([entry, ...saves])
-  }
-
-  function overwriteSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
-    if (!target) return
-    if (!confirm(`Overwrite "${target.name}" with the current adventure? This cannot be undone.`)) {
-      return
-    }
-    const updated: SavedGame = {
-      ...target,
-      savedAt: Date.now(),
-      slots: { ...slots },
-      state: structuredClone(state),
-      plot: [...plot],
-      memory: structuredClone(memory),
-      chronicle: structuredClone(chronicle),
-      turns: structuredClone(turns),
-      compactCutoff,
-    }
-    commitSaves(saves.map((s) => (s.id === id ? updated : s)))
-  }
-
-  function loadSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
-    if (!target) return
-    if (
-      (turns.length > 0 || totalChronicleEntries(chronicle) > 0) &&
-      !confirm('Load this save? Your current adventure will be replaced.')
-    ) {
-      return
-    }
-    abortRef.current?.abort()
-    setThinking(false)
-    setSnapshot(null)
-    commitSlots({ ...defaultSlots(), ...target.slots })
-    commitState(structuredClone(target.state))
-    commitPlot([...(target.plot ?? [])])
-    commitMemory(structuredClone(target.memory ?? {}))
-    commitChronicle(target.chronicle ?? [])
-    setTurns(target.turns)
-    commitCompactCutoff(target.compactCutoff)
-    setShowSaves(false)
-  }
-
-  function deleteSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
-    if (!target) return
-    if (!confirm(`Delete "${target.name}"? This cannot be undone.`)) return
-    commitSaves(saves.filter((s) => s.id !== id))
-  }
-
-  function exportSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
-    if (!target) return
-    const payload: SaveFile = { marker: SAVE_FILE_MARKER, version: 3, save: target }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const slug = target.name.replace(/[^a-z0-9-_]+/gi, '_').slice(0, 40) || 'save'
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${slug}.dm-save.json`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-  }
-
-  async function importSavedGame(file: File) {
-    try {
-      const text = await file.text()
-      const parsed = JSON.parse(text) as unknown
-      let raw: SavedGame | SavedGameV1 | SavedGameV2 | null = null
-      if (
-        parsed &&
-        typeof parsed === 'object' &&
-        (parsed as { marker?: unknown }).marker === SAVE_FILE_MARKER &&
-        isSavedGameLike((parsed as { save?: unknown }).save)
-      ) {
-        raw = (parsed as SaveFile | SaveFileV1 | SaveFileV2).save
-      } else if (isSavedGameLike(parsed)) {
-        raw = parsed
-      }
-      if (!raw) {
-        alert('That file is not a valid Dungeon Master save.')
-        return
-      }
-      const normalized = normalizeSavedGame(raw)
-      const entry: SavedGame = { ...normalized, id: makeSaveId(), savedAt: Date.now() }
-      commitSaves([entry, ...saves])
-    } catch (err) {
-      alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-
-  async function runTurn(
-    pendingTurn: Turn,
-    baseTurns: Turn[],
-    baseState: WorldState,
-    basePlot: string[],
-    baseMemory: Memory,
-    baseChronicle: Chronicle,
-    baseCutoff: number,
-    onAbortRestore: () => void,
-  ) {
-    setThinking(true)
-    setStatusText('DM is thinking…')
-    const controller = new AbortController()
-    abortRef.current = controller
-    try {
-      const settings = {
-        compactionThreshold: context.compactionThreshold,
-        compactionBatch: context.compactionBatch,
-          }
-      const allTurns = [...baseTurns, pendingTurn]
-      let workingChronicle = baseChronicle
-      let workingCutoff = baseCutoff
-      // Compact BEFORE the in-flight turn (we don't want to summarize a turn
-      // that doesn't have a reply yet). We measure against `baseTurns`.
-      if (chronicleNeedsCompaction(baseTurns, workingCutoff, workingChronicle, settings)) {
-        const compacted = await compactCascade(
-          baseTurns,
-          workingCutoff,
-          workingChronicle,
-          settings,
-          { model, apiKey: xaiKey, baseUrl, slots },
-          controller.signal,
-          (label) => setStatusText(label),
-        )
-        workingChronicle = compacted.chronicle
-        workingCutoff = compacted.cutoff
-        commitChronicle(workingChronicle)
-        commitCompactCutoff(workingCutoff)
-        setTurns((ts) => stripTracesBefore(ts, workingCutoff))
-        setStatusText('DM is thinking…')
-      }
-
-      const result = await runNarrator(
-        {
-          systemPrompt,
-          model,
-          apiKey: xaiKey,
-          baseUrl,
-          slots,
-          chronicle: workingChronicle,
-          history: allTurns.slice(workingCutoff),
-          initialState: baseState,
-          initialPlot: basePlot,
-          initialMemory: baseMemory,
-          sampling,
-          stateCleanupThreshold: context.stateCleanupChars,
-          includePriorPlayerTurns: context.includePriorPlayerTurns,
-          reminderAsSystem: context.reminderAsSystem,
-          includeWorldState: context.includeWorldState,
-          includePlotOutline: context.includePlotOutline,
-          includeMemory: context.includeMemory,
-          includeToolCallHistory: context.includeToolCallHistory,
-          nsfw: context.nsfw,
-        },
-        controller.signal,
-      )
-      commitState(result.state)
-      commitPlot(result.plot)
-      commitMemory(result.memory)
-
-      const narratorCall: ModelCall = {
-        id: crypto.randomUUID(),
-        model,
-        text: result.text,
-        trace: result.trace,
-        reasoningTokens: result.reasoningTokens,
-      }
-      if (context.useReviser) {
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === pendingTurn.id
-              ? {
-                  ...t,
-                  narrator: narratorCall,
-                }
-              : t,
-          ),
-        )
-        setStatusText('Reviser polishing…')
-        try {
-          const reviserCall = await runReviser(
-            {
-              model: context.reviserModel,
-              apiKey: xaiKey,
-              baseUrl,
-              slots,
-              draft: result.text,
-              sampling,
-            },
-            controller.signal,
-          )
-          setTurns((ts) =>
-            ts.map((t) =>
-              t.id === pendingTurn.id
-                ? { ...t, reply: reviserCall }
-                : t,
-            ),
-          )
-        } catch (reviserErr) {
-          if (controller.signal.aborted) throw reviserErr
-          // Reviser failed — show the narrator's draft instead of losing the turn.
-          setTurns((ts) =>
-            ts.map((t) =>
-              t.id === pendingTurn.id
-                ? {
-                    ...t,
-                    narrator: undefined,
-                    reply: {
-                      ...t.reply,
-                      text: result.text,
-                      trace: withReviserFailureNote(result.trace, reviserErr),
-                      reasoningTokens: result.reasoningTokens,
-                    },
-                  }
-                : t,
-            ),
-          )
-        }
-      } else {
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === pendingTurn.id
-              ? {
-                  ...t,
-                  narrator: undefined,
-                  reply: {
-                    ...t.reply,
-                    text: result.text,
-                    trace: result.trace,
-                    reasoningTokens: result.reasoningTokens,
-                  },
-                }
-              : t,
-          ),
-        )
-      }
-    } catch (err) {
-      if (controller.signal.aborted) {
-        if (abortRef.current === controller) onAbortRestore()
-        return
-      }
-      const failureText = `(The dungeon master falters: ${err instanceof Error ? err.message : String(err)})`
-      // If the model thought but never produced prose, keep its trace so the
-      // player can still see what the DM was reasoning about.
-      const failureTrace = err instanceof EmptyNarrativeError ? err.trace : undefined
-      const failureReasoningTokens =
-        err instanceof EmptyNarrativeError ? err.reasoningTokens : undefined
-      setTurns((ts) =>
-        ts.map((t) =>
-          t.id === pendingTurn.id
-            ? {
-                ...t,
-                reply: {
-                  ...t.reply,
-                  text: failureText,
-                  trace: failureTrace,
-                  reasoningTokens: failureReasoningTokens,
-                },
-              }
-            : t,
-        ),
-      )
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null
-      setThinking(false)
-    }
-  }
-
-  function makePendingTurn(kind: TurnKind, turnInput: string): Turn {
-    const reply: ModelCall = { id: crypto.randomUUID(), model, text: '' }
-    return { id: crypto.randomUUID(), kind, input: turnInput, reply }
-  }
-
-  async function send() {
-    const text = input.trim()
-    if (!text || thinking) return
-    setInput('')
-    const snap: TurnSnapshot = {
-      turns,
-      state,
-      plot,
-      memory,
-      chronicle,
-      compactCutoff,
-      input: text,
-      kind: 'player',
-    }
-    setSnapshot(snap)
-    const pendingTurn = makePendingTurn('player', text)
-    setTurns([...turns, pendingTurn])
-    await runTurn(pendingTurn, turns, state, plot, memory, chronicle, compactCutoff, () => {
-      setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-      setInput((cur) => cur || text)
-    })
-  }
-
-  async function continueStory() {
-    if (thinking || turns.length === 0) return
-    const snap: TurnSnapshot = {
-      turns,
-      state,
-      plot,
-      memory,
-      chronicle,
-      compactCutoff,
-      input: '',
-      kind: 'continue',
-    }
-    setSnapshot(snap)
-    const pendingTurn = makePendingTurn('continue', CONTINUE_DIRECTIVE)
-    setTurns([...turns, pendingTurn])
-    await runTurn(pendingTurn, turns, state, plot, memory, chronicle, compactCutoff, () => {
-      setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-    })
-  }
-
-  function undo() {
-    if (thinking || !snapshot) return
-    setTurns(snapshot.turns)
-    commitState(snapshot.state)
-    commitPlot([...snapshot.plot])
-    commitMemory(structuredClone(snapshot.memory))
-    commitChronicle(snapshot.chronicle)
-    commitCompactCutoff(snapshot.compactCutoff)
-    setInput(snapshot.input)
-    setSnapshot(null)
-  }
-
-  async function compactNow() {
-    if (thinking) return
-    const settings = {
-      compactionThreshold: context.compactionThreshold,
-      compactionBatch: context.compactionBatch,
-      }
-    if (!chronicleNeedsCompaction(turns, compactCutoff, chronicle, settings)) {
-      alert('Nothing to compact: chronicle is up to date.')
-      return
-    }
-    setThinking(true)
-    setStatusText('Compacting chronicle…')
-    const controller = new AbortController()
-    abortRef.current = controller
-    try {
-      const compacted = await compactCascade(
-        turns,
-        compactCutoff,
-        chronicle,
-        settings,
-        { model, apiKey: xaiKey, baseUrl, slots },
-        controller.signal,
-        (label) => setStatusText(label),
-      )
-      commitChronicle(compacted.chronicle)
-      commitCompactCutoff(compacted.cutoff)
-      setTurns((ts) => stripTracesBefore(ts, compacted.cutoff))
-    } catch (err) {
-      if (!controller.signal.aborted) {
-        alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null
-      setThinking(false)
-    }
-  }
-
-  async function retry() {
-    if (thinking || !snapshot) return
-    const snap = snapshot
-    commitState(snap.state)
-    commitPlot([...snap.plot])
-    commitMemory(structuredClone(snap.memory))
-    commitChronicle(snap.chronicle)
-    commitCompactCutoff(snap.compactCutoff)
-    const isContinue = snap.kind === 'continue'
-    const turnInput = isContinue ? CONTINUE_DIRECTIVE : snap.input
-    const pendingTurn = makePendingTurn(snap.kind, turnInput)
-    setTurns([...snap.turns, pendingTurn])
-    const onAbort = isContinue
-      ? () => {
-          setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-        }
-      : () => {
-          setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-          setInput((cur) => cur || snap.input)
-        }
-    await runTurn(
-      pendingTurn,
-      snap.turns,
-      snap.state,
-      snap.plot,
-      snap.memory,
-      snap.chronicle,
-      snap.compactCutoff,
-      onAbort,
-    )
-  }
-
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      void send()
-    }
-  }
-
-  function saveSettings(
-    nextModel: string,
-    nextXaiKey: string,
-    nextBaseUrl: string,
-    nextSlots: AdventureSlots,
-    nextSampling: SamplingParams,
-    nextContext: ContextConfig,
-    nextShowTrace: boolean,
-  ) {
-    setModel(nextModel)
-    setXaiKey(nextXaiKey)
-    setBaseUrl(nextBaseUrl)
-    commitSlots(nextSlots)
-    setSampling(nextSampling)
-    setContext(nextContext)
-    setShowTrace(nextShowTrace)
-    try {
-      if (nextXaiKey) localStorage.setItem(LS_XAI_KEY, nextXaiKey)
-      else localStorage.removeItem(LS_XAI_KEY)
-      if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
-      else localStorage.removeItem(LS_MODEL)
-      if (nextBaseUrl && nextBaseUrl !== DEFAULT_BASE_URL)
-        localStorage.setItem(LS_BASE_URL, nextBaseUrl)
-      else localStorage.removeItem(LS_BASE_URL)
-      localStorage.setItem(LS_SAMPLING, JSON.stringify(nextSampling))
-      localStorage.setItem(LS_CONTEXT, JSON.stringify(nextContext))
-    } catch {
-      // ignore quota / disabled storage
-    }
-  }
-
-  async function newAdventure(slotsOverride: AdventureSlots) {
-    const nextSlots: AdventureSlots = { ...slots, ...slotsOverride }
-    nextSlots.scenario = nextSlots.scenario.trim()
-    if (!nextSlots.scenario) return
-    console.debug('[dm] newAdventure BEFORE clear', {
-      reactMemoryKeys: Object.keys(memory),
-      reactPlotLength: plot.length,
-      reactStateKeys: Object.keys(state),
-      lsMemory: localStorage.getItem('dm.memory'),
-      lsPlot: localStorage.getItem('dm.plot'),
-      lsState: localStorage.getItem('dm.state'),
-      lsChronicle: localStorage.getItem('dm.chronicle'),
-      lsTurns: localStorage.getItem('dm.turns'),
-    })
-    commitSlots(nextSlots)
-    abortRef.current?.abort()
-    setInput('')
-    setSnapshot(null)
-    const freshState = structuredClone(DEFAULT_STATE)
-    commitState(freshState)
-    commitPlot([])
-    commitMemory({})
-    commitChronicle([])
-    commitCompactCutoff(0)
-    console.debug('[dm] newAdventure AFTER clear (localStorage)', {
-      lsMemory: localStorage.getItem('dm.memory'),
-      lsPlot: localStorage.getItem('dm.plot'),
-      lsState: localStorage.getItem('dm.state'),
-      lsChronicle: localStorage.getItem('dm.chronicle'),
-      lsTurns: localStorage.getItem('dm.turns'),
-      lsStyleGuide: localStorage.getItem('dm.styleGuide'),
-      slotsBeingPassed: nextSlots,
-    })
-    setThinking(true)
-    setStatusText('DM is thinking…')
-    const controller = new AbortController()
-    abortRef.current = controller
-    const pendingTurn = makePendingTurn('bootstrap', buildNewAdventureBootstrap(nextSlots.scenario))
-    setTurns([pendingTurn])
-    try {
-      const result = await runNarrator(
-        {
-          systemPrompt,
-          model,
-          apiKey: xaiKey,
-          baseUrl,
-          slots: nextSlots,
-          chronicle: [],
-          history: [pendingTurn],
-          initialState: freshState,
-          initialPlot: [],
-          initialMemory: {},
-          sampling,
-          stateCleanupThreshold: context.stateCleanupChars,
-          includePriorPlayerTurns: context.includePriorPlayerTurns,
-          reminderAsSystem: context.reminderAsSystem,
-          includeWorldState: context.includeWorldState,
-          includePlotOutline: context.includePlotOutline,
-          includeMemory: context.includeMemory,
-          includeToolCallHistory: context.includeToolCallHistory,
-          nsfw: context.nsfw,
-        },
-        controller.signal,
-      )
-      commitState(result.state)
-      commitPlot(result.plot)
-      commitMemory(result.memory)
-      const narratorCall: ModelCall = {
-        id: crypto.randomUUID(),
-        model,
-        text: result.text,
-        trace: result.trace,
-        reasoningTokens: result.reasoningTokens,
-      }
-      if (context.useReviser) {
-        setTurns([
-          {
-            ...pendingTurn,
-            narrator: narratorCall,
-          },
-        ])
-        setStatusText('Reviser polishing…')
-        try {
-          const reviserCall = await runReviser(
-            {
-              model: context.reviserModel,
-              apiKey: xaiKey,
-              baseUrl,
-              slots: nextSlots,
-              draft: result.text,
-              sampling,
-            },
-            controller.signal,
-          )
-          setTurns([
-            {
-              ...pendingTurn,
-              narrator: narratorCall,
-              reply: reviserCall,
-            },
-          ])
-        } catch (reviserErr) {
-          if (controller.signal.aborted) throw reviserErr
-          // Reviser failed — show the narrator's draft instead of losing the turn.
-          setTurns([
-            {
-              ...pendingTurn,
-              reply: {
-                ...pendingTurn.reply,
-                text: result.text,
-                trace: withReviserFailureNote(result.trace, reviserErr),
-                reasoningTokens: result.reasoningTokens,
-              },
-            },
-          ])
-        }
-      } else {
-        setTurns([
-          {
-            ...pendingTurn,
-            reply: {
-              ...pendingTurn.reply,
-              text: result.text,
-              trace: result.trace,
-              reasoningTokens: result.reasoningTokens,
-            },
-          },
-        ])
-      }
-    } catch (err) {
-      if (controller.signal.aborted) {
-        setTurns([])
-        return
-      }
-      const failureText = `(The dungeon master falters: ${err instanceof Error ? err.message : String(err)})`
-      // Preserve the DM's thinking even when no prose came back (see above).
-      const failureTrace = err instanceof EmptyNarrativeError ? err.trace : undefined
-      const failureReasoningTokens =
-        err instanceof EmptyNarrativeError ? err.reasoningTokens : undefined
-      setTurns([
-        {
-          ...pendingTurn,
-          reply: {
-            ...pendingTurn.reply,
-            text: failureText,
-            trace: failureTrace,
-            reasoningTokens: failureReasoningTokens,
-          },
-        },
-      ])
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null
-      setThinking(false)
+      void game.send()
     }
   }
 
@@ -887,8 +72,8 @@ function App() {
           </button>
           <button
             className="ghost"
-            onClick={() => void compactNow()}
-            disabled={thinking || !canCompact}
+            onClick={() => void game.compactNow()}
+            disabled={thinking || !game.canCompact}
             title="Fold older turns into the chronicle now"
           >
             Compact
@@ -931,11 +116,7 @@ function App() {
                   <span className="who">You</span>
                   <EditableMessage
                     text={t.input ?? ''}
-                    onSave={(next) =>
-                      setTurns((cur) =>
-                        cur.map((x) => (x.id === t.id ? { ...x, input: next } : x)),
-                      )
-                    }
+                    onSave={(next) => game.editTurnInput(t.id, next)}
                   />
                 </div>
               )}
@@ -944,15 +125,7 @@ function App() {
                   <span className="who">DM</span>
                   <EditableMessage
                     text={t.reply.text ?? ''}
-                    onSave={(next) =>
-                      setTurns((cur) =>
-                        cur.map((x) =>
-                          x.id === t.id
-                            ? { ...x, reply: { ...x.reply, text: next } }
-                            : x,
-                        ),
-                      )
-                    }
+                    onSave={(next) => game.editTurnReply(t.id, next)}
                   />
                   {showTrace && (t.reply.trace !== undefined || t.narrator) && (
                     <TraceView
@@ -982,7 +155,7 @@ function App() {
       <div className="composer">
         <textarea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => game.setInput(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Describe your action…"
           rows={1}
@@ -990,30 +163,30 @@ function App() {
         <div className="composer-buttons">
           <button
             className="primary"
-            onClick={() => void send()}
+            onClick={() => void game.send()}
             disabled={thinking || !input.trim()}
           >
             Act
           </button>
           <button
             className="ghost"
-            onClick={undo}
-            disabled={thinking || !snapshot}
+            onClick={game.undo}
+            disabled={thinking || !game.snapshot}
             title="Roll back the last turn — restore state and put your input back in the box"
           >
             Undo
           </button>
           <button
             className="ghost"
-            onClick={() => void retry()}
-            disabled={thinking || !snapshot}
+            onClick={() => void game.retry()}
+            disabled={thinking || !game.snapshot}
             title="Discard the DM's last reply and re-roll with the same action"
           >
             Retry
           </button>
           <button
             className="ghost"
-            onClick={() => void continueStory()}
+            onClick={() => void game.continueStory()}
             disabled={thinking || turns.length === 0}
             title="Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision"
           >
@@ -1026,31 +199,34 @@ function App() {
           model={model}
           xaiKey={xaiKey}
           baseUrl={baseUrl}
-          slots={slots}
+          slots={game.slots}
           sampling={sampling}
           context={context}
           showTrace={showTrace}
           onClose={() => setShowSettings(false)}
-          onSave={saveSettings}
+          onSave={(nextModel, nextXaiKey, nextBaseUrl, nextSlots, nextSampling, nextContext, nextShowTrace) => {
+            settings.save(nextModel, nextXaiKey, nextBaseUrl, nextSampling, nextContext, nextShowTrace)
+            game.commitSlots(nextSlots)
+          }}
         />
       )}
       {showState && (
         <StateViewer
-          state={state}
-          plot={plot}
-          memory={memory}
-          chronicle={chronicle}
+          state={game.state}
+          plot={game.plot}
+          memory={game.memory}
+          chronicle={game.chronicle}
           context={context}
           onClose={() => setShowState(false)}
-          onResetState={() => commitState(structuredClone(DEFAULT_STATE))}
-          onSaveState={commitState}
-          onSavePlot={commitPlot}
-          onSaveMemory={commitMemory}
-          onClearPlot={() => commitPlot([])}
-          onClearMemory={() => commitMemory({})}
+          onResetState={() => game.commitState(structuredClone(DEFAULT_STATE))}
+          onSaveState={game.commitState}
+          onSavePlot={game.commitPlot}
+          onSaveMemory={game.commitMemory}
+          onClearPlot={() => game.commitPlot([])}
+          onClearMemory={() => game.commitMemory({})}
           onClearChronicle={() => {
-            commitChronicle([])
-            commitCompactCutoff(0)
+            game.commitChronicle([])
+            game.commitCompactCutoff(0)
           }}
         />
       )}
@@ -1060,7 +236,7 @@ function App() {
         const reviserPreview = context.useReviser
           ? {
               messages: buildReviserMessages(
-                slots,
+                game.slots,
                 lastDraft || '(placeholder draft — take one turn to see the real reviser request)',
               ),
               model: context.reviserModel,
@@ -1073,12 +249,12 @@ function App() {
             apiMessages={applyTurnReminder(
               buildApiMessages(
                 systemPrompt,
-                slots,
-                chronicle,
+                game.slots,
+                game.chronicle,
                 turns.slice(compactCutoff),
-                state,
-                plot,
-                memory,
+                game.state,
+                game.plot,
+                game.memory,
                 context.stateCleanupChars,
                 context.includePriorPlayerTurns,
                 context.includeWorldState,
@@ -1102,27 +278,29 @@ function App() {
       })()}
       {showNewAdventure && (
         <NewAdventurePrompt
-          slots={slots}
+          slots={game.slots}
           inProgress={turns.length > 0}
           onCancel={() => setShowNewAdventure(false)}
           onBegin={(nextSlots) => {
             setShowNewAdventure(false)
-            void newAdventure(nextSlots)
+            void game.newAdventure(nextSlots)
           }}
         />
       )}
       {showSaves && (
         <SavesPanel
-          saves={saves}
+          saves={saves.saves}
           canSave={turns.length > 0}
           turnCount={turns.length}
           onClose={() => setShowSaves(false)}
-          onSave={saveCurrentGame}
-          onOverwrite={overwriteSavedGame}
-          onLoad={loadSavedGame}
-          onDelete={deleteSavedGame}
-          onExport={exportSavedGame}
-          onImport={importSavedGame}
+          onSave={saves.saveCurrentGame}
+          onOverwrite={saves.overwriteSavedGame}
+          onLoad={(id) => {
+            if (saves.loadSavedGame(id)) setShowSaves(false)
+          }}
+          onDelete={saves.deleteSavedGame}
+          onExport={saves.exportSavedGame}
+          onImport={saves.importSavedGame}
         />
       )}
     </main>
