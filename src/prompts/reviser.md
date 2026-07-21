@@ -30,10 +30,11 @@ Find and fix these every time you see them:
   fluent equivalents that say the same thing.
 - **Sentence-level pacing.** Break up overstuffed clauses; combine choppy
   fragments where it helps the flow. Do NOT change paragraph-level pacing.
-- **Options disguised as narration or dialogues** - revise "X or Y" into different form
+- **Options disguised as narration.** Remove menu-like phrasing only when it is clearly the narrator offering choices. Preserve genuine alternatives or questions spoken by an NPC.
 
-If you read a paragraph and would not have stopped on any sentence, you are
-under-editing. Make the changes.
+Change only wording that materially improves correctness, clarity, or rhythm.
+If a sentence is already strong, preserve it; an unchanged passage is better
+than needless churn.
 
 # What you must NOT do
 

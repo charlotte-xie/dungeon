@@ -1,33 +1,44 @@
-You are responsible for creating a concise synthesis of several turns in an ongoing roleplaying game story. Given inputs (raw turn transcripts OR existing chronicle entries being folded into a higher-level summary), produce ONE condensed entry.
+You create a compact continuity record from several turns in an ongoing roleplaying game. The inputs may be raw turn transcripts or older continuity records being compressed again. Produce one condensed entry containing only consequential information established by those inputs.
 
-You are not narrating, not retelling, not entertaining.
+You are recording causal changes, not narrating, retelling, or entertaining.
 
 # What to keep
 
-- **Key events**: important things that happen to the player
-- **Decisions and commitments**: significant decisions by the player. What an NPC committed to or revealed about their goals.
-- **Important story points**: enough information that a reader can understand what happened
-- **Emotional impact**: things that are meaningful to the player character
+- Significant player decisions and commitments.
+- Irreversible outcomes and changes to the current situation.
+- Unresolved discoveries, threats, mysteries, debts, promises, and objectives that can affect later choices.
+- Changes in an NPC's intentions, knowledge, allegiance, or relationship with the player.
+- Important resources, injuries, objects, access, or leverage gained or lost.
+- The minimum causal link needed to explain why the resulting situation exists.
 
-Drop minor details that are not important to the story.
+# What to omit
+
+- Atmosphere, scenery, weather, clothing, incidental gestures, and sensory description.
+- Action choreography, travel between known places, exact dialogue, and intermediate steps once their outcome is known.
+- Transient reactions, repeated facts, introductions already established elsewhere, and resolved minor obstacles.
+- Details whose removal would not affect a later decision, consequence, mystery, relationship, objective, or continuity check.
+
+Do not import facts from grounding context that the inputs do not establish or change. Never preserve a detail merely because it is vivid, named, or occupies many words in the source.
+
+If the inputs contain little consequential change, one sentence is sufficient. Do not manufacture importance or add detail to fill the available budget.
 
 # Style — complete grammatical English, NO EXCEPTIONS
 
 Past tense, second person. Every sentence is complete: subject, verb, all required articles, auxiliaries, prepositions, conjunctions, and pronouns in place.
 
-The entry is SHORT by OMITTING UNIMPORTANT DETAILS, not by stripping grammar. You should be writing full, proper English sentences.
+The entry is short by omitting unimportant details, not by stripping grammar. Write full, proper English sentences.
 
-The output reads as continuous prose a human chronicler could have written. A reader who knows nothing about the "extraction" task should be able to read it as a normal (if dense) paragraph of story recap.
+The output reads as dense continuity notes in paragraph form, not as a scene recap.
 
 RIGHT (complete sentences, dense but well-formed):
 
-  You went to the town of Goodering where you met Jack and won a bag of gold in a poker match. You celebrated with Jack afterwards in a dingy tavern where he expressed his love.
+  You won a bag of gold from Jack in Goodering. Afterwards, Jack confessed that he loved you.
 
 Keep named entities in plain form ("Jack", "the Vault", "the iron seal"). Do NOT echo the source's register, conversational style, or markup ("PLAYER:", "DM:", "ENTRY 1", direct dialogue quotes). Inputs are RAW MATERIAL TO DIGEST, not a style sample.
 
 # Length
 
-Target ~{{targetChars}} characters. HARD MAXIMUM: {{maxChars}}. If it doesn't fit, prune more aggressively.
+Use at most {{targetChars}} characters where possible. This is a ceiling, not a target. HARD MAXIMUM: {{maxChars}}. Prefer a substantially shorter entry when the inputs contain little lasting change.
 
 # Output
 

@@ -4,7 +4,7 @@ import { DEFAULT_SYSTEM_PROMPT } from './prompts'
 import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
-import { applyTurnReminder, buildApiMessages } from './engine/request'
+import { applyTurnReminder, buildModelMessages } from './engine/request'
 import { FUTURE_PLOT_PLAN_TOOL, UPDATE_MEMORY_TOOL, UPDATE_STATE_TOOL } from './engine/tools'
 import { useGameController } from './hooks/useGameController'
 import { useSaves } from './hooks/useSaves'
@@ -20,8 +20,8 @@ import { TraceView } from './ui/TraceView'
 function App() {
   const systemPrompt = DEFAULT_SYSTEM_PROMPT
   const settings = useSettings()
-  const { model, xaiKey, baseUrl, sampling, context, showTrace } = settings
-  const game = useGameController({ systemPrompt, model, xaiKey, baseUrl, sampling, context })
+  const { model, apiKey, baseUrl, sampling, context, showTrace } = settings
+  const game = useGameController({ systemPrompt, model, apiKey, baseUrl, sampling, context })
   const saves = useSaves({
     captureGame: game.captureGame,
     restoreGame: game.restoreGame,
@@ -65,8 +65,9 @@ function App() {
           <button
             className="ghost"
             onClick={() => setShowNewAdventure(true)}
-            disabled={thinking}
-            title="Start a new adventure — confirm or edit the scenario brief"
+            title={thinking
+              ? 'Start a new adventure and cancel the current generation'
+              : 'Start a new adventure — confirm or edit the scenario brief'}
           >
             New Adventure
           </button>
@@ -170,8 +171,16 @@ function App() {
           </button>
           <button
             className="ghost"
+            onClick={game.cancelOperation}
+            disabled={!thinking}
+            title="Cancel the active model request and restore the pending input"
+          >
+            Cancel
+          </button>
+          <button
+            className="ghost"
             onClick={game.undo}
-            disabled={thinking || !game.snapshot}
+            disabled={thinking || !game.canUndo}
             title="Roll back the last turn — restore state and put your input back in the box"
           >
             Undo
@@ -179,7 +188,7 @@ function App() {
           <button
             className="ghost"
             onClick={() => void game.retry()}
-            disabled={thinking || !game.snapshot}
+            disabled={thinking || !game.canRetry}
             title="Discard the DM's last reply and re-roll with the same action"
           >
             Retry
@@ -197,15 +206,15 @@ function App() {
       {showSettings && (
         <SettingsPanel
           model={model}
-          xaiKey={xaiKey}
+          apiKey={apiKey}
           baseUrl={baseUrl}
           slots={game.slots}
           sampling={sampling}
           context={context}
           showTrace={showTrace}
           onClose={() => setShowSettings(false)}
-          onSave={(nextModel, nextXaiKey, nextBaseUrl, nextSlots, nextSampling, nextContext, nextShowTrace) => {
-            settings.save(nextModel, nextXaiKey, nextBaseUrl, nextSampling, nextContext, nextShowTrace)
+          onSave={(nextModel, nextApiKey, nextBaseUrl, nextSlots, nextSampling, nextContext, nextShowTrace) => {
+            settings.save(nextModel, nextApiKey, nextBaseUrl, nextSampling, nextContext, nextShowTrace)
             game.commitSlots(nextSlots)
           }}
         />
@@ -217,6 +226,7 @@ function App() {
           memory={game.memory}
           chronicle={game.chronicle}
           context={context}
+          busy={thinking}
           onClose={() => setShowState(false)}
           onResetState={() => game.commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={game.commitState}
@@ -246,8 +256,8 @@ function App() {
           : undefined
         return (
           <ContextViewer
-            apiMessages={applyTurnReminder(
-              buildApiMessages(
+            messages={applyTurnReminder(
+              buildModelMessages(
                 systemPrompt,
                 game.slots,
                 game.chronicle,
@@ -264,6 +274,11 @@ function App() {
                 context.nsfw,
               ),
               context.reminderAsSystem,
+              {
+                worldState: context.includeWorldState,
+                plotOutline: context.includePlotOutline,
+                memory: context.includeMemory,
+              },
             )}
             tools={[
               ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
@@ -290,7 +305,8 @@ function App() {
       {showSaves && (
         <SavesPanel
           saves={saves.saves}
-          canSave={turns.length > 0}
+          canSave={!thinking && turns.some((turn) => !!turn.reply.text)}
+          busy={thinking}
           turnCount={turns.length}
           onClose={() => setShowSaves(false)}
           onSave={saves.saveCurrentGame}

@@ -1,21 +1,24 @@
 // Summarizer agent. Single-purpose: given a list of input texts (raw turns
 // rendered as PLAYER:/DM: lines, OR existing chronicle entries being promoted
-// to a higher level), produce one polished prose summary of approximately the
-// requested length.
+// to a higher level), produce one compact continuity record within the
+// requested length budget.
 //
 // The chronicle module decides what to summarize and at what target length;
 // the agent just renders the inputs and calls the model.
 
 import { buildSummarizerPrompt } from '../../prompts'
-import { ADVENTURE_SLOTS } from '../config'
-import { xaiChat } from '../xai'
-import type { AdventureSlots, ApiMessage } from '../types'
+import { completeModel } from '../model/client'
+import type { ModelMessage } from '../model/types'
+import type { Memory } from '../types'
 
 export interface SummarizerInput {
   model: string
   apiKey: string
   baseUrl: string
-  slots: AdventureSlots
+  // Long-term memory at the time of the fold, passed as grounding canon so
+  // summaries keep entity names and established facts consistent across folds
+  // (without it, adjacent entries can drift — "the priest" vs. his name).
+  memory: Memory
   // The texts to compress into one summary. For level-0 folds these are raw
   // turn renderings ("PLAYER: ...\n\nDM: ..."); for level promotions these
   // are existing chronicle entry texts.
@@ -29,57 +32,73 @@ export interface SummarizerResult {
   summary: string
 }
 
+function normalizeWords(text: string): string {
+  return text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+}
+
+// Memory is useful for canonical entity names, but sending the entire store
+// distracts the summarizer and can leak unrelated facts into the chronicle.
+// Keep only entries whose slug or leading identity phrase is mentioned in the
+// material being summarized.
+export function relevantMemoryForInputs(memory: Memory, inputs: string[]): Memory {
+  const source = ` ${normalizeWords(inputs.join('\n'))} `
+  const relevant: Memory = {}
+  for (const [slug, description] of Object.entries(memory)) {
+    const slugPhrase = normalizeWords(slug.replace(/[_-]+/g, ' '))
+    const slugMentioned = slugPhrase !== 'player' && source.includes(` ${slugPhrase} `)
+    const identity = description.split(/[;.!?]/, 1)[0] ?? ''
+    const names = identity.match(/\b[A-Z][\p{L}'’-]{2,}\b/gu) ?? []
+    const nameMentioned = names
+      .filter((name) => !['The', 'This', 'That'].includes(name))
+      .some((name) => source.includes(` ${normalizeWords(name)} `))
+    if (slugMentioned || nameMentioned) relevant[slug] = description
+  }
+  return relevant
+}
+
 export async function runSummarizer(
   input: SummarizerInput,
   signal: AbortSignal,
 ): Promise<SummarizerResult> {
-  const slotsBlock = ADVENTURE_SLOTS.map((def) => {
-    const v = (input.slots[def.key] ?? '').trim()
-    return v ? `${def.label}:\n\n${v}` : ''
-  })
-    .filter(Boolean)
-    .join('\n\n')
-
   const joined = input.inputs
     .map((text, i) => `--- ENTRY ${i + 1} ---\n\n${text}`)
     .join('\n\n')
 
+  const relevantMemory = relevantMemoryForInputs(input.memory, input.inputs)
+  const canonBlock = Object.keys(relevantMemory).length
+    ? `--- CANON (long-term memory — grounding only) ---\n\n` +
+      `Use this only to preserve the spelling and identity of entities already mentioned ` +
+      `in the inputs. Do NOT summarize this block or import any fact that the inputs ` +
+      `themselves do not establish or change.\n\n` +
+      `\`\`\`json\n${JSON.stringify(relevantMemory, null, 2)}\n\`\`\`\n\n`
+    : ''
+
   const userContent =
-    `${slotsBlock}\n\n` +
+    canonBlock +
     `--- BEGIN INPUTS (${input.inputs.length} ${input.inputs.length === 1 ? 'entry' : 'entries'} to fold into one summary) ---\n\n` +
     `${joined}\n\n` +
     `--- END INPUTS ---\n\n` +
-    `Produce a single unified retelling that covers everything in the inputs above. ` +
-    `Use polished prose, complete sentences, decreasing resolution as material recedes ` +
+    `Produce one compact continuity record containing only consequential changes established ` +
+    `by the inputs above. Use complete sentences and decrease resolution as material recedes ` +
     `into the past. The inputs are RAW MATERIAL — do not echo their formatting, headers, ` +
-    `or any "ENTRY N" / "PLAYER:" / "DM:" markers. Output the retelling text only — no ` +
+    `or any "ENTRY N" / "PLAYER:" / "DM:" markers. Output the continuity text only — no ` +
     `preamble, headers, bullet markers, or meta commentary.`
 
-  const apiMessages: ApiMessage[] = [
+  const messages: ModelMessage[] = [
     { role: 'system', content: buildSummarizerPrompt(input.targetChars) },
     { role: 'user', content: userContent },
   ]
 
-  const res = await xaiChat(
+  const completion = await completeModel(
     {
       model: input.model,
-      messages: apiMessages,
-      stream: false,
+      messages,
+      label: 'summarizer',
     },
-    input.apiKey,
+    { baseUrl: input.baseUrl, apiKey: input.apiKey },
     signal,
-    input.baseUrl,
   )
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`summarizer ${res.status}: ${body.slice(0, 200) || res.statusText}`)
-  }
-
-  const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[]
-  }
-  const content = data.choices?.[0]?.message?.content?.trim()
-  if (!content) throw new Error('Summarizer returned empty retelling')
+  const content = completion.text
+  if (!content) throw new Error('Summarizer returned an empty continuity record')
   return { summary: content }
 }

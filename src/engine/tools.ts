@@ -1,9 +1,10 @@
-// Tool schemas advertised to the model + executor for tool calls + a fallback
-// parser for inline <function_call> XML the model sometimes emits as prose.
+// Provider-neutral tool schemas plus the game-state executor. Wire-format
+// conversion and text-protocol recovery live under ./model.
 
 import { buildMemoryRules, buildPlotRules } from '../prompts'
-import { deleteByPath, getByPath, setByPath } from './state'
-import type { InlineToolCall, JsonValue, Memory, WorldState } from './types'
+import type { ModelToolDefinition } from './model/types'
+import { deleteByPath, getByPath, isSafeStatePath, setByPath } from './state'
+import type { JsonValue, Memory, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
 export const MAX_PLOT_ITEM_CHARS = 300
@@ -14,19 +15,10 @@ export const PLOT_RULES = buildPlotRules(MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS)
 
 export const MEMORY_RULES = buildMemoryRules(MAX_MEMORY_STRING_CHARS)
 
-export const UPDATE_STATE_TOOL = {
-  type: 'function',
-  function: {
+export const UPDATE_STATE_TOOL: ModelToolDefinition = {
     name: 'update_state',
     description:
-      `Rewrite the world state JSON for the next turn. The previous state is FIRST cleared in full; then the paths you list in \`keep\` are restored from the previous state (carrying forward their existing values); then your \`set\` map is applied on top, creating or overwriting paths. There is NO separate delete — omission is deletion. (As a convenience, a path whose value in \`set\` is \`null\` is treated as omission: that path is dropped from the next turn, even if it appears in \`keep\`. State never stores null.) ` +
-      `EVERY TURN you must pass BOTH parameters together. \`keep\` is a whitelist of dotted paths from the CURRENT state that should survive into the next turn unchanged; anything not in \`keep\` is gone unless you also re-set it via \`set\`. \`set\` carries new or updated values on top of the kept paths. ` +
-      `Use this each turn to (a) carry forward facts whose value is unchanged (cheap — just list the path in \`keep\`), (b) update facts whose value has changed (put the new value in \`set\`), and (c) drop facts that no longer apply (simply omit them from both lists). ` +
-      `STRING VALUES in \`set\` must be complete English phrases or short clauses with all articles, prepositions, and verbs in place — NOT telegraphic fragments, NOT single keywords, NOT label-shorthand. ` +
-      `RIGHT: "standing at the edge of the dock", "wary of the player and unwilling to speak openly", "a heavy iron seal in his coat pocket". ` +
-      `Compactness comes from picking the right level of detail and splitting long facts across multiple keys, not from dropping grammar. ` +
-      `Example call (the priest's study scene continues; the player just sat down and drew a knife; the earlier "weather" key from the street scene no longer applies): {keep:["scene.location","scene.mood","npcs.priest.posture"], set:{"player.position":"seated in the high-backed chair across from the priest","player.holding":"a slim boot-knife, blade flat against the thigh"}}. The previous state's \`scene.weather\` and any old \`player.*\` values are dropped because they aren't in \`keep\` and aren't reset. ` +
-      `Calling with empty \`keep\` and empty \`set\` clears all state (between-scenes reset).`,
+      `Replace the current-scene consistency state, but only when that state materially changed. Always pass both \`keep\` and \`set\`. The previous state is cleared; paths in \`keep\` retain their current values; then dotted paths in \`set\` are added or overwritten. Anything omitted from both is deleted, and setting a path to null also deletes it. Use short, complete English phrases for string values. Empty \`keep\` and \`set\` clears the state.`,
     parameters: {
       type: 'object',
       properties: {
@@ -45,21 +37,11 @@ export const UPDATE_STATE_TOOL = {
       },
       required: ['keep', 'set'],
     },
-  },
 }
-
-export const FUTURE_PLOT_PLAN_TOOL = {
-  type: 'function',
-  function: {
+export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
     name: 'future_plot_plan',
     description:
-      `Edit the numbered FUTURE plot plan — your private notebook of the directions the story is heading in, not what has already happened. Keeping the plot interesting and engaging is YOUR responsibility; this tool is how you do it. Every entry must describe an upcoming pressure, revelation, NPC move, or unresolved hook. As soon as something is delivered to the player, DELETE that entry — past events do not belong here (the chronicle records them). Exactly one operation per call via \`op\`. Positions are 1-indexed and refer to the list as it appears in the system message. ` +
-      `OPERATIONS: ` +
-      `\`append\` adds a new future entry at the end (\`text\` required); ` +
-      `\`insert\` inserts a new future entry before \`position\`; ` +
-      `\`update\` rewrites the entry at \`position\` (use this when a direction has shifted but the thread is still ahead of the player); ` +
-      `\`delete\` removes the entry at \`position\` (use this the moment a planned beat becomes past). ` +
-      `LIMITS: at most ${MAX_PLOT_ITEMS} entries total; each entry's \`text\` must be <= ${MAX_PLOT_ITEM_CHARS} chars. Out-of-range positions, missing required fields, or oversize text reject the call and leave the list unchanged.`,
+      `Edit the private numbered plan of future pressures, revelations, NPC moves, and unresolved hooks. Call only when the plan materially changes. Use one operation per call: \`append\` or \`insert\` a genuine new direction, \`update\` a direction that shifted, or \`delete\` a beat once it has played out. Positions are 1-indexed. Maximum ${MAX_PLOT_ITEMS} entries and ${MAX_PLOT_ITEM_CHARS} characters per entry.`,
     parameters: {
       type: 'object',
       properties: {
@@ -81,20 +63,12 @@ export const FUTURE_PLOT_PLAN_TOOL = {
       },
       required: ['op'],
     },
-  },
 }
 
-export const UPDATE_MEMORY_TOOL = {
-  type: 'function',
-  function: {
+export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Update long-term memory — your canonical record of NPCs, locations, plot themes, and key past events that should persist across scenes. Provide \`set\` (a map of slug → string description), \`delete\` (an array of slugs to remove), or both. Deletes apply first, then sets — so a slug that appears in both ends up with the set value. ` +
-      `STRUCTURE: each key is a slug (lowercase, underscores, no periods or spaces) and each value is a single complete English description that captures everything important about that entity. Setting a slug REPLACES its description in full — write the whole updated description, not a delta. Example: \`{"lady_veyra":"spymaster of the Crimson Court; tall, silver-haired, soft-spoken; wants the courier ledger destroyed; openly hostile to the player after the dock confrontation; secretly the Duke's half-sister"}\`. ` +
-      `WHEN TO USE: use \`update_memory\` IN PREFERENCE TO \`update_state\` for anything that should be remembered beyond the current scene — recurring NPCs, named places, plot themes, secrets, important past events. Use \`update_state\` only for the live current scene (current location, what the player is doing right now, immediate sensory details). ` +
-      `WHEN TO DELETE: only when an entity is genuinely no longer relevant to the story (a one-off NPC who has fully left the narrative, a location that's been abandoned permanently, a plot theme that's been resolved and won't return). Do NOT delete on scene change — memory persists. ` +
-      `VALUES must be complete English prose — sentences or semicolon-joined clauses with all articles, prepositions, and verbs in place — NOT telegraphic fragments, NOT JSON, NOT bullet lists. ` +
-      `HARD LIMIT: each value must be <= ${MAX_MEMORY_STRING_CHARS} characters. An over-long value is rejected and the existing value is left unchanged. If an entity needs more than that, split it across two slugs (e.g. \`lady_veyra\` and \`lady_veyra_secret\`).`,
+      `Update canonical long-term facts that should persist across scenes: recurring NPCs, locations, threads, secrets, and consequential past events. Call only for a material change. \`set\` maps lowercase underscore slugs to complete replacement descriptions; \`delete\` removes entries that are genuinely no longer relevant. Deletes apply before sets. Do not store transient current-scene detail or future plans. Each description is limited to ${MAX_MEMORY_STRING_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {
@@ -111,7 +85,6 @@ export const UPDATE_MEMORY_TOOL = {
         },
       },
     },
-  },
 }
 
 export interface ToolExecResult {
@@ -158,6 +131,18 @@ export function executeTool(
       const rawSetEntries: [string, JsonValue][] = Object.entries(args.set).filter(
         (e): e is [string, JsonValue] => typeof e[0] === 'string' && e[0].length > 0,
       )
+      const unsafePaths = [
+        ...keepPaths.filter((path) => !isSafeStatePath(path)),
+        ...rawSetEntries.map(([path]) => path).filter((path) => !isSafeStatePath(path)),
+      ]
+      if (unsafePaths.length > 0) {
+        return {
+          state,
+          plot,
+          memory,
+          result: `error: unsafe state path${unsafePaths.length === 1 ? '' : 's'} rejected: ${unsafePaths.join(', ')}. Previous state unchanged.`,
+        }
+      }
       // null/undefined in `set` means delete: drop the path instead of writing
       // it. (JSON.parse never produces undefined, but we accept it defensively.)
       const setWrites: [string, JsonValue][] = []
@@ -413,17 +398,16 @@ export function executeTool(
   return { state, plot, memory, result: `error: unknown tool ${name}` }
 }
 
-const INLINE_TOOL_CALL_PATTERN =
-  /<function_call\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/function_call>/gi
-
-export function parseInlineToolCalls(content: string): { cleaned: string; calls: InlineToolCall[] } {
-  const calls: InlineToolCall[] = []
-  const cleaned = content
-    .replace(INLINE_TOOL_CALL_PATTERN, (_match, name: string, body: string) => {
-      calls.push({ name, arguments: body.trim() })
-      return ''
-    })
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-  return { cleaned, calls }
+export function executeEnabledTool(
+  enabledNames: ReadonlySet<string>,
+  name: string,
+  rawArgs: string,
+  state: WorldState,
+  plot: string[],
+  memory: Memory,
+): ToolExecResult {
+  if (!enabledNames.has(name)) {
+    return { state, plot, memory, result: `error: tool ${name} is disabled` }
+  }
+  return executeTool(name, rawArgs, state, plot, memory)
 }

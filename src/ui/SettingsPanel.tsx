@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ADVENTURE_SLOTS,
   DEFAULT_BASE_URL,
@@ -10,7 +10,7 @@ import {
   MODEL_OPTIONS,
   XAI_BASE_URL,
 } from '../engine/config'
-import { listModels } from '../engine/xai'
+import { listModels } from '../engine/model/client'
 import type {
   AdventureSlots,
   ContextConfig,
@@ -20,7 +20,7 @@ import type {
 
 interface SettingsPanelProps {
   model: string
-  xaiKey: string
+  apiKey: string
   baseUrl: string
   slots: AdventureSlots
   sampling: SamplingParams
@@ -29,7 +29,7 @@ interface SettingsPanelProps {
   onClose: () => void
   onSave: (
     model: string,
-    xaiKey: string,
+    apiKey: string,
     baseUrl: string,
     slots: AdventureSlots,
     sampling: SamplingParams,
@@ -40,7 +40,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   model,
-  xaiKey,
+  apiKey,
   baseUrl,
   slots,
   sampling,
@@ -50,7 +50,7 @@ export function SettingsPanel({
   onSave,
 }: SettingsPanelProps) {
   const [draftModel, setDraftModel] = useState(model)
-  const [draftXaiKey, setDraftXaiKey] = useState(xaiKey)
+  const [draftApiKey, setDraftApiKey] = useState(apiKey)
   const [draftBaseUrl, setDraftBaseUrl] = useState(baseUrl || DEFAULT_BASE_URL)
   const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
@@ -59,20 +59,48 @@ export function SettingsPanel({
   const [detectedModels, setDetectedModels] = useState<string[] | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
-  const isLocalEndpoint = !/(^|\/\/)[^/]*\bx\.ai\b/i.test(draftBaseUrl)
+  const detectControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(
+    () => () => {
+      detectControllerRef.current?.abort()
+      detectControllerRef.current = null
+    },
+    [],
+  )
+
+  function resetDetection() {
+    detectControllerRef.current?.abort()
+    detectControllerRef.current = null
+    setDetecting(false)
+    setDetectedModels(null)
+    setDetectError(null)
+  }
 
   async function detectModels() {
+    detectControllerRef.current?.abort()
+    const controller = new AbortController()
+    detectControllerRef.current = controller
     setDetecting(true)
     setDetectError(null)
     try {
-      const ids = await listModels(draftBaseUrl.trim() || DEFAULT_BASE_URL, draftXaiKey.trim())
+      const ids = await listModels(
+        draftBaseUrl.trim() || DEFAULT_BASE_URL,
+        draftApiKey.trim(),
+        controller.signal,
+      )
+      if (detectControllerRef.current !== controller) return
       setDetectedModels(ids)
       if (ids.length === 0) setDetectError('Endpoint reachable but reported no models.')
     } catch (err) {
+      if (controller.signal.aborted || detectControllerRef.current !== controller) return
       setDetectedModels(null)
       setDetectError(err instanceof Error ? err.message : String(err))
     } finally {
-      setDetecting(false)
+      if (detectControllerRef.current === controller) {
+        detectControllerRef.current = null
+        setDetecting(false)
+      }
     }
   }
 
@@ -96,7 +124,7 @@ export function SettingsPanel({
     for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
     onSave(
       draftModel.trim(),
-      draftXaiKey.trim(),
+      draftApiKey.trim(),
       draftBaseUrl.trim() || DEFAULT_BASE_URL,
       trimmed,
       draftSampling,
@@ -107,6 +135,7 @@ export function SettingsPanel({
   }
 
   function resetDefaults() {
+    resetDetection()
     setDraftModel(DEFAULT_MODEL)
     setDraftBaseUrl(DEFAULT_BASE_URL)
     setDraftSampling({ ...DEFAULT_SAMPLING })
@@ -128,7 +157,10 @@ export function SettingsPanel({
             <input
               type="text"
               value={draftBaseUrl}
-              onChange={(e) => setDraftBaseUrl(e.target.value)}
+              onChange={(e) => {
+                resetDetection()
+                setDraftBaseUrl(e.target.value)
+              }}
               placeholder={DEFAULT_BASE_URL}
               spellCheck={false}
               autoComplete="off"
@@ -136,7 +168,10 @@ export function SettingsPanel({
             <button
               type="button"
               className="ghost"
-              onClick={() => setDraftBaseUrl(XAI_BASE_URL)}
+              onClick={() => {
+                resetDetection()
+                setDraftBaseUrl(XAI_BASE_URL)
+              }}
               title="Use the default xAI API endpoint"
             >
               xAI
@@ -144,7 +179,10 @@ export function SettingsPanel({
             <button
               type="button"
               className="ghost"
-              onClick={() => setDraftBaseUrl(LMSTUDIO_BASE_URL)}
+              onClick={() => {
+                resetDetection()
+                setDraftBaseUrl(LMSTUDIO_BASE_URL)
+              }}
               title="Use LM Studio's default local server URL (port 1234)"
             >
               LM Studio
@@ -154,7 +192,7 @@ export function SettingsPanel({
               className="ghost"
               onClick={() => void detectModels()}
               disabled={detecting}
-              title="Query <baseUrl>/v1/models and populate the model pickers below with the exact identifiers the server reports."
+              title="Query <baseUrl>/models and populate the model pickers below with the exact identifiers the server reports."
             >
               {detecting ? 'Detecting…' : 'Detect models'}
             </button>
@@ -171,25 +209,22 @@ export function SettingsPanel({
             </p>
           )}
         </label>
-        <label
-          title={
-            isLocalEndpoint
-              ? 'Optional for local servers (LM Studio etc. ignore the Authorization header). Stored in this browser.'
-              : "Stored in this browser's localStorage and sent directly to api.x.ai on each turn. Get one at https://console.x.ai/"
-          }
-        >
-          <span>API key{isLocalEndpoint ? ' (optional for local)' : ''}</span>
+        <label title="Stored in this browser's localStorage and sent directly to the configured endpoint. Leave blank when the endpoint does not require authentication.">
+          <span>API key (optional if endpoint permits)</span>
           <input
             type="password"
-            value={draftXaiKey}
-            onChange={(e) => setDraftXaiKey(e.target.value)}
-            placeholder={isLocalEndpoint ? '(leave blank if local server takes no key)' : 'xai-…'}
+            value={draftApiKey}
+            onChange={(e) => {
+              resetDetection()
+              setDraftApiKey(e.target.value)
+            }}
+            placeholder="provider API key"
             spellCheck={false}
             autoComplete="off"
           />
         </label>
         <label
-          title={`Pick a preset on the left or type any model id on the right. Sent to /chat/completions. Default: ${DEFAULT_MODEL}. Click "Detect models" above to populate this list from your endpoint. Applies on the next turn — reasoning variants skip temperature/penalty.`}
+          title={`Pick a preset on the left or type any model id on the right. Sent to /chat/completions. Default: ${DEFAULT_MODEL}. Click "Detect models" above to populate this list from your endpoint. Applies on the next turn.`}
         >
           <span>Model</span>
           <div className="model-picker">
@@ -214,7 +249,7 @@ export function SettingsPanel({
           </div>
         </label>
         <label
-          title={`Model id used for the reviser pass (toggle in Experimental flags below). Should be a non-reasoning xAI model — the reviser does not benefit from chain-of-thought and reasoning models reject the temperature/penalty params. Default: ${DEFAULT_REVISER_MODEL}.`}
+          title={`Model id used for the optional reviser pass. A small, fast instruction-following model is usually sufficient. Default: ${DEFAULT_REVISER_MODEL}.`}
         >
           <span>Reviser model</span>
           <div className="model-picker">
@@ -255,7 +290,7 @@ export function SettingsPanel({
         <div className="sampling-grid">
           <label
             className="sampling-field"
-            title={`Higher = more varied prose and rhythm. Default ${DEFAULT_SAMPLING.temperature}. Ignored on reasoning models.`}
+            title={`Higher = more varied prose and rhythm. Default ${DEFAULT_SAMPLING.temperature}. If a model rejects this setting, the adapter retries without it and remembers that capability for the session.`}
           >
             <span>Temperature</span>
             <input

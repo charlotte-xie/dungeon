@@ -1,6 +1,6 @@
 # AI Dungeon Master
 
-A minimal React + Vite + TypeScript chat UI that turns Grok into a tabletop RPG narrator. You type an action, the DM narrates the world's response.
+A minimal React + Vite + TypeScript chat UI that turns an LLM into a tabletop RPG narrator. You type an action, the DM narrates the world's response.
 
 ## Setup
 
@@ -9,11 +9,13 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3003, click the gear icon, paste your xAI key into **Settings → xAI API key**, and start playing.
+Open http://localhost:3003, open **Settings**, then enter a model, API key, and base URL.
 
 ## How keys are handled
 
-The browser calls `https://api.x.ai/v1/chat/completions` directly with `Authorization: Bearer <your key>`. The key is stored in `localStorage` under `dm.xaiKey` and never leaves your machine. There is no backend — the app is fully static and works on GitHub Pages.
+The browser calls the configured OpenAI-compatible Chat Completions endpoint directly. The default is `https://api.x.ai/v1`, but the base URL can point at OpenAI or a local server that implements `/chat/completions` and `/models`. The key is stored in `localStorage` under `dm.xaiKey`; there is no backend.
+
+Because requests originate in the browser, a local or hosted endpoint must allow browser CORS requests. Never use a valuable unrestricted API key on a public/shared browser profile.
 
 Get a key at [console.x.ai](https://console.x.ai/).
 
@@ -21,9 +23,12 @@ Get a key at [console.x.ai](https://console.x.ai/).
 
 In **Settings**:
 
-- **xAI API key** — required.
-- **Model** — defaults to `grok-4`. Try `grok-4-fast`, `grok-4-fast-reasoning`, or `grok-code-fast`.
+- **API key** — required by hosted providers; local servers may accept a placeholder.
+- **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
+- **Model** — defaults to `grok-4`; choose a model exposed by the configured endpoint.
 - System prompt, scenario, style guide, sampling params, context limits.
+
+Provider transport and response repair are isolated under `src/engine/model`. Game orchestration consumes provider-neutral messages and tool calls. The normalizer handles native tool calls as well as common malformed text forms, while refusing calls for tools that were not advertised in the request.
 
 ## Deployment
 
@@ -32,6 +37,7 @@ Pushes to `master` deploy to GitHub Pages via `.github/workflows/deploy.yml`. Th
 ## Scripts
 
 - `pnpm dev` — dev server
+- `pnpm test` — internal Vitest unit tests
 - `pnpm build` — `tsc -b && vite build`
 - `pnpm lint` — ESLint
 - `pnpm preview` — preview the built bundle locally

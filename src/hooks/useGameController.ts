@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { buildNewAdventureBootstrap } from '../prompts'
 import { EmptyNarrativeError, runNarrator } from '../engine/agents/narrator'
 import { runReviser } from '../engine/agents/reviser'
 import {
   chronicleNeedsCompaction,
   compactCascade,
+  memoryForCompaction,
   stripTracesBefore,
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
+import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
+import { INITIAL_TURN_RECOVERY, turnRecoveryReducer } from '../engine/turnRecovery'
 import {
   LS_COMPACT_CUTOFF,
   LS_TURNS,
@@ -30,12 +33,13 @@ import {
   type ContextConfig,
   type Memory,
   type ModelCall,
+  type RetryAction,
   type SamplingParams,
   type SavedGame,
   type TraceEvent,
   type Turn,
   type TurnKind,
-  type TurnSnapshot,
+  type TurnCheckpoint,
   type WorldState,
 } from '../engine/types'
 
@@ -44,7 +48,7 @@ import {
 export interface GameSettings {
   systemPrompt: string
   model: string
-  xaiKey: string
+  apiKey: string
   baseUrl: string
   sampling: SamplingParams
   context: ContextConfig
@@ -69,10 +73,10 @@ function withReviserFailureNote(trace: TraceEvent[], err: unknown): TraceEvent[]
 }
 
 // The game controller: owns all adventure state (slots, world state, plot,
-// memory, chronicle, turns, snapshot) and the turn engine that mutates it.
+// memory, chronicle, turns, recovery state) and the turn engine that mutates it.
 // App.tsx is a pure view over what this returns.
 export function useGameController(settings: GameSettings) {
-  const { systemPrompt, model, xaiKey, baseUrl, sampling, context } = settings
+  const { systemPrompt, model, apiKey, baseUrl, sampling, context } = settings
 
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
@@ -85,8 +89,8 @@ export function useGameController(settings: GameSettings) {
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [statusText, setStatusText] = useState('DM is thinking…')
-  const [snapshot, setSnapshot] = useState<TurnSnapshot | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, INITIAL_TURN_RECOVERY)
+  const [operations] = useState(() => new OperationCoordinator())
 
   const canCompact = chronicleNeedsCompaction(turns, compactCutoff, chronicle, {
     compactionThreshold: context.compactionThreshold,
@@ -101,7 +105,37 @@ export function useGameController(settings: GameSettings) {
     }
   }, [turns])
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(
+    () => () => {
+      operations.supersede()
+    },
+    [operations],
+  )
+
+  function isCurrentOperation(operation: ActiveOperation): boolean {
+    return operations.isCurrent(operation)
+  }
+
+  function operationCanCommit(operation: ActiveOperation): boolean {
+    return operations.canCommit(operation)
+  }
+
+  function beginOperation(replaceExisting = false): ActiveOperation | null {
+    const operation = operations.start(replaceExisting)
+    if (!operation) return null
+    setThinking(true)
+    return operation
+  }
+
+  function supersedeCurrentOperation() {
+    operations.supersede()
+    setThinking(false)
+  }
+
+  function cancelOperation() {
+    if (!operations.cancel()) return
+    setStatusText('Cancelling…')
+  }
 
   function commitState(next: WorldState) {
     setState(next)
@@ -138,6 +172,25 @@ export function useGameController(settings: GameSettings) {
     }
   }
 
+  function checkpoint(): TurnCheckpoint {
+    return { turns, state, plot, memory, chronicle, compactCutoff }
+  }
+
+  function restoreCheckpoint(saved: TurnCheckpoint) {
+    setTurns(saved.turns)
+    commitState(saved.state)
+    commitPlot([...saved.plot])
+    commitMemory(structuredClone(saved.memory))
+    commitChronicle(saved.chronicle)
+    commitCompactCutoff(saved.compactCutoff)
+  }
+
+  function restoreAbortedAction(action: RetryAction) {
+    restoreCheckpoint(action.checkpoint)
+    setInput(action.restoreInput)
+    dispatchRecovery({ type: 'abort', action })
+  }
+
   function editTurnInput(id: string, next: string) {
     setTurns((cur) => cur.map((t) => (t.id === id ? { ...t, input: next } : t)))
   }
@@ -164,15 +217,19 @@ export function useGameController(settings: GameSettings) {
     // Slots to narrate with — defaults to current slots; newAdventure passes
     // the freshly-committed ones since React state hasn't re-rendered yet.
     slotsForTurn?: AdventureSlots
+    replaceExisting?: boolean
     onAbortRestore: () => void
   }) {
     const { pendingTurn, baseTurns, baseState, basePlot, baseMemory, baseChronicle, baseCutoff } =
       args
     const turnSlots = args.slotsForTurn ?? slots
-    setThinking(true)
+    const operation = beginOperation(args.replaceExisting)
+    if (!operation) {
+      args.onAbortRestore()
+      return
+    }
     setStatusText('DM is thinking…')
-    const controller = new AbortController()
-    abortRef.current = controller
+    const { controller } = operation
     try {
       const settings = {
         compactionThreshold: context.compactionThreshold,
@@ -189,10 +246,18 @@ export function useGameController(settings: GameSettings) {
           workingCutoff,
           workingChronicle,
           settings,
-          { model, apiKey: xaiKey, baseUrl, slots: turnSlots },
+          {
+            model,
+            apiKey,
+            baseUrl,
+            memory: memoryForCompaction(baseMemory, context.includeMemory),
+          },
           controller.signal,
-          (label) => setStatusText(label),
+          (label) => {
+            if (operationCanCommit(operation)) setStatusText(label)
+          },
         )
+        if (!operationCanCommit(operation)) return
         workingChronicle = compacted.chronicle
         workingCutoff = compacted.cutoff
         commitChronicle(workingChronicle)
@@ -205,7 +270,7 @@ export function useGameController(settings: GameSettings) {
         {
           systemPrompt,
           model,
-          apiKey: xaiKey,
+          apiKey,
           baseUrl,
           slots: turnSlots,
           chronicle: workingChronicle,
@@ -225,9 +290,7 @@ export function useGameController(settings: GameSettings) {
         },
         controller.signal,
       )
-      commitState(result.state)
-      commitPlot(result.plot)
-      commitMemory(result.memory)
+      if (!operationCanCommit(operation)) return
 
       const narratorCall: ModelCall = {
         id: crypto.randomUUID(),
@@ -252,7 +315,7 @@ export function useGameController(settings: GameSettings) {
           const reviserCall = await runReviser(
             {
               model: context.reviserModel,
-              apiKey: xaiKey,
+              apiKey,
               baseUrl,
               slots: turnSlots,
               draft: result.text,
@@ -260,6 +323,7 @@ export function useGameController(settings: GameSettings) {
             },
             controller.signal,
           )
+          if (!operationCanCommit(operation)) return
           setTurns((ts) =>
             ts.map((t) =>
               t.id === pendingTurn.id
@@ -305,9 +369,13 @@ export function useGameController(settings: GameSettings) {
           ),
         )
       }
+      if (!operationCanCommit(operation)) return
+      commitState(result.state)
+      commitPlot(result.plot)
+      commitMemory(result.memory)
     } catch (err) {
-      if (controller.signal.aborted) {
-        if (abortRef.current === controller) args.onAbortRestore()
+      if (controller.signal.aborted || !isCurrentOperation(operation)) {
+        if (isCurrentOperation(operation)) args.onAbortRestore()
         return
       }
       const failureText = `(The dungeon master falters: ${err instanceof Error ? err.message : String(err)})`
@@ -332,26 +400,24 @@ export function useGameController(settings: GameSettings) {
         ),
       )
     } finally {
-      if (abortRef.current === controller) abortRef.current = null
-      setThinking(false)
+      if (operations.finish(operation)) {
+        setThinking(false)
+      }
     }
   }
 
   async function send() {
     const text = input.trim()
-    if (!text || thinking) return
+    if (!text || operations.busy) return
     setInput('')
-    const snap: TurnSnapshot = {
-      turns,
-      state,
-      plot,
-      memory,
-      chronicle,
-      compactCutoff,
+    const action: RetryAction = {
+      checkpoint: checkpoint(),
       input: text,
+      restoreInput: text,
       kind: 'player',
+      slots,
     }
-    setSnapshot(snap)
+    dispatchRecovery({ type: 'start', action })
     const pendingTurn = makePendingTurn('player', text)
     setTurns([...turns, pendingTurn])
     await runTurn({
@@ -362,26 +428,20 @@ export function useGameController(settings: GameSettings) {
       baseMemory: memory,
       baseChronicle: chronicle,
       baseCutoff: compactCutoff,
-      onAbortRestore: () => {
-        setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-        setInput((cur) => cur || text)
-      },
+      onAbortRestore: () => restoreAbortedAction(action),
     })
   }
 
   async function continueStory() {
-    if (thinking || turns.length === 0) return
-    const snap: TurnSnapshot = {
-      turns,
-      state,
-      plot,
-      memory,
-      chronicle,
-      compactCutoff,
-      input: '',
+    if (operations.busy || turns.length === 0) return
+    const action: RetryAction = {
+      checkpoint: checkpoint(),
+      input: CONTINUE_DIRECTIVE,
+      restoreInput: '',
       kind: 'continue',
+      slots,
     }
-    setSnapshot(snap)
+    dispatchRecovery({ type: 'start', action })
     const pendingTurn = makePendingTurn('continue', CONTINUE_DIRECTIVE)
     setTurns([...turns, pendingTurn])
     await runTurn({
@@ -392,58 +452,42 @@ export function useGameController(settings: GameSettings) {
       baseMemory: memory,
       baseChronicle: chronicle,
       baseCutoff: compactCutoff,
-      onAbortRestore: () => {
-        setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-      },
+      onAbortRestore: () => restoreAbortedAction(action),
     })
   }
 
   function undo() {
-    if (thinking || !snapshot) return
-    setTurns(snapshot.turns)
-    commitState(snapshot.state)
-    commitPlot([...snapshot.plot])
-    commitMemory(structuredClone(snapshot.memory))
-    commitChronicle(snapshot.chronicle)
-    commitCompactCutoff(snapshot.compactCutoff)
-    setInput(snapshot.input)
-    setSnapshot(null)
+    if (operations.busy || !recovery.undo) return
+    restoreCheckpoint(recovery.undo.checkpoint)
+    setInput(recovery.undo.restoreInput)
+    dispatchRecovery({ type: 'undo' })
   }
 
   async function retry() {
-    if (thinking || !snapshot) return
-    const snap = snapshot
-    commitState(snap.state)
-    commitPlot([...snap.plot])
-    commitMemory(structuredClone(snap.memory))
-    commitChronicle(snap.chronicle)
-    commitCompactCutoff(snap.compactCutoff)
-    const isContinue = snap.kind === 'continue'
-    const turnInput = isContinue ? CONTINUE_DIRECTIVE : snap.input
-    const pendingTurn = makePendingTurn(snap.kind, turnInput)
-    setTurns([...snap.turns, pendingTurn])
-    const onAbortRestore = isContinue
-      ? () => {
-          setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-        }
-      : () => {
-          setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
-          setInput((cur) => cur || snap.input)
-        }
+    if (operations.busy || !recovery.retry) return
+    const action = recovery.retry
+    const base = action.checkpoint
+    restoreCheckpoint(base)
+    commitSlots(action.slots)
+    setInput('')
+    dispatchRecovery({ type: 'start', action })
+    const pendingTurn = makePendingTurn(action.kind, action.input)
+    setTurns([...base.turns, pendingTurn])
     await runTurn({
       pendingTurn,
-      baseTurns: snap.turns,
-      baseState: snap.state,
-      basePlot: snap.plot,
-      baseMemory: snap.memory,
-      baseChronicle: snap.chronicle,
-      baseCutoff: snap.compactCutoff,
-      onAbortRestore,
+      baseTurns: base.turns,
+      baseState: base.state,
+      basePlot: base.plot,
+      baseMemory: base.memory,
+      baseChronicle: base.chronicle,
+      baseCutoff: base.compactCutoff,
+      slotsForTurn: action.slots,
+      onAbortRestore: () => restoreAbortedAction(action),
     })
   }
 
   async function compactNow() {
-    if (thinking) return
+    if (operations.busy) return
     const settings = {
       compactionThreshold: context.compactionThreshold,
       compactionBatch: context.compactionBatch,
@@ -452,30 +496,39 @@ export function useGameController(settings: GameSettings) {
       alert('Nothing to compact: chronicle is up to date.')
       return
     }
-    setThinking(true)
     setStatusText('Compacting chronicle…')
-    const controller = new AbortController()
-    abortRef.current = controller
+    const operation = beginOperation()
+    if (!operation) return
+    const { controller } = operation
     try {
       const compacted = await compactCascade(
         turns,
         compactCutoff,
         chronicle,
         settings,
-        { model, apiKey: xaiKey, baseUrl, slots },
+        {
+          model,
+          apiKey,
+          baseUrl,
+          memory: memoryForCompaction(memory, context.includeMemory),
+        },
         controller.signal,
-        (label) => setStatusText(label),
+        (label) => {
+          if (operationCanCommit(operation)) setStatusText(label)
+        },
       )
+      if (!operationCanCommit(operation)) return
       commitChronicle(compacted.chronicle)
       commitCompactCutoff(compacted.cutoff)
       setTurns((ts) => stripTracesBefore(ts, compacted.cutoff))
     } catch (err) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && isCurrentOperation(operation)) {
         alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     } finally {
-      if (abortRef.current === controller) abortRef.current = null
-      setThinking(false)
+      if (operations.finish(operation)) {
+        setThinking(false)
+      }
     }
   }
 
@@ -484,16 +537,29 @@ export function useGameController(settings: GameSettings) {
     nextSlots.scenario = nextSlots.scenario.trim()
     if (!nextSlots.scenario) return
     commitSlots(nextSlots)
-    abortRef.current?.abort()
     setInput('')
-    setSnapshot(null)
     const freshState = structuredClone(DEFAULT_STATE)
     commitState(freshState)
     commitPlot([])
     commitMemory({})
     commitChronicle([])
     commitCompactCutoff(0)
-    const pendingTurn = makePendingTurn('bootstrap', buildNewAdventureBootstrap(nextSlots.scenario))
+    const action: RetryAction = {
+      checkpoint: {
+        turns: [],
+        state: freshState,
+        plot: [],
+        memory: {},
+        chronicle: [],
+        compactCutoff: 0,
+      },
+      input: buildNewAdventureBootstrap(),
+      restoreInput: '',
+      kind: 'bootstrap',
+      slots: nextSlots,
+    }
+    dispatchRecovery({ type: 'start', action })
+    const pendingTurn = makePendingTurn(action.kind, action.input)
     setTurns([pendingTurn])
     await runTurn({
       pendingTurn,
@@ -504,28 +570,29 @@ export function useGameController(settings: GameSettings) {
       baseChronicle: [],
       baseCutoff: 0,
       slotsForTurn: nextSlots,
-      onAbortRestore: () => setTurns([]),
+      replaceExisting: true,
+      onAbortRestore: () => restoreAbortedAction(action),
     })
   }
 
   // Deep-copy the current adventure for a save slot.
   function captureGame(): GameData {
+    const completedTurns = turns.filter((turn) => !!turn.reply.text)
     return {
       slots: { ...slots },
       state: structuredClone(state),
       plot: [...plot],
       memory: structuredClone(memory),
       chronicle: structuredClone(chronicle),
-      turns: structuredClone(turns),
-      compactCutoff,
+      turns: structuredClone(completedTurns),
+      compactCutoff: Math.min(compactCutoff, completedTurns.length),
     }
   }
 
   // Replace the current adventure with a saved one, cancelling any in-flight turn.
   function restoreGame(save: SavedGame) {
-    abortRef.current?.abort()
-    setThinking(false)
-    setSnapshot(null)
+    supersedeCurrentOperation()
+    dispatchRecovery({ type: 'reset' })
     commitSlots({ ...defaultSlots(), ...save.slots })
     commitState(structuredClone(save.state))
     commitPlot([...(save.plot ?? [])])
@@ -544,7 +611,8 @@ export function useGameController(settings: GameSettings) {
     chronicle,
     turns,
     compactCutoff,
-    snapshot,
+    canUndo: recovery.undo !== null,
+    canRetry: recovery.retry !== null,
     // engine status
     input,
     setInput,
@@ -557,6 +625,7 @@ export function useGameController(settings: GameSettings) {
     retry,
     undo,
     compactNow,
+    cancelOperation,
     newAdventure,
     editTurnInput,
     editTurnReply,

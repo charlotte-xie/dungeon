@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   isSavedGameLike,
   loadStoredSaves,
@@ -26,8 +26,10 @@ export function useSaves(game: {
   hasProgress: boolean
 }) {
   const [saves, setSaves] = useState<SavedGame[]>(() => loadStoredSaves())
+  const savesRef = useRef(saves)
 
   function commitSaves(next: SavedGame[]) {
+    savesRef.current = next
     setSaves(next)
     persistSaves(next)
   }
@@ -39,11 +41,12 @@ export function useSaves(game: {
       savedAt: Date.now(),
       ...game.captureGame(),
     }
-    commitSaves([entry, ...saves])
+    commitSaves([entry, ...savesRef.current])
   }
 
   function overwriteSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
+    const current = savesRef.current
+    const target = current.find((s) => s.id === id)
     if (!target) return
     if (!confirm(`Overwrite "${target.name}" with the current adventure? This cannot be undone.`)) {
       return
@@ -53,13 +56,13 @@ export function useSaves(game: {
       savedAt: Date.now(),
       ...game.captureGame(),
     }
-    commitSaves(saves.map((s) => (s.id === id ? updated : s)))
+    commitSaves(current.map((s) => (s.id === id ? updated : s)))
   }
 
   // Returns true if the save was loaded (false when missing or the user
   // declined the confirm), so the caller can close the panel only on success.
   function loadSavedGame(id: string): boolean {
-    const target = saves.find((s) => s.id === id)
+    const target = savesRef.current.find((s) => s.id === id)
     if (!target) return false
     if (
       game.hasProgress &&
@@ -72,14 +75,15 @@ export function useSaves(game: {
   }
 
   function deleteSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
+    const current = savesRef.current
+    const target = current.find((s) => s.id === id)
     if (!target) return
     if (!confirm(`Delete "${target.name}"? This cannot be undone.`)) return
-    commitSaves(saves.filter((s) => s.id !== id))
+    commitSaves(current.filter((s) => s.id !== id))
   }
 
   function exportSavedGame(id: string) {
-    const target = saves.find((s) => s.id === id)
+    const target = savesRef.current.find((s) => s.id === id)
     if (!target) return
     const payload: SaveFile = { marker: SAVE_FILE_MARKER, version: 3, save: target }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -115,7 +119,7 @@ export function useSaves(game: {
       }
       const normalized = normalizeSavedGame(raw)
       const entry: SavedGame = { ...normalized, id: makeSaveId(), savedAt: Date.now() }
-      commitSaves([entry, ...saves])
+      commitSaves([entry, ...savesRef.current])
     } catch (err) {
       alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`)
     }

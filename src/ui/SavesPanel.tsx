@@ -4,6 +4,7 @@ import type { SavedGame } from '../engine/types'
 interface SavesPanelProps {
   saves: SavedGame[]
   canSave: boolean
+  busy: boolean
   turnCount: number
   onClose: () => void
   onSave: (name: string) => void
@@ -28,6 +29,7 @@ function formatRelative(ts: number): string {
 export function SavesPanel({
   saves,
   canSave,
+  busy,
   turnCount,
   onClose,
   onSave,
@@ -63,9 +65,17 @@ export function SavesPanel({
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
 
+        {busy && (
+          <p className="hint">
+            Generation is continuing in the background. Loading a save will cancel it; completed saves can still be inspected, exported, or deleted.
+          </p>
+        )}
+
         <h3 className="saves-subhead">Save current game</h3>
         <p className="hint">
-          {canSave
+          {busy
+            ? 'Wait for generation to finish or cancel it before saving or overwriting the current adventure.'
+            : canSave
             ? `Snapshot scenario, style, chronicle, state, and all ${turnCount} turn${turnCount === 1 ? '' : 's'} under a short label.`
             : 'Start an adventure first — there is nothing to save yet.'}
         </p>

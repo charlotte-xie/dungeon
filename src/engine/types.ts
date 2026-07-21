@@ -89,12 +89,12 @@ export interface ContextConfig {
   // narrate-and-call cadence right next to the generation point. Only applies
   // to the live tail — chronicle/compacted turns are already prose summaries.
   includeToolCallHistory: boolean
-  // When true, run a non-reasoning model after the narrator to polish its
-  // draft into clean English. The revised text replaces the narrator output
-  // as the visible reply; the original draft is preserved on Turn.narrator.
+  // When true, run a second model pass after the narrator to polish its draft
+  // into clean English. The revised text replaces the narrator output as the
+  // visible reply; the original draft is preserved on Turn.narrator.
   useReviser: boolean
-  // Model id passed to xAI for the reviser pass. Should be a non-reasoning
-  // variant from the same provider as `model` (cheaper, faster, no thinking).
+  // Model id for the reviser pass. A lightweight instruction-following model
+  // is generally sufficient for this prose-cleanup task.
   reviserModel: string
   nsfw: boolean
 }
@@ -119,15 +119,21 @@ export interface SamplingParams {
   temperature: number
 }
 
-export interface TurnSnapshot {
+export interface TurnCheckpoint {
   turns: Turn[]
   state: WorldState
   plot: string[]
   memory: Memory
   chronicle: Chronicle
   compactCutoff: number
+}
+
+export interface RetryAction {
+  checkpoint: TurnCheckpoint
   input: string
+  restoreInput: string
   kind: TurnKind
+  slots: AdventureSlots
 }
 
 export interface SavedGame {
@@ -187,26 +193,6 @@ export interface SaveFileV1 {
   marker: typeof SAVE_FILE_MARKER
   version: 1
   save: SavedGameV1
-}
-
-// xAI request/response shapes.
-
-export interface ApiMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
-  tool_calls?: ToolCall[]
-  tool_call_id?: string
-}
-
-export interface ToolCall {
-  id: string
-  type?: string
-  function: { name: string; arguments: string }
-}
-
-export interface InlineToolCall {
-  name: string
-  arguments: string
 }
 
 export const CONTINUE_DIRECTIVE =

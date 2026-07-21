@@ -16,9 +16,25 @@ function fill(template: string, vars: Record<string, string | number>): string {
 }
 
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
-export const TURN_REMINDER = turnReminder.trim()
 export const DEFAULT_SCENARIO = defaultScenario.trim()
 export const REVISER_SYSTEM_PROMPT = reviserSystem.trim()
+
+export interface TurnReminderCapabilities {
+  worldState: boolean
+  plotOutline: boolean
+  memory: boolean
+}
+
+export function buildTurnReminder(capabilities: TurnReminderCapabilities): string {
+  const tools: string[] = []
+  if (capabilities.worldState) tools.push('`update_state` for changed current-scene facts')
+  if (capabilities.plotOutline) tools.push('`future_plot_plan` for changed future directions')
+  if (capabilities.memory) tools.push('`update_memory` for changed long-term facts')
+  const toolReminder = tools.length
+    ? `- Use only the enabled tools that need a material update: ${tools.join('; ')}. If their data is unchanged, make no tool call.`
+    : ''
+  return fill(turnReminder, { toolReminder }).trim()
+}
 
 export const NSFW_ON_PROMPT =
   'The player is a consenting adult who agrees to dark, mature or NSFW themes. Include these if appropriate to the story.'
@@ -44,6 +60,6 @@ export function buildSummarizerPrompt(targetChars: number): string {
   }).trim()
 }
 
-export function buildNewAdventureBootstrap(scenario: string): string {
-  return fill(newAdventureBootstrapTemplate, { scenario }).trim()
+export function buildNewAdventureBootstrap(): string {
+  return newAdventureBootstrapTemplate.trim()
 }

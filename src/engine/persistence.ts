@@ -7,6 +7,7 @@ import type {
   Chronicle,
   ChronicleEntry,
   ContextConfig,
+  JsonValue,
   Memory,
   MessageV1,
   ModelCall,
@@ -19,7 +20,8 @@ import type {
 } from './types'
 
 export const LS_MODEL = 'dm.model'
-export const LS_XAI_KEY = 'dm.xaiKey'
+// Keep the legacy storage key so existing users retain their configured key.
+export const LS_API_KEY = 'dm.xaiKey'
 export const LS_BASE_URL = 'dm.baseUrl'
 export const LS_STATE = 'dm.state'
 export const LS_PLOT = 'dm.plot'
@@ -35,6 +37,108 @@ export const LS_SAVES = 'dm.saves'
 export const LS_SHOW_TRACE = 'dm.showTrace'
 
 const LS_MESSAGES_V1 = 'dm.messages'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean'
+  ) {
+    return true
+  }
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.every(isJsonValue)
+  return isRecord(value) && Object.values(value).every(isJsonValue)
+}
+
+function isWorldStateLike(value: unknown): value is WorldState {
+  return isRecord(value) && Object.values(value).every(isJsonValue)
+}
+
+function isMemoryLike(value: unknown): value is Memory {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
+}
+
+function isTraceLike(value: unknown): boolean {
+  if (!Array.isArray(value)) return false
+  return value.every((event) => {
+    if (!isRecord(event) || typeof event.kind !== 'string') return false
+    if (event.kind === 'thought' || event.kind === 'reasoning') {
+      return typeof event.text === 'string'
+    }
+    return (
+      event.kind === 'call' &&
+      typeof event.name === 'string' &&
+      typeof event.arguments === 'string' &&
+      typeof event.result === 'string'
+    )
+  })
+}
+
+function isModelCallLike(value: unknown): value is ModelCall {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.model === 'string' &&
+    (value.text === undefined || typeof value.text === 'string') &&
+    (value.trace === undefined || isTraceLike(value.trace)) &&
+    (value.reasoningTokens === undefined ||
+      (typeof value.reasoningTokens === 'number' && Number.isFinite(value.reasoningTokens))) &&
+    (value.durationMs === undefined ||
+      (typeof value.durationMs === 'number' && Number.isFinite(value.durationMs)))
+  )
+}
+
+export function isTurnLike(value: unknown): value is Turn {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    (value.kind === 'bootstrap' || value.kind === 'player' || value.kind === 'continue') &&
+    (value.input === undefined || typeof value.input === 'string') &&
+    (value.narrator === undefined || isModelCallLike(value.narrator)) &&
+    isModelCallLike(value.reply)
+  )
+}
+
+function isMessageV1Like(value: unknown): value is MessageV1 {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    (value.role === 'dm' || value.role === 'player') &&
+    typeof value.text === 'string' &&
+    (value.trace === undefined || isTraceLike(value.trace))
+  )
+}
+
+function isChronicleLike(value: unknown): value is Chronicle {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (level) =>
+        Array.isArray(level) &&
+        level.every(
+          (entry) =>
+            isRecord(entry) &&
+            typeof entry.id === 'string' &&
+            typeof entry.text === 'string' &&
+            typeof entry.turnsCovered === 'number' &&
+            Number.isFinite(entry.turnsCovered) &&
+            entry.turnsCovered >= 0 &&
+            typeof entry.createdAt === 'number' &&
+            Number.isFinite(entry.createdAt),
+        ),
+    )
+  )
+}
+
+function clampCutoff(value: number, turnCount: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(turnCount, Math.max(0, Math.floor(value)))
+}
 
 export function loadStored(key: string, fallback: string): string {
   try {
@@ -68,8 +172,8 @@ export function loadStoredState(): WorldState {
   try {
     const raw = localStorage.getItem(LS_STATE)
     if (!raw) return structuredClone(DEFAULT_STATE)
-    const parsed = JSON.parse(raw) as WorldState
-    return parsed
+    const parsed = JSON.parse(raw) as unknown
+    return isWorldStateLike(parsed) ? parsed : structuredClone(DEFAULT_STATE)
   } catch {
     return structuredClone(DEFAULT_STATE)
   }
@@ -109,10 +213,10 @@ export function loadStoredMemory(): Memory {
     const raw = localStorage.getItem(LS_MEMORY)
     if (!raw) return structuredClone(DEFAULT_MEMORY)
     const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (!isMemoryLike(parsed)) {
       return structuredClone(DEFAULT_MEMORY)
     }
-    return parsed as Memory
+    return parsed
   } catch {
     return structuredClone(DEFAULT_MEMORY)
   }
@@ -145,9 +249,12 @@ export function loadStoredTurnsAndCutoff(): { turns: Turn[]; cutoff: number } {
   try {
     const raw = localStorage.getItem(LS_TURNS)
     if (raw) {
-      const parsed = JSON.parse(raw) as Turn[]
-      if (Array.isArray(parsed)) {
-        return { turns: parsed, cutoff: loadStoredCompactCutoffRaw() }
+      const parsed = JSON.parse(raw) as unknown
+      if (Array.isArray(parsed) && parsed.every(isTurnLike)) {
+        return {
+          turns: parsed,
+          cutoff: clampCutoff(loadStoredCompactCutoffRaw(), parsed.length),
+        }
       }
     }
   } catch {
@@ -265,8 +372,8 @@ export function loadStoredChronicle(): Chronicle {
     const raw = localStorage.getItem(LS_CHRONICLE)
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
-      if (Array.isArray(parsed)) {
-        return parsed as Chronicle
+      if (isChronicleLike(parsed)) {
+        return parsed
       }
     }
   } catch {
@@ -330,25 +437,35 @@ export function makeSaveId(): string {
 export function isSavedGameLike(
   v: unknown,
 ): v is SavedGame | SavedGameV1 | SavedGameV2 {
-  if (!v || typeof v !== 'object') return false
-  const s = v as Record<string, unknown>
+  if (!isRecord(v)) return false
+  const s = v
   const hasNewSlots =
-    typeof s.slots === 'object' && s.slots !== null && !Array.isArray(s.slots)
+    isRecord(s.slots) &&
+    Object.entries(s.slots).every(
+      ([key, value]) =>
+        (key !== 'scenario' && key !== 'styleGuide') || typeof value === 'string',
+    )
   const hasOldScenario = typeof s.scenario === 'string'
-  const hasTurnsOrMessages = Array.isArray(s.turns) || Array.isArray(s.messages)
+  const hasTurnsOrMessages =
+    (Array.isArray(s.turns) && s.turns.every(isTurnLike)) ||
+    (Array.isArray(s.messages) && s.messages.every(isMessageV1Like))
   const hasChronicleOrSummary =
-    Array.isArray(s.chronicle) || typeof s.summary === 'string'
+    isChronicleLike(s.chronicle) || typeof s.summary === 'string'
+  const plotValid =
+    s.plot === undefined ||
+    (Array.isArray(s.plot) && s.plot.every((entry) => typeof entry === 'string'))
+  const memoryValid = s.memory === undefined || isMemoryLike(s.memory)
   return (
     typeof s.id === 'string' &&
     typeof s.name === 'string' &&
-    typeof s.savedAt === 'number' &&
+    typeof s.savedAt === 'number' && Number.isFinite(s.savedAt) &&
     (hasNewSlots || hasOldScenario) &&
     hasChronicleOrSummary &&
-    typeof s.compactCutoff === 'number' &&
+    typeof s.compactCutoff === 'number' && Number.isFinite(s.compactCutoff) &&
     hasTurnsOrMessages &&
-    typeof s.state === 'object' &&
-    s.state !== null &&
-    !Array.isArray(s.state)
+    isWorldStateLike(s.state) &&
+    plotValid &&
+    memoryValid
   )
 }
 
@@ -398,8 +515,12 @@ export function normalizeSavedGame(
       chronicle?: unknown
       memory?: unknown
     }
-  const incoming: Partial<AdventureSlots> = (legacy.slots as Partial<AdventureSlots> | undefined) ?? {}
-  const slots = { ...defaultSlots(), ...incoming }
+  const incoming: Record<string, unknown> = isRecord(legacy.slots) ? legacy.slots : {}
+  const slots = defaultSlots()
+  for (const def of ADVENTURE_SLOTS) {
+    const value = incoming[def.key]
+    if (typeof value === 'string') slots[def.key] = value
+  }
   if (legacy.scenario && !incoming.scenario) {
     slots.scenario = legacy.scenario
   }
@@ -409,8 +530,8 @@ export function normalizeSavedGame(
   let turns: Turn[]
   let cutoff: number
   if (Array.isArray(legacy.turns)) {
-    turns = legacy.turns
-    cutoff = legacy.compactCutoff
+    turns = legacy.turns.filter(isTurnLike)
+    cutoff = clampCutoff(legacy.compactCutoff, turns.length)
   } else {
     const migrated = migrateV1MessagesToTurns(
       Array.isArray(legacy.messages) ? legacy.messages : [],
@@ -420,23 +541,23 @@ export function normalizeSavedGame(
     cutoff = migrated.cutoff
   }
   let chronicle: Chronicle
-  if (Array.isArray(legacy.chronicle)) {
-    chronicle = legacy.chronicle as Chronicle
+  if (isChronicleLike(legacy.chronicle)) {
+    chronicle = legacy.chronicle
   } else if (typeof legacy.summary === 'string' && legacy.summary.length > 0) {
     chronicle = summaryToChronicle(legacy.summary, cutoff)
   } else {
     chronicle = []
   }
   const memory: Memory =
-    legacy.memory && typeof legacy.memory === 'object' && !Array.isArray(legacy.memory)
-      ? (legacy.memory as Memory)
+    isMemoryLike(legacy.memory)
+      ? legacy.memory
       : {}
   return {
     id: legacy.id,
     name: legacy.name,
     savedAt: legacy.savedAt,
     slots,
-    state: legacy.state,
+    state: isWorldStateLike(legacy.state) ? legacy.state : structuredClone(DEFAULT_STATE),
     plot,
     memory,
     chronicle,

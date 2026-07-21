@@ -6,10 +6,10 @@
 // plot, or memory — it only rewrites prose.
 
 import { REVISER_SYSTEM_PROMPT } from '../../prompts'
-import { modelSupportsSampling, xaiChat } from '../xai'
+import { completeModel } from '../model/client'
+import type { ModelMessage } from '../model/types'
 import type {
   AdventureSlots,
-  ApiMessage,
   ModelCall,
   SamplingParams,
   TraceEvent,
@@ -29,9 +29,9 @@ export interface ReviserContext {
 export function buildReviserMessages(
   slots: AdventureSlots,
   draft: string,
-): ApiMessage[] {
+): ModelMessage[] {
   const styleGuide = slots.styleGuide?.trim() ?? ''
-  const messages: ApiMessage[] = [
+  const messages: ModelMessage[] = [
     { role: 'system', content: REVISER_SYSTEM_PROMPT },
   ]
   if (styleGuide) {
@@ -63,43 +63,26 @@ export async function runReviser(
 
   const messages = buildReviserMessages(ctx.slots, ctx.draft)
 
-  const body: Record<string, unknown> = {
-    model: ctx.model,
-    messages,
-    stream: false,
+  const completion = await completeModel(
+    {
+      model: ctx.model,
+      messages,
+      temperature: ctx.sampling.temperature,
+      label: 'reviser',
+    },
+    { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey },
+    signal,
+  )
+  for (const reasoning of completion.reasoning) {
+    trace.push({ kind: 'reasoning', text: reasoning })
   }
-  if (modelSupportsSampling(ctx.model)) {
-    body.temperature = ctx.sampling.temperature
+  for (const anomaly of completion.anomalies) {
+    trace.push({ kind: 'thought', text: `(model protocol: ${anomaly.detail})` })
   }
-
-  console.debug('[reviser] xAI request', { model: ctx.model, body })
-  const res = await xaiChat(body, ctx.apiKey, signal, ctx.baseUrl)
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '')
-    throw new Error(`reviser ${res.status}: ${errBody.slice(0, 200) || res.statusText}`)
-  }
-
-  const rawData = (await res.json()) as unknown
-  console.debug('[reviser] xAI response', { rawData })
-  const data = rawData as {
-    choices?: {
-      finish_reason?: string
-      message?: { content?: string; reasoning_content?: string }
-    }[]
-    usage?: { completion_tokens_details?: { reasoning_tokens?: number } }
-  }
-  const choice = data.choices?.[0]
-  const msg = choice?.message
-  if (!msg) throw new Error('Empty response from reviser (no message)')
-
-  const reasoning = msg.reasoning_content?.trim()
-  if (reasoning) trace.push({ kind: 'reasoning', text: reasoning })
-  const reasoningTokens =
-    data.usage?.completion_tokens_details?.reasoning_tokens ?? 0
-  const text = msg.content?.trim() ?? ''
+  const text = completion.text
   if (!text) {
     throw new Error(
-      `Empty reviser output (finish_reason=${choice?.finish_reason ?? 'unknown'})`,
+      `Empty reviser output (finish_reason=${completion.finishReason ?? 'unknown'})`,
     )
   }
 
@@ -108,7 +91,7 @@ export async function runReviser(
     model: ctx.model,
     text,
     trace: trace.length ? trace : undefined,
-    reasoningTokens: reasoningTokens || undefined,
+    reasoningTokens: completion.reasoningTokens,
     durationMs: Date.now() - startedAt,
   }
 }

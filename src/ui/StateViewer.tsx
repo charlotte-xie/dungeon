@@ -8,6 +8,7 @@ interface StateViewerProps {
   memory: Memory
   chronicle: Chronicle
   context: ContextConfig
+  busy: boolean
   onClose: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
@@ -42,6 +43,7 @@ export function StateViewer({
   memory,
   chronicle,
   context,
+  busy,
   onClose,
   onResetState,
   onSaveState,
@@ -154,6 +156,12 @@ export function StateViewer({
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
 
+        {busy && (
+          <p className="hint">
+            Generation is continuing in the background. State data is view-only until it finishes or is cancelled.
+          </p>
+        )}
+
         {context.includeMemory && (
           <>
             <h2>Long-term memory</h2>
@@ -169,6 +177,7 @@ export function StateViewer({
               spellCheck={false}
               value={memoryDraft}
               onChange={(e) => setMemoryDraft(e.target.value)}
+              readOnly={busy}
               placeholder="(no memory yet — call update_memory or paste JSON here)"
             />
             {memoryError && <p className="error-text">{memoryError}</p>}
@@ -189,6 +198,7 @@ export function StateViewer({
               spellCheck={false}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              readOnly={busy}
             />
             {parseError && <p className="error-text">{parseError}</p>}
           </>
@@ -213,6 +223,7 @@ export function StateViewer({
               spellCheck={false}
               value={plotDraft}
               onChange={(e) => setPlotDraft(e.target.value)}
+              readOnly={busy}
               placeholder="(no future plot plan yet — one entry per line)"
             />
             {plotError && <p className="error-text">{plotError}</p>}
@@ -272,7 +283,7 @@ export function StateViewer({
               onClick={() => {
                 if (memoryEntries > 0 && confirm('Clear all long-term memory?')) onClearMemory()
               }}
-              disabled={memoryEntries === 0}
+              disabled={busy || memoryEntries === 0}
             >
               Clear memory
             </button>
@@ -283,6 +294,7 @@ export function StateViewer({
               onClick={() => {
                 if (confirm('Reset live state to empty defaults?')) onResetState()
               }}
+              disabled={busy}
             >
               Reset state
             </button>
@@ -293,7 +305,7 @@ export function StateViewer({
               onClick={() => {
                 if (plot.length && confirm('Clear the future plot plan?')) onClearPlot()
               }}
-              disabled={plot.length === 0}
+              disabled={busy || plot.length === 0}
             >
               Clear plan
             </button>
@@ -303,24 +315,24 @@ export function StateViewer({
             onClick={() => {
               if (totalEntries > 0 && confirm('Clear the chronicle and reset compaction cutoff?')) onClearChronicle()
             }}
-            disabled={totalEntries === 0}
+            disabled={busy || totalEntries === 0}
           >
             Clear chronicle
           </button>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
           {context.includeMemory && (
-            <button onClick={handleSaveMemory} disabled={!memoryDirty}>
+            <button onClick={handleSaveMemory} disabled={busy || !memoryDirty}>
               Save memory
             </button>
           )}
           {context.includeWorldState && (
-            <button onClick={handleSave} disabled={!stateDirty}>
+            <button onClick={handleSave} disabled={busy || !stateDirty}>
               Save state
             </button>
           )}
           {context.includePlotOutline && (
-            <button onClick={handleSavePlot} disabled={!plotDirty}>
+            <button onClick={handleSavePlot} disabled={busy || !plotDirty}>
               Save plot
             </button>
           )}

@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import type { ApiMessage, SamplingParams } from '../engine/types'
+import type { ModelMessage } from '../engine/model/types'
+import type { SamplingParams } from '../engine/types'
 
 export interface ReviserPreview {
-  messages: ApiMessage[]
+  messages: ModelMessage[]
   model: string
   source: 'last-turn' | 'no-draft'
   // Short note about where the draft came from (e.g. "Draft from turn #4.")
@@ -11,7 +12,7 @@ export interface ReviserPreview {
 }
 
 interface ContextViewerProps {
-  apiMessages: ApiMessage[]
+  messages: ModelMessage[]
   tools: unknown[]
   sampling: SamplingParams
   reviser?: ReviserPreview
@@ -20,9 +21,9 @@ interface ContextViewerProps {
 
 type Tab = 'narrator' | 'reviser'
 
-export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }: ContextViewerProps) {
+export function ContextViewer({ messages, tools, sampling, reviser, onClose }: ContextViewerProps) {
   const [tab, setTab] = useState<Tab>('narrator')
-  const active = tab === 'reviser' && reviser ? reviser.messages : apiMessages
+  const active = tab === 'reviser' && reviser ? reviser.messages : messages
   const totalBytes = active.reduce((n, m) => n + (m.content?.length ?? 0), 0)
   const toolsJson = JSON.stringify(tools, null, 2)
   return (
@@ -50,8 +51,8 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
         )}
         {tab === 'narrator' ? (
           <p className="hint">
-            This is the exact <code>messages</code> array (plus tool schema and sampling params)
-            that will be sent to the model on your next turn. Total content:{' '}
+            This is the provider-neutral request (messages, tool schema, and sampling params)
+            before the configured adapter serializes it. Total content:{' '}
             {totalBytes.toLocaleString()} chars across {active.length} messages.
           </p>
         ) : reviser?.source === 'no-draft' ? (
@@ -82,15 +83,15 @@ export function ContextViewer({ apiMessages, tools, sampling, reviser, onClose }
             <div key={i} className={`context-item ctx-${m.role}`}>
               <div className="ctx-head">
                 <span className="ctx-role">{m.role}</span>
-                {m.tool_call_id && <span className="ctx-tag">tool_call_id: {m.tool_call_id}</span>}
-                {m.tool_calls?.length ? <span className="ctx-tag">{m.tool_calls.length} tool_call(s)</span> : null}
+                {m.toolCallId && <span className="ctx-tag">tool_call_id: {m.toolCallId}</span>}
+                {m.toolCalls?.length ? <span className="ctx-tag">{m.toolCalls.length} tool_call(s)</span> : null}
                 <span className="ctx-len">{m.content.length.toLocaleString()} chars</span>
               </div>
-              {(m.content || !m.tool_calls?.length) && (
+              {(m.content || !m.toolCalls?.length) && (
                 <pre className="state-json">{m.content || '(empty)'}</pre>
               )}
-              {m.tool_calls?.length ? (
-                <pre className="state-json">{JSON.stringify(m.tool_calls, null, 2)}</pre>
+              {m.toolCalls?.length ? (
+                <pre className="state-json">{JSON.stringify(m.toolCalls, null, 2)}</pre>
               ) : null}
             </div>
           ))}

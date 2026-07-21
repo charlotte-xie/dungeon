@@ -6,7 +6,7 @@ import {
   LS_MODEL,
   LS_SAMPLING,
   LS_SHOW_TRACE,
-  LS_XAI_KEY,
+  LS_API_KEY,
   loadStored,
   loadStoredContext,
   loadStoredSampling,
@@ -18,7 +18,7 @@ import type { ContextConfig, SamplingParams } from '../engine/types'
 // game controller, not here.
 export function useSettings() {
   const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
-  const [xaiKey, setXaiKey] = useState(() => loadStored(LS_XAI_KEY, ''))
+  const [apiKey, setApiKey] = useState(() => loadStored(LS_API_KEY, ''))
   const [baseUrl, setBaseUrl] = useState(() => loadStored(LS_BASE_URL, DEFAULT_BASE_URL))
   const [sampling, setSampling] = useState<SamplingParams>(() => loadStoredSampling())
   const [context, setContext] = useState<ContextConfig>(() => loadStoredContext())
@@ -42,21 +42,21 @@ export function useSettings() {
 
   function save(
     nextModel: string,
-    nextXaiKey: string,
+    nextApiKey: string,
     nextBaseUrl: string,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
     nextShowTrace: boolean,
   ) {
     setModel(nextModel)
-    setXaiKey(nextXaiKey)
+    setApiKey(nextApiKey)
     setBaseUrl(nextBaseUrl)
     setSampling(nextSampling)
     setContext(nextContext)
     setShowTrace(nextShowTrace)
     try {
-      if (nextXaiKey) localStorage.setItem(LS_XAI_KEY, nextXaiKey)
-      else localStorage.removeItem(LS_XAI_KEY)
+      if (nextApiKey) localStorage.setItem(LS_API_KEY, nextApiKey)
+      else localStorage.removeItem(LS_API_KEY)
       if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
       else localStorage.removeItem(LS_MODEL)
       if (nextBaseUrl && nextBaseUrl !== DEFAULT_BASE_URL)
@@ -69,5 +69,5 @@ export function useSettings() {
     }
   }
 
-  return { model, xaiKey, baseUrl, sampling, context, showTrace, save }
+  return { model, apiKey, baseUrl, sampling, context, showTrace, save }
 }
