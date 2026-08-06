@@ -132,6 +132,20 @@ describe('buildModelMessages layout', () => {
     expect(messages.some((m) => m.content.includes('(stale)'))).toBe(false)
   })
 
+  it('extends a stable prefix across successive turns (cache-friendly)', () => {
+    const t1 = playerTurn('t1', 'I knock.')
+    const first = build([t1])
+    const t1Done: Turn = { ...t1, reply: { ...t1.reply, text: 'No answer.' } }
+    const second = build([t1Done, playerTurn('t2', 'I try the handle.')])
+    // Request 1 ends with the 4-message injection after t1's input. Request 2
+    // must reproduce everything before that injection byte-for-byte, so the
+    // provider's prefix cache stays valid; only the tail beyond t1's input
+    // (t1's prose, t2's input, the fresh injection) is new.
+    const shared = first.slice(0, -4)
+    expect(shared[shared.length - 1]).toMatchObject({ role: 'user', content: 'I knock.' })
+    expect(second.slice(0, shared.length)).toEqual(shared)
+  })
+
   it('produces no injection when all subsystems are disabled', () => {
     const messages = build([playerTurn('t1', 'Hello?')], {
       includeWorldState: false,
