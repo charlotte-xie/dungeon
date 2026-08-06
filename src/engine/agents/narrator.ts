@@ -1,6 +1,17 @@
-// Narrator orchestration: compose game context, consume normalized model
-// results, execute game tools, and loop until narrative prose is available.
-// Provider transport and response-format quirks live under ../model.
+// Narrator orchestration in two phases over ONE conversation:
+//
+//   1. Narrate — the model writes the turn's prose. It is instructed not to
+//      call tools (a stray call is still executed defensively).
+//   2. Plot — the prose is appended to the same conversation followed by a
+//      pivot instruction, and the model acts as the Plotter: comparing the
+//      narration against the injected state/memory/plan and recording every
+//      material change via the update tools, looping until it makes no calls.
+//
+// Both phases advertise the identical tool set and extend the same message
+// list append-only, so the plotter request is a near-total provider cache hit
+// on the narrator's prefix, and updates reflect what was actually narrated
+// rather than what the model intended to write. Provider transport and
+// response-format quirks live under ../model.
 
 import {
   applyTurnReminder,
@@ -62,9 +73,13 @@ export interface NarratorResult {
 }
 
 export const MAX_NARRATOR_ITERATIONS = 10
+export const MAX_PLOTTER_ITERATIONS = 4
 
 const FINAL_NARRATIVE_INSTRUCTION =
-  'The tool phase is complete. Do not emit tool calls, JSON tool envelopes, XML function calls, analysis, or commentary. Using the recorded tool results, return only the in-character narrative response now in 1-4 paragraphs.'
+  'Do not emit tool calls, JSON tool envelopes, XML function calls, analysis, or commentary. Return only the in-character narrative response now in 1-4 paragraphs.'
+
+const PLOTTER_INSTRUCTION =
+  'The narration for this turn is complete. You are now acting as the Plotter: compare the player’s input and the narration above against the current state, memory, and future plot plan (see the get_state / get_memory / get_plot_plan results). Record every material change by calling `update_state`, `update_memory`, and/or `future_plot_plan`, following each subsystem’s rules — batch all needed calls, in one response if possible. If a subsystem has no material change, make no call for it. Do not write story prose or commentary. When there is nothing further to record, reply with no tool calls.'
 
 /**
  * Thrown when the model ends its turn (finish_reason=stop) with tool calls
@@ -158,6 +173,43 @@ export async function runNarrator(
     })
   }
 
+  // Shared by both phases: append the model's tool-call turn and execute each
+  // call, serving context reads from the live data and mutations through the
+  // game-state executor. Append-only throughout.
+  const handleToolCalls = (completion: { text: string; toolCalls: ModelToolCall[] }) => {
+    messages.push({
+      role: 'assistant',
+      content: completion.text,
+      toolCalls: completion.toolCalls,
+    })
+    for (const call of completion.toolCalls) {
+      if (enabledToolNames.has(call.name) && isContextReadTool(call.name)) {
+        const payload =
+          call.name === GET_MEMORY_TOOL.name
+            ? buildMemoryPayload(currentMemory)
+            : call.name === GET_PLOT_PLAN_TOOL.name
+              ? buildPlotPayload(currentPlot)
+              : buildStatePayload(currentState, ctx.stateCleanupThreshold)
+        pushToolResult(call, payload)
+        continue
+      }
+      const exec = executeEnabledTool(
+        enabledToolNames,
+        call.name,
+        call.arguments,
+        currentState,
+        currentPlot,
+        currentMemory,
+      )
+      currentState = exec.state
+      currentPlot = exec.plot
+      currentMemory = exec.memory
+      pushToolResult(call, exec.result)
+    }
+  }
+
+  // --- Phase 1: narrate ---
+  let proseText: string | null = null
   let nudged = false
   for (let iter = 0; iter < MAX_NARRATOR_ITERATIONS; iter++) {
     const finalNarrativeAttempt = iter === MAX_NARRATOR_ITERATIONS - 1
@@ -205,53 +257,19 @@ export async function runNarrator(
     if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
 
     if (completion.toolCalls.length) {
+      // The narrator is instructed not to call tools; execute defensively and
+      // continue toward prose. The plotter phase cleans up after regardless.
       const interstitial = completion.text
       if (interstitial) trace.push({ kind: 'thought', text: interstitial })
-      messages.push({
-        role: 'assistant',
-        content: completion.text,
-        toolCalls: completion.toolCalls,
-      })
-      for (const call of completion.toolCalls) {
-        // Live re-read of injected context: serve the current data instead of
-        // running the game-state executor. Appended as an ordinary tool
-        // result — no earlier message is rewritten.
-        if (enabledToolNames.has(call.name) && isContextReadTool(call.name)) {
-          const payload =
-            call.name === GET_MEMORY_TOOL.name
-              ? buildMemoryPayload(currentMemory)
-              : call.name === GET_PLOT_PLAN_TOOL.name
-                ? buildPlotPayload(currentPlot)
-                : buildStatePayload(currentState, ctx.stateCleanupThreshold)
-          pushToolResult(call, payload)
-          continue
-        }
-        const exec = executeEnabledTool(
-          enabledToolNames,
-          call.name,
-          call.arguments,
-          currentState,
-          currentPlot,
-          currentMemory,
-        )
-        currentState = exec.state
-        currentPlot = exec.plot
-        currentMemory = exec.memory
-        pushToolResult(call, exec.result)
-      }
+      handleToolCalls(completion)
       continue
     }
 
     const content = completion.text
-    if (content)
-      return {
-        text: content,
-        state: currentState,
-        plot: currentPlot,
-        memory: currentMemory,
-        trace,
-        reasoningTokens: totalReasoningTokens || undefined,
-      }
+    if (content) {
+      proseText = content
+      break
+    }
 
     console.warn('[dm] empty model message', { iter, completion })
     if (finalNarrativeAttempt) {
@@ -263,9 +281,7 @@ export async function runNarrator(
     }
     if (!nudged) {
       nudged = true
-      pushNudge(
-        'State updates recorded. Now provide the narrative reply in character — 2-4 short paragraphs.',
-      )
+      pushNudge('Provide the narrative reply in character — 2-4 short paragraphs.')
       continue
     }
     throw new EmptyNarrativeError(
@@ -274,5 +290,65 @@ export async function runNarrator(
       totalReasoningTokens || undefined,
     )
   }
-  throw new Error(`Narrator loop exceeded ${MAX_NARRATOR_ITERATIONS} iterations`)
+  if (proseText === null) {
+    throw new Error(`Narrator loop exceeded ${MAX_NARRATOR_ITERATIONS} iterations`)
+  }
+
+  // --- Phase 2: plot ---
+  // Commit the prose into the same conversation, pivot the model into the
+  // Plotter role, and loop until it records nothing further. A plotter
+  // failure never loses the turn: the prose and any updates recorded so far
+  // are kept, and the rest of the state simply carries forward.
+  if (tools.length) {
+    messages.push({ role: 'assistant', content: proseText })
+    const pivot = ctx.reminderAsSystem
+      ? { role: 'system' as const, content: PLOTTER_INSTRUCTION }
+      : { role: 'user' as const, content: `(OOC: ${PLOTTER_INSTRUCTION})` }
+    messages.push(pivot)
+    trace.push({ kind: 'thought', text: `(plotter → ${pivot.role}) ${PLOTTER_INSTRUCTION}` })
+    try {
+      for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
+        const completion = await completeModel(
+          {
+            model: ctx.model,
+            messages,
+            tools,
+            temperature: ctx.sampling.temperature,
+            label: `plotter:${iter}`,
+          },
+          { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey },
+          signal,
+        )
+        for (const reasoning of completion.reasoning) {
+          trace.push({ kind: 'reasoning', text: reasoning })
+        }
+        for (const anomaly of completion.anomalies) {
+          trace.push({ kind: 'thought', text: `(model protocol: ${anomaly.detail})` })
+        }
+        const iterReasoningTokens = completion.reasoningTokens ?? 0
+        if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
+        if (completion.text) {
+          trace.push({ kind: 'thought', text: `(plotter) ${completion.text}` })
+        }
+        if (!completion.toolCalls.length) break
+        handleToolCalls(completion)
+      }
+    } catch (err) {
+      if (signal.aborted) throw err
+      const msg = err instanceof Error ? err.message : String(err)
+      trace.push({
+        kind: 'thought',
+        text: `(plotter failed: ${msg} — updates recorded so far are kept; anything else carries forward unchanged)`,
+      })
+    }
+  }
+
+  return {
+    text: proseText,
+    state: currentState,
+    plot: currentPlot,
+    memory: currentMemory,
+    trace,
+    reasoningTokens: totalReasoningTokens || undefined,
+  }
 }

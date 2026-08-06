@@ -8,16 +8,21 @@ import {
 } from './prompts'
 
 describe('capability-aware prompts', () => {
-  it('mentions only enabled maintenance tools', () => {
+  it('steers the narrator away from tools when any subsystem is enabled', () => {
     const reminder = buildTurnReminder({
       worldState: false,
       plotOutline: true,
       memory: false,
     })
+    expect(reminder).toContain('Do not call tools while narrating')
+    expect(reminder).toContain('Plotter pass')
 
-    expect(reminder).toContain('`future_plot_plan`')
-    expect(reminder).not.toContain('`update_state`')
-    expect(reminder).not.toContain('`update_memory`')
+    const bare = buildTurnReminder({
+      worldState: false,
+      plotOutline: false,
+      memory: false,
+    })
+    expect(bare).not.toContain('Plotter pass')
   })
 
   it('does not demand a specific tool during bootstrap', () => {

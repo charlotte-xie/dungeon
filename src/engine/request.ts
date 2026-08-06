@@ -62,7 +62,7 @@ export function buildStatePayload(
 ): string {
   const stateJson = JSON.stringify(currentState, null, 2)
   const auditPrompt =
-    'Reminder: did this turn change the live scene — player position, NPCs present, what is held or worn, the active stimulus? If yes, call `update_state` (passing both `keep` and `set`; anything not in either is dropped). If the scene is unchanged, skip the call and the current state carries forward unchanged.'
+    'If this turn’s events change the live scene — player position, NPCs present, what is held or worn, the active stimulus — the Plotter pass records it via `update_state` (passing both `keep` and `set`; anything not in either is dropped). If the scene is unchanged, no call is needed and the state carries forward.'
   const cleanupStatus =
     stateJson.length > stateCleanupThreshold
       ? `STATUS: state size is ${stateJson.length.toLocaleString()} chars — OVER the ${stateCleanupThreshold.toLocaleString()} cleanup threshold. Tighten the next \`update_state\` call: drop stale keys by omitting them from both \`keep\` and \`set\`, and condense any value that's grown bloated.`
@@ -74,18 +74,18 @@ export function buildMemoryPayload(currentMemory: Memory): string {
   const entries = Object.keys(currentMemory)
   const body = entries.length
     ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
-    : '(no memory yet — use `update_memory` when the story establishes something that should persist across scenes)'
+    : '(no memory yet — the Plotter pass adds entries via `update_memory` when the story establishes something that should persist across scenes)'
   const reminder =
-    'Reminder: did this turn introduce a recurring NPC, location, or thread, or meaningfully change an existing entry? If yes, call `update_memory` before writing. If nothing notable changed, skip it.'
+    'If this turn introduces a recurring NPC, location, or thread, or meaningfully changes an existing entry, the Plotter pass records it via `update_memory`. If nothing notable changed, no call is needed.'
   return `${body}\n\n${reminder}`
 }
 
 export function buildPlotPayload(currentPlot: string[]): string {
   const bullets = currentPlot.length
     ? currentPlot.map((p, i) => `${i + 1}. ${p}`).join('\n')
-    : '(no future plot plan yet — add a direction when the fiction establishes a useful future pressure or hook)'
+    : '(no future plot plan yet — the Plotter pass adds a direction when the fiction establishes a useful future pressure or hook)'
   const reminder =
-    'Reminder: review the plan after deciding what happens. Delete a beat that played out, update a direction that materially shifted, or add a genuine new pressure or hook. If the plan is still accurate, do not call the tool.'
+    'Each turn the Plotter pass reviews this plan: delete a beat that played out, update a direction that materially shifted, or add a genuine new pressure or hook. If the plan is still accurate, no call is made.'
   return `${bullets}\n\n${reminder}`
 }
 

@@ -26,12 +26,10 @@ export interface TurnReminderCapabilities {
 }
 
 export function buildTurnReminder(capabilities: TurnReminderCapabilities): string {
-  const tools: string[] = []
-  if (capabilities.worldState) tools.push('`update_state` for changed current-scene facts')
-  if (capabilities.plotOutline) tools.push('`future_plot_plan` for changed future directions')
-  if (capabilities.memory) tools.push('`update_memory` for changed long-term facts')
-  const toolReminder = tools.length
-    ? `- Use only the enabled tools that need a material update: ${tools.join('; ')}. If their data is unchanged, make no tool call.`
+  const anyTools =
+    capabilities.worldState || capabilities.plotOutline || capabilities.memory
+  const toolReminder = anyTools
+    ? '- Do not call tools while narrating — write the prose reply only. After your reply, a separate Plotter pass reviews the turn and records state/memory/plan updates.'
     : ''
   return fill(turnReminder, { toolReminder }).trim()
 }
