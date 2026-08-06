@@ -285,7 +285,6 @@ export function useGameController(settings: GameSettings) {
           includeWorldState: context.includeWorldState,
           includePlotOutline: context.includePlotOutline,
           includeMemory: context.includeMemory,
-          includeToolCallHistory: context.includeToolCallHistory,
           nsfw: context.nsfw,
         },
         controller.signal,

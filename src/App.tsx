@@ -277,7 +277,6 @@ function App() {
                 context.includeWorldState,
                 context.includePlotOutline,
                 context.includeMemory,
-                context.includeToolCallHistory,
                 context.nsfw,
               ),
               context.reminderAsSystem,

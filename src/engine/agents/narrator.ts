@@ -49,7 +49,6 @@ export interface NarratorContext {
   includeWorldState: boolean
   includePlotOutline: boolean
   includeMemory: boolean
-  includeToolCallHistory: boolean
   nsfw: boolean
 }
 
@@ -112,7 +111,6 @@ export async function runNarrator(
     ctx.includeWorldState,
     ctx.includePlotOutline,
     ctx.includeMemory,
-    ctx.includeToolCallHistory,
     ctx.nsfw,
   )
   const tools: ModelToolDefinition[] = []

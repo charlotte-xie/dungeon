@@ -5,11 +5,14 @@
 //   1. Stable prefix — system prompt, NSFW stance, adventure slots, the static
 //      rules for each enabled subsystem (memory, plot plan, live state), and
 //      the chronicle. Changes rarely (settings edits, compactions).
-//   2. History — append-only between compactions.
+//   2. History — append-only between compactions; user inputs and narration
+//      prose only. Past turns' tool calls, results, and reasoning are never
+//      replayed — tool activity is scaffolding of the turn that produced it.
 //   3. Context injection — the volatile working data (memory, plot plan,
 //      state) delivered as a seeded tool exchange: one assistant message that
 //      "called" the context read tools, then one tool result per call carrying
-//      the current data. Always the last thing before generation.
+//      the current data. Always the last thing before generation, and part of
+//      the current turn only — it is never persisted or replayed.
 //
 // The injection replaces the old rewritten-in-place system blocks. Because the
 // volatile data now enters only at the tail, nothing earlier in the request is
@@ -35,7 +38,6 @@ import {
   GET_STATE_TOOL,
   MEMORY_RULES,
   PLOT_RULES,
-  isContextReadTool,
 } from './tools'
 import type { ModelMessage, ModelToolCall } from './model/types'
 import type {
@@ -144,38 +146,6 @@ export function buildContextInjectionMessages(
   return [{ role: 'assistant', content: '', toolCalls: calls }, ...results]
 }
 
-// Reconstruct a past live turn's tool activity as model messages: one assistant
-// message carrying structured tool calls, followed by a matching `tool`
-// result message per call. Reasoning/thought events are intentionally dropped —
-// vendor guidance is that prior turns' reasoning is ephemeral and should not be
-// replayed; only the call→result cadence is durable history. The calls live on
-// the narrator trace when a reviser ran, else on the reply trace. Inline-call
-// names (suffixed " (inline)") are normalized to the real tool name so the
-// demonstrated cadence uses the structured tool API. Context read calls are
-// dropped too: their results are stale snapshots of data the injection already
-// provides fresh, so replaying them only bloats the transcript.
-export function buildHistoricalToolMessages(turn: Turn): ModelMessage[] {
-  const trace = turn.narrator?.trace ?? turn.reply.trace
-  if (!trace) return []
-  const calls = trace
-    .filter((e): e is Extract<typeof e, { kind: 'call' }> => e.kind === 'call')
-    .map((e) => ({ ...e, name: e.name.replace(/\s*\(inline\)\s*$/i, '') }))
-    .filter((e) => !isContextReadTool(e.name))
-  if (!calls.length) return []
-  const toolCalls: ModelToolCall[] = calls.map((e, i) => ({
-    id: `${turn.id}-call-${i}`,
-    name: e.name,
-    arguments: e.arguments,
-  }))
-  const messages: ModelMessage[] = [
-    { role: 'assistant', content: '', toolCalls },
-  ]
-  calls.forEach((e, i) => {
-    messages.push({ role: 'tool', toolCallId: `${turn.id}-call-${i}`, content: e.result })
-  })
-  return messages
-}
-
 export function buildModelMessages(
   systemPrompt: string,
   slots: AdventureSlots,
@@ -189,7 +159,6 @@ export function buildModelMessages(
   includeWorldState: boolean,
   includePlotOutline: boolean,
   includeMemory: boolean,
-  includeToolCallHistory: boolean,
   nsfw: boolean,
 ): ModelMessage[] {
   const messages: ModelMessage[] = [
@@ -212,18 +181,11 @@ export function buildModelMessages(
   if (chronicleMessage) {
     messages.push(chronicleMessage)
   }
-  // Tool-call history is replayed only for the most recent completed turn:
-  // one fresh demonstration of the narrate-and-call cadence is enough, and
-  // older turns' calls are stale data (update_state arguments embed a full
-  // old snapshot) that would bloat the transcript. Earlier turns contribute
-  // only their user input and narration prose.
-  let latestReplyIndex = -1
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].reply.text) {
-      latestReplyIndex = i
-      break
-    }
-  }
+  // History replays only the durable story: user inputs and narration prose.
+  // Tool activity (calls, results, reasoning) is ephemeral scaffolding of the
+  // turn that produced it — the current turn's data arrives fresh via the
+  // context injection below, and stale snapshots would only bloat the
+  // transcript and invalidate the cached prefix.
   for (let i = 0; i < history.length; i++) {
     const t = history[i]
     const isLast = i === history.length - 1
@@ -239,9 +201,6 @@ export function buildModelMessages(
       messages.push({ role: 'user', content: t.input ?? '' })
     }
     if (hasReply) {
-      if (includeToolCallHistory && i === latestReplyIndex) {
-        for (const m of buildHistoricalToolMessages(t)) messages.push(m)
-      }
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
     }
   }

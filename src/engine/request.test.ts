@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildContextInjectionMessages,
-  buildHistoricalToolMessages,
   buildModelMessages,
   buildStatePayload,
 } from './request'
@@ -46,7 +45,6 @@ function build(
     flags.includeWorldState,
     flags.includePlotOutline,
     flags.includeMemory,
-    true,
     false,
   )
 }
@@ -108,13 +106,15 @@ describe('buildModelMessages layout', () => {
     expect(call.toolCalls?.map((c) => c.name)).toEqual(['get_state'])
   })
 
-  it('replays tool calls only for the most recent completed turn', () => {
+  it('never replays past turns\' tool activity — only the seeded injection', () => {
     const withCalls = (turn: Turn, callName: string): Turn => ({
       ...turn,
       reply: {
         ...turn.reply,
         trace: [
           { kind: 'call', name: callName, arguments: '{"keep":[],"set":{}}', result: 'ok' },
+          { kind: 'call', name: 'get_state', arguments: '{}', result: '(stale)' },
+          { kind: 'reasoning', text: 'private thinking' },
         ],
       },
     })
@@ -123,12 +123,13 @@ describe('buildModelMessages layout', () => {
       withCalls(playerTurn('t2', 'I knock louder.', 'The door creaks open.'), 'update_memory'),
       playerTurn('t3', 'I step inside.'),
     ])
-    const replayed = messages
+    const toolCallNames = messages
       .filter((m) => m.role === 'assistant' && m.toolCalls?.length)
       .flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
-    // Only turn t2 (the latest completed turn) replays; t1's calls are dropped.
-    // The remaining tool-call message is the seeded context injection.
-    expect(replayed).toEqual(['update_memory', 'get_memory', 'get_plot_plan', 'get_state'])
+    expect(toolCallNames).toEqual(['get_memory', 'get_plot_plan', 'get_state'])
+    expect(messages.filter((m) => m.role === 'tool')).toHaveLength(3)
+    expect(messages.some((m) => m.content.includes('private thinking'))).toBe(false)
+    expect(messages.some((m) => m.content.includes('(stale)'))).toBe(false)
   })
 
   it('produces no injection when all subsystems are disabled', () => {
@@ -152,45 +153,6 @@ describe('buildContextInjectionMessages', () => {
       'ctx-get-plot-plan',
       'ctx-get-state',
     ])
-  })
-})
-
-describe('buildHistoricalToolMessages', () => {
-  it('replays update calls but drops stale context reads', () => {
-    const turn: Turn = {
-      id: 't1',
-      kind: 'player',
-      input: 'I look around.',
-      reply: {
-        id: 't1-reply',
-        model: 'test',
-        text: 'You look around.',
-        trace: [
-          { kind: 'call', name: 'get_state', arguments: '{}', result: '(stale state)' },
-          { kind: 'call', name: 'update_state', arguments: '{"keep":[],"set":{}}', result: 'ok' },
-          { kind: 'call', name: 'get_memory (inline)', arguments: '{}', result: '(stale memory)' },
-        ],
-      },
-    }
-    const messages = buildHistoricalToolMessages(turn)
-    expect(messages).toHaveLength(2)
-    expect(messages[0].toolCalls?.map((c) => c.name)).toEqual(['update_state'])
-    expect(messages[1]).toMatchObject({ role: 'tool', content: 'ok' })
-  })
-
-  it('returns nothing when the only calls were context reads', () => {
-    const turn: Turn = {
-      id: 't1',
-      kind: 'player',
-      input: 'Hm.',
-      reply: {
-        id: 't1-reply',
-        model: 'test',
-        text: 'Quiet.',
-        trace: [{ kind: 'call', name: 'get_state', arguments: '{}', result: '(stale)' }],
-      },
-    }
-    expect(buildHistoricalToolMessages(turn)).toEqual([])
   })
 })
 

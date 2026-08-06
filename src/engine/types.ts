@@ -84,12 +84,6 @@ export interface ContextConfig {
   includeWorldState: boolean
   includePlotOutline: boolean
   includeMemory: boolean
-  // When true, replay the most recent completed turn's tool calls + their
-  // results (reasoning stripped; context reads dropped) into the transcript,
-  // so the latest turn demonstrates the narrate-and-call cadence next to the
-  // generation point. Older turns contribute only input + narration — their
-  // calls carry stale state snapshots and would bloat the transcript.
-  includeToolCallHistory: boolean
   // When true, run a second model pass after the narrator to polish its draft
   // into clean English. The revised text replaces the narrator output as the
   // visible reply; the original draft is preserved on Turn.narrator.

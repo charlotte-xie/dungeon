@@ -334,10 +334,6 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.includeMemory === 'boolean'
           ? parsed.includeMemory
           : DEFAULT_CONTEXT.includeMemory,
-      includeToolCallHistory:
-        typeof parsed.includeToolCallHistory === 'boolean'
-          ? parsed.includeToolCallHistory
-          : DEFAULT_CONTEXT.includeToolCallHistory,
       useReviser:
         typeof parsed.useReviser === 'boolean'
           ? parsed.useReviser

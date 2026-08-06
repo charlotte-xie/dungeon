@@ -420,17 +420,6 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When on, each live-history turn's tool calls (update_state / future_plot_plan / update_memory) and their results are replayed into the transcript so recent turns demonstrate the narrate-and-call cadence; reasoning is not replayed. Helps the model keep making updates as context grows. Only affects the live tail — chronicle/compacted turns are unaffected. Default ${DEFAULT_CONTEXT.includeToolCallHistory ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.includeToolCallHistory}
-              onChange={(e) => setContextField('includeToolCallHistory', e.target.checked)}
-            />
-            <strong>Replay tool calls in history</strong>
-          </label>
-          <label
-            className="flag-field"
             title={`When on, the DM is told the player is a consenting adult and may include dark, mature, or NSFW themes if they fit the story. When off, the DM is told to avoid NSFW descriptions or plot developments. Default ${DEFAULT_CONTEXT.nsfw ? 'on' : 'off'}.`}
           >
             <input
