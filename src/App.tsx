@@ -5,7 +5,14 @@ import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { applyTurnReminder, buildModelMessages } from './engine/request'
-import { FUTURE_PLOT_PLAN_TOOL, UPDATE_MEMORY_TOOL, UPDATE_STATE_TOOL } from './engine/tools'
+import {
+  FUTURE_PLOT_PLAN_TOOL,
+  GET_MEMORY_TOOL,
+  GET_PLOT_PLAN_TOOL,
+  GET_STATE_TOOL,
+  UPDATE_MEMORY_TOOL,
+  UPDATE_STATE_TOOL,
+} from './engine/tools'
 import { useGameController } from './hooks/useGameController'
 import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
@@ -281,9 +288,9 @@ function App() {
               },
             )}
             tools={[
-              ...(context.includeMemory ? [UPDATE_MEMORY_TOOL] : []),
-              ...(context.includeWorldState ? [UPDATE_STATE_TOOL] : []),
-              ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL] : []),
+              ...(context.includeMemory ? [UPDATE_MEMORY_TOOL, GET_MEMORY_TOOL] : []),
+              ...(context.includeWorldState ? [UPDATE_STATE_TOOL, GET_STATE_TOOL] : []),
+              ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL, GET_PLOT_PLAN_TOOL] : []),
             ]}
             sampling={sampling}
             reviser={reviserPreview}

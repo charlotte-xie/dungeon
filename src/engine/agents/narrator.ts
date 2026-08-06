@@ -4,16 +4,20 @@
 
 import {
   applyTurnReminder,
-  buildModelMessagesIndexed,
-  buildMemorySystemMessage,
-  buildPlotSystemMessage,
-  buildStateSystemMessage,
+  buildMemoryPayload,
+  buildModelMessages,
+  buildPlotPayload,
+  buildStatePayload,
 } from '../request'
 import {
   FUTURE_PLOT_PLAN_TOOL,
+  GET_MEMORY_TOOL,
+  GET_PLOT_PLAN_TOOL,
+  GET_STATE_TOOL,
   UPDATE_MEMORY_TOOL,
   UPDATE_STATE_TOOL,
   executeEnabledTool,
+  isContextReadTool,
 } from '../tools'
 import { completeModel } from '../model/client'
 import type { ModelToolCall, ModelToolDefinition } from '../model/types'
@@ -91,7 +95,11 @@ export async function runNarrator(
   let currentState = ctx.initialState
   let currentPlot = ctx.initialPlot
   let currentMemory = ctx.initialMemory
-  const { messages, stateIndex, plotIndex, memoryIndex } = buildModelMessagesIndexed(
+  // The context (memory/plot/state) is injected as a seeded tool exchange at
+  // the tail of these messages. From here on the conversation is append-only —
+  // never rewritten mid-turn — so every loop iteration extends the provider's
+  // cached prefix instead of invalidating it.
+  const messages = buildModelMessages(
     ctx.systemPrompt,
     ctx.slots,
     ctx.chronicle,
@@ -109,17 +117,21 @@ export async function runNarrator(
   )
   const tools: ModelToolDefinition[] = []
   const enabledToolNames = new Set<string>()
+  const advertise = (tool: ModelToolDefinition) => {
+    tools.push(tool)
+    enabledToolNames.add(tool.name)
+  }
   if (ctx.includeMemory) {
-    tools.push(UPDATE_MEMORY_TOOL)
-    enabledToolNames.add(UPDATE_MEMORY_TOOL.name)
+    advertise(UPDATE_MEMORY_TOOL)
+    advertise(GET_MEMORY_TOOL)
   }
   if (ctx.includeWorldState) {
-    tools.push(UPDATE_STATE_TOOL)
-    enabledToolNames.add(UPDATE_STATE_TOOL.name)
+    advertise(UPDATE_STATE_TOOL)
+    advertise(GET_STATE_TOOL)
   }
   if (ctx.includePlotOutline) {
-    tools.push(FUTURE_PLOT_PLAN_TOOL)
-    enabledToolNames.add(FUTURE_PLOT_PLAN_TOOL.name)
+    advertise(FUTURE_PLOT_PLAN_TOOL)
+    advertise(GET_PLOT_PLAN_TOOL)
   }
 
   const trace: TraceEvent[] = []
@@ -167,14 +179,11 @@ export async function runNarrator(
       })
     }
     if (iter === 0) {
-      console.debug('[dm] narrator iter 0 — memory/plot/state slices the model sees', {
+      console.debug('[dm] narrator iter 0 — memory/plot/state slices injected as tool results', {
         initialMemory: ctx.initialMemory,
         initialMemoryKeys: Object.keys(ctx.initialMemory),
         initialPlot: ctx.initialPlot,
         initialState: ctx.initialState,
-        memorySystemMessage: memoryIndex >= 0 ? messages[memoryIndex]?.content : '(disabled)',
-        plotSystemMessage: plotIndex >= 0 ? messages[plotIndex]?.content : '(disabled)',
-        stateSystemMessage: stateIndex >= 0 ? messages[stateIndex]?.content : '(disabled)',
       })
     }
     const completion = await completeModel(
@@ -206,6 +215,19 @@ export async function runNarrator(
         toolCalls: completion.toolCalls,
       })
       for (const call of completion.toolCalls) {
+        // Live re-read of injected context: serve the current data instead of
+        // running the game-state executor. Appended as an ordinary tool
+        // result — no earlier message is rewritten.
+        if (enabledToolNames.has(call.name) && isContextReadTool(call.name)) {
+          const payload =
+            call.name === GET_MEMORY_TOOL.name
+              ? buildMemoryPayload(currentMemory)
+              : call.name === GET_PLOT_PLAN_TOOL.name
+                ? buildPlotPayload(currentPlot)
+                : buildStatePayload(currentState, ctx.stateCleanupThreshold)
+          pushToolResult(call, payload)
+          continue
+        }
         const exec = executeEnabledTool(
           enabledToolNames,
           call.name,
@@ -218,15 +240,6 @@ export async function runNarrator(
         currentPlot = exec.plot
         currentMemory = exec.memory
         pushToolResult(call, exec.result)
-      }
-      if (stateIndex >= 0) {
-        messages[stateIndex] = buildStateSystemMessage(currentState, ctx.stateCleanupThreshold)
-      }
-      if (plotIndex >= 0) {
-        messages[plotIndex] = buildPlotSystemMessage(currentPlot)
-      }
-      if (memoryIndex >= 0) {
-        messages[memoryIndex] = buildMemorySystemMessage(currentMemory)
       }
       continue
     }
