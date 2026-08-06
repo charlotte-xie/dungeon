@@ -4,13 +4,20 @@
 // newest, least-compressed summaries; higher indices hold older, more
 // heavily compressed material. Each entry is roughly entryTargetChars long.
 //
-// Algorithm (parameters N = compactionThreshold, M = compactionBatch):
+// Algorithm (N = compactionThreshold, floor = compactionFloor, M =
+// compactionBatch), tuned so compaction events are rare: every chronicle
+// change rewrites the chronicle system message and advances the cutoff,
+// invalidating the provider's cached prefix for the whole history, so all
+// rewriting is clustered into one drain event every (N - floor) turns.
 //
-// 1. After every turn, if (turns.length - cutoff) >= N, fold the M oldest
-//    live turns into one chronicle[0] entry. Cutoff advances by M.
+// 1. When (turns.length - cutoff) >= N, drain the live tail down to `floor`
+//    turns in one event: fold sub-batches of M turns into one chronicle[0]
+//    entry each (summaries run in parallel; entries append in story order).
+//    Between events the chronicle and cutoff are frozen.
 // 2. After folding, if chronicle[k].length >= N for some k, take the first
 //    M entries at level k, summarize them into one entry of approximately
-//    entryTargetChars, append it to chronicle[k+1]. Recurse.
+//    entryTargetChars, append it to chronicle[k+1]. Recurse. Levels only
+//    grow during folds, so promotions can only fire inside a drain event.
 // 3. If level k is the topmost and gets compacted, chronicle gains a new
 //    level k+1.
 //
@@ -23,8 +30,9 @@ import type { ModelMessage } from './model/types'
 import type { Chronicle, ChronicleEntry, Memory, Turn } from './types'
 
 export interface ChronicleSettings {
-  compactionThreshold: number  // N
-  compactionBatch: number      // M
+  compactionThreshold: number  // N — high watermark; also per-level promotion threshold
+  compactionFloor: number      // drain target; clamped to at most N - M
+  compactionBatch: number      // M — turns/entries folded per chronicle entry
 }
 
 // Each summary targets 1/M of the combined input length — so compression
@@ -78,6 +86,10 @@ export async function compactCascade(
 ): Promise<CompactionResult> {
   const N = Math.max(2, settings.compactionThreshold)
   const M = Math.max(1, Math.min(settings.compactionBatch, N - 1))
+  // Drain target. Clamping to N - M guarantees an event folds at least one
+  // full sub-batch (and reproduces legacy fold-one-batch behavior for stored
+  // configs whose threshold predates the floor setting).
+  const low = Math.max(0, Math.min(settings.compactionFloor, N - M))
   let nextChronicle: Chronicle = chronicle.map((level) => level.slice())
   let nextCutoff = cutoff
 
@@ -85,31 +97,41 @@ export async function compactCascade(
   // Bounded by total possible operations (turns / M) plus levels.
   const HARD_CAP = 64
   for (let safety = 0; safety < HARD_CAP; safety++) {
-    // Step 1: fold raw turns if eligible.
+    // Step 1: drain raw turns if over the high watermark — fold sub-batches
+    // of M down to the floor in one event. The sub-batch summaries are
+    // independent, so they run in parallel; entries append in story order.
     if (turns.length - nextCutoff >= N) {
       onProgress?.('Folding turns into chronicle…')
-      const batch = turns.slice(nextCutoff, nextCutoff + M)
-      const inputs = batch.map(renderTurnForSummary).filter(Boolean)
-      const result = await runSummarizer(
-        {
-          model: agent.model,
-          apiKey: agent.apiKey,
-          baseUrl: agent.baseUrl,
-          memory: agent.memory,
-          inputs,
-          targetChars: targetForInputs(inputs, M),
-        },
-        signal,
+      const targetCutoff = turns.length - low
+      const batches: Turn[][] = []
+      for (let c = nextCutoff; c < targetCutoff; c += M) {
+        batches.push(turns.slice(c, Math.min(c + M, targetCutoff)))
+      }
+      const summaries = await Promise.all(
+        batches.map((batch) => {
+          const inputs = batch.map(renderTurnForSummary).filter(Boolean)
+          return runSummarizer(
+            {
+              model: agent.model,
+              apiKey: agent.apiKey,
+              baseUrl: agent.baseUrl,
+              memory: agent.memory,
+              inputs,
+              targetChars: targetForInputs(inputs, batch.length),
+            },
+            signal,
+          )
+        }),
       )
-      const entry: ChronicleEntry = {
+      const entries: ChronicleEntry[] = summaries.map((result, i) => ({
         id: crypto.randomUUID(),
         text: result.summary,
-        turnsCovered: batch.length,
+        turnsCovered: batches[i].length,
         createdAt: Date.now(),
-      }
+      }))
       if (nextChronicle.length === 0) nextChronicle.push([])
-      nextChronicle[0] = [...nextChronicle[0], entry]
-      nextCutoff += batch.length
+      nextChronicle[0] = [...nextChronicle[0], ...entries]
+      nextCutoff = targetCutoff
       continue
     }
 

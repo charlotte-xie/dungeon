@@ -68,15 +68,21 @@ export interface SlotDef {
 }
 
 export interface ContextConfig {
-  // N — when the live tail (turns past the cutoff) reaches this many turns,
-  // fold the oldest M into one chronicle[0] entry. Same N applies recursively
-  // at every chronicle level: when chronicle[k].length >= N, promote first M
-  // to chronicle[k+1].
+  // N (high watermark) — when the live tail (turns past the cutoff) reaches
+  // this many turns, a compaction event runs and drains the tail down to
+  // compactionFloor. N also remains the per-level promotion threshold: when
+  // chronicle[k].length >= N, the first M entries promote to chronicle[k+1].
   compactionThreshold: number
-  // M — how many turns or entries to fold per compaction step. Each summary
-  // targets 1/M of the combined input length, so compression ratio is
-  // constant and entries end up roughly "one turn-worth" regardless of how
-  // long individual turns happen to be.
+  // Low watermark — the drain target of a compaction event. Events recur
+  // every (N - floor) turns; between events the chronicle and cutoff are
+  // frozen, so the request prefix stays byte-stable for provider caching.
+  // Effective value is clamped to at most N - M.
+  compactionFloor: number
+  // M — how many turns or entries to fold per chronicle entry (the sub-batch
+  // size within a drain event, not the event cadence). Each summary targets
+  // 1/M of the combined input length, so compression ratio is constant and
+  // entries end up roughly "one turn-worth" regardless of how long individual
+  // turns happen to be.
   compactionBatch: number
   stateCleanupChars: number
   includePriorPlayerTurns: boolean

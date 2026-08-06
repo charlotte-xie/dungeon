@@ -94,6 +94,7 @@ export function useGameController(settings: GameSettings) {
 
   const canCompact = chronicleNeedsCompaction(turns, compactCutoff, chronicle, {
     compactionThreshold: context.compactionThreshold,
+    compactionFloor: context.compactionFloor,
     compactionBatch: context.compactionBatch,
   })
 
@@ -233,6 +234,7 @@ export function useGameController(settings: GameSettings) {
     try {
       const settings = {
         compactionThreshold: context.compactionThreshold,
+        compactionFloor: context.compactionFloor,
         compactionBatch: context.compactionBatch,
       }
       const allTurns = [...baseTurns, pendingTurn]
@@ -489,6 +491,7 @@ export function useGameController(settings: GameSettings) {
     if (operations.busy) return
     const settings = {
       compactionThreshold: context.compactionThreshold,
+      compactionFloor: context.compactionFloor,
       compactionBatch: context.compactionBatch,
     }
     if (!chronicleNeedsCompaction(turns, compactCutoff, chronicle, settings)) {

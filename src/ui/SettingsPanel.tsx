@@ -307,7 +307,7 @@ export function SettingsPanel({
         <div className="sampling-grid">
           <label
             className="sampling-field"
-            title={`When the live tail (turns past the cutoff) reaches this many turns, the oldest M get folded into one chronicle entry. Same threshold applies recursively at every chronicle level. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
+            title={`High watermark: when the live tail (turns past the cutoff) reaches this many turns, one compaction event drains it down to the floor. Rarer events preserve the provider's context cache. Also the per-level promotion threshold. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
           >
             <span>Compaction threshold (N)</span>
             <input
@@ -320,7 +320,20 @@ export function SettingsPanel({
           </label>
           <label
             className="sampling-field"
-            title={`How many turns or entries to fold per compaction step. One chronicle entry covers M raw turns; a level-1 entry covers M²; and so on. Default ${DEFAULT_CONTEXT.compactionBatch}.`}
+            title={`Low watermark: a compaction event folds turns until this many remain live, so events recur every (threshold − floor) turns and the chronicle stays frozen in between. Clamped to at most threshold − batch. Default ${DEFAULT_CONTEXT.compactionFloor}.`}
+          >
+            <span>Compaction floor</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={draftContext.compactionFloor}
+              onChange={(e) => setContextField('compactionFloor', Number(e.target.value))}
+            />
+          </label>
+          <label
+            className="sampling-field"
+            title={`How many turns or entries to fold per chronicle entry (sub-batch size within a drain event). One chronicle entry covers M raw turns; a level-1 entry covers M²; and so on. Default ${DEFAULT_CONTEXT.compactionBatch}.`}
           >
             <span>Compaction batch (M)</span>
             <input

@@ -306,6 +306,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.compactionThreshold === 'number'
           ? parsed.compactionThreshold
           : DEFAULT_CONTEXT.compactionThreshold,
+      compactionFloor:
+        typeof parsed.compactionFloor === 'number'
+          ? parsed.compactionFloor
+          : DEFAULT_CONTEXT.compactionFloor,
       compactionBatch:
         typeof parsed.compactionBatch === 'number'
           ? parsed.compactionBatch

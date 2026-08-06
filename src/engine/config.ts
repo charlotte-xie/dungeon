@@ -81,7 +81,8 @@ export const DEFAULT_STATE: WorldState = {
 export const DEFAULT_MEMORY: Memory = {}
 
 export const DEFAULT_CONTEXT: ContextConfig = {
-  compactionThreshold: 8,
+  compactionThreshold: 32,
+  compactionFloor: 16,
   compactionBatch: 4,
   stateCleanupChars: 10_000,
   includePriorPlayerTurns: true,
