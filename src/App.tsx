@@ -135,19 +135,23 @@ function App() {
                     text={t.reply.text ?? ''}
                     onSave={(next) => game.editTurnReply(t.id, next)}
                   />
-                  {showTrace && (t.reply.trace !== undefined || t.narrator) && (
+                  {showTrace && (t.reply.trace !== undefined || t.narrator || t.plotter) && (
                     <TraceView
                       calls={
                         t.narrator
                           ? [
                               { label: 'narrator (draft)', call: t.narrator, hideText: true },
+                              ...(t.plotter ? [{ label: 'plotter', call: t.plotter }] : []),
                               {
                                 label: 'reviser',
                                 call: t.reply,
                                 diffAgainst: t.narrator.text ?? '',
                               },
                             ]
-                          : [{ label: 'narrator', call: t.reply, hideText: true }]
+                          : [
+                              { label: 'narrator', call: t.reply, hideText: true },
+                              ...(t.plotter ? [{ label: 'plotter', call: t.plotter }] : []),
+                            ]
                       }
                       expanded={expandedTraces.has(t.id)}
                       onToggle={() => toggleTrace(t.id)}

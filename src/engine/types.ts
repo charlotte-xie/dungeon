@@ -27,6 +27,10 @@ export interface Turn {
   // separate so the trace can show draft → revised side by side.
   narrator?: ModelCall
   reply: ModelCall
+  // The Plotter phase's activity (tool calls recording state/memory/plan
+  // updates after the narration). No text — kept separate so the trace pane
+  // can show the narrate and plot phases as distinct sections.
+  plotter?: ModelCall
 }
 
 // Legacy shape — kept only so v1 saves and v1 localStorage can be migrated.

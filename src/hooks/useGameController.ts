@@ -300,6 +300,9 @@ export function useGameController(settings: GameSettings) {
         trace: result.trace,
         reasoningTokens: result.reasoningTokens,
       }
+      const plotterCall: ModelCall | undefined = result.plotterTrace
+        ? { id: crypto.randomUUID(), model, trace: result.plotterTrace }
+        : undefined
       if (context.useReviser) {
         setTurns((ts) =>
           ts.map((t) =>
@@ -307,6 +310,7 @@ export function useGameController(settings: GameSettings) {
               ? {
                   ...t,
                   narrator: narratorCall,
+                  plotter: plotterCall,
                 }
               : t,
           ),
@@ -359,6 +363,7 @@ export function useGameController(settings: GameSettings) {
               ? {
                   ...t,
                   narrator: undefined,
+                  plotter: plotterCall,
                   reply: {
                     ...t.reply,
                     text: result.text,

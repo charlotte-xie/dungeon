@@ -237,7 +237,7 @@ export function buildChronicleSystemMessage(chronicle: Chronicle): ModelMessage 
 export function stripTracesBefore(turns: Turn[], cutoff: number): Turn[] {
   let changed = false
   const next = turns.map((t, i) => {
-    if (i >= cutoff || (!t.reply.trace && !t.narrator?.trace)) return t
+    if (i >= cutoff || (!t.reply.trace && !t.narrator?.trace && !t.plotter)) return t
     changed = true
     const reply = { ...t.reply }
     delete reply.trace
@@ -246,7 +246,8 @@ export function stripTracesBefore(turns: Turn[], cutoff: number): Turn[] {
       narrator = { ...narrator }
       delete narrator.trace
     }
-    return { ...t, reply, narrator }
+    // The plotter call is nothing but trace — drop it entirely.
+    return { ...t, reply, narrator, plotter: undefined }
   })
   return changed ? next : turns
 }

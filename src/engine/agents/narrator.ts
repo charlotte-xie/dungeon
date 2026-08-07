@@ -68,7 +68,10 @@ export interface NarratorResult {
   state: WorldState
   plot: string[]
   memory: Memory
+  // Narrate-phase events only; the plotter phase records separately so the
+  // trace UI can present the two phases as distinct sections.
   trace: TraceEvent[]
+  plotterTrace?: TraceEvent[]
   reasoningTokens?: number
 }
 
@@ -147,7 +150,11 @@ export async function runNarrator(
     advertise(GET_PLOT_PLAN_TOOL)
   }
 
-  const trace: TraceEvent[] = []
+  const narratorTrace: TraceEvent[] = []
+  const plotterTrace: TraceEvent[] = []
+  // Events land in the trace of whichever phase is active; the helpers below
+  // capture this binding, so reassigning it pivots them to the plotter trace.
+  let trace: TraceEvent[] = narratorTrace
   let totalReasoningTokens = 0
   const pushToolResult = (call: ModelToolCall, content: string) => {
     messages.push({ role: 'tool', toolCallId: call.id, content })
@@ -305,7 +312,7 @@ export async function runNarrator(
       ? { role: 'system' as const, content: PLOTTER_INSTRUCTION }
       : { role: 'user' as const, content: `(OOC: ${PLOTTER_INSTRUCTION})` }
     messages.push(pivot)
-    trace.push({ kind: 'thought', text: `(plotter → ${pivot.role}) ${PLOTTER_INSTRUCTION}` })
+    trace = plotterTrace
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
         const completion = await completeModel(
@@ -328,7 +335,7 @@ export async function runNarrator(
         const iterReasoningTokens = completion.reasoningTokens ?? 0
         if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
         if (completion.text) {
-          trace.push({ kind: 'thought', text: `(plotter) ${completion.text}` })
+          trace.push({ kind: 'thought', text: completion.text })
         }
         if (!completion.toolCalls.length) break
         handleToolCalls(completion)
@@ -348,7 +355,8 @@ export async function runNarrator(
     state: currentState,
     plot: currentPlot,
     memory: currentMemory,
-    trace,
+    trace: narratorTrace,
+    plotterTrace: plotterTrace.length ? plotterTrace : undefined,
     reasoningTokens: totalReasoningTokens || undefined,
   }
 }

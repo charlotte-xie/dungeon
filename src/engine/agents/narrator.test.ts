@@ -71,6 +71,11 @@ describe('runNarrator two-phase flow', () => {
     expect(result.text).toBe('The door creaks open.')
     expect(result.state).toEqual({ scene: { location: 'the mill' } })
     expect(mockedModel).toHaveBeenCalledTimes(3)
+    // The phases record to separate traces for the UI.
+    expect(result.trace.some((e) => e.kind === 'call')).toBe(false)
+    expect(
+      result.plotterTrace?.some((e) => e.kind === 'call' && e.name === 'update_state'),
+    ).toBe(true)
 
     const narratorReq = mockedModel.mock.calls[0][0]
     const plotterReq = mockedModel.mock.calls[1][0]
@@ -106,7 +111,7 @@ describe('runNarrator two-phase flow', () => {
     expect(result.text).toBe('Prose.')
     expect(result.state).toEqual({})
     expect(
-      result.trace.some((e) => e.kind === 'thought' && e.text.includes('plotter failed')),
+      result.plotterTrace?.some((e) => e.kind === 'thought' && e.text.includes('plotter failed')),
     ).toBe(true)
   })
 
