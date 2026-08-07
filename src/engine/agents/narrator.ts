@@ -82,7 +82,7 @@ const FINAL_NARRATIVE_INSTRUCTION =
   'Do not emit tool calls, JSON tool envelopes, XML function calls, analysis, or commentary. Return only the in-character narrative response now in 1-4 paragraphs.'
 
 const PLOTTER_INSTRUCTION =
-  'The narration for this turn is complete. You are now acting as the Plotter: compare the player’s input and the narration above against the current state, memory, and future plot plan (see the get_state / get_memory / get_plot_plan results). Record every material change by calling `update_state`, `update_memory`, and/or `future_plot_plan`, following each subsystem’s rules — batch all needed calls, in one response if possible. If a subsystem has no material change, make no call for it. Do not write story prose or commentary. When there is nothing further to record, reply with no tool calls.'
+  'The narration for this turn is complete. You are now acting as the Plotter: compare the player’s input and the narration above against the current state, memory, and future plot plan (see the get_state / get_memory / get_plot_plan results). Record every material change by calling `update_state`, `update_memory`, and/or `future_plot_plan`, following each subsystem’s rules — batch every needed call into this single response. If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.'
 
 /**
  * Thrown when the model ends its turn (finish_reason=stop) with tool calls
@@ -182,15 +182,20 @@ export async function runNarrator(
 
   // Shared by both phases: append the model's tool-call turn and execute each
   // call, serving context reads from the live data and mutations through the
-  // game-state executor. Append-only throughout.
+  // game-state executor. Append-only throughout. Reports whether the batch
+  // contained context reads or rejected calls so the plotter loop can decide
+  // whether another iteration has a purpose.
   const handleToolCalls = (completion: { text: string; toolCalls: ModelToolCall[] }) => {
     messages.push({
       role: 'assistant',
       content: completion.text,
       toolCalls: completion.toolCalls,
     })
+    let sawError = false
+    let sawRead = false
     for (const call of completion.toolCalls) {
       if (enabledToolNames.has(call.name) && isContextReadTool(call.name)) {
+        sawRead = true
         const payload =
           call.name === GET_MEMORY_TOOL.name
             ? buildMemoryPayload(currentMemory)
@@ -211,8 +216,10 @@ export async function runNarrator(
       currentState = exec.state
       currentPlot = exec.plot
       currentMemory = exec.memory
+      if (/^(error|partial)\b/i.test(exec.result)) sawError = true
       pushToolResult(call, exec.result)
     }
+    return { sawError, sawRead }
   }
 
   // --- Phase 1: narrate ---
@@ -334,11 +341,23 @@ export async function runNarrator(
         }
         const iterReasoningTokens = completion.reasoningTokens ?? 0
         if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
-        if (completion.text) {
+        if (completion.text && completion.text.trim().toUpperCase() !== 'DONE') {
           trace.push({ kind: 'thought', text: completion.text })
         }
         if (!completion.toolCalls.length) break
-        handleToolCalls(completion)
+        const batch = handleToolCalls(completion)
+        // A clean batch of updates is the normal end of the phase. Stop here:
+        // a confirmation round-trip ends the request on bare tool results
+        // with no fresh directive, which makes models waffle about whether
+        // they should be waiting for player input. Iterate only when there is
+        // something concrete left to do — repair a rejected call, or act on a
+        // context read the model chose to make.
+        if (!batch.sawError && !batch.sawRead) break
+        if (batch.sawError) {
+          pushNudge(
+            'One or more Plotter calls were rejected — see the tool results above. Re-issue the corrected calls now, or reply with only the word DONE to leave them unrecorded.',
+          )
+        }
       }
     } catch (err) {
       if (signal.aborted) throw err
