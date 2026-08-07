@@ -81,8 +81,44 @@ export const MAX_PLOTTER_ITERATIONS = 4
 const FINAL_NARRATIVE_INSTRUCTION =
   'Do not emit tool calls, JSON tool envelopes, XML function calls, analysis, or commentary. Return only the in-character narrative response now in 1-4 paragraphs.'
 
-const PLOTTER_INSTRUCTION =
-  'The narration for this turn is complete. You are now acting as the Plotter: compare the player’s input and the narration above against the current state, memory, and future plot plan (see the get_state / get_memory / get_plot_plan results). Record every material change by calling `update_state`, `update_memory`, and/or `future_plot_plan`, following each subsystem’s rules — batch every needed call into this single response. Keep the subsystems distinct: `update_state` holds the current scene (positions, presence, held items, active tension); `update_memory` holds only durable, scene-independent canon; `future_plot_plan` holds only future directions. If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.'
+// The plotter pivot names only the subsystems that are actually enabled —
+// a static text would point the model at injections that don't exist and
+// tools that aren't advertised whenever a subsystem is switched off.
+export function buildPlotterInstruction(
+  includeWorldState: boolean,
+  includePlotOutline: boolean,
+  includeMemory: boolean,
+): string {
+  const reads: string[] = []
+  const updates: string[] = []
+  const distinctions: string[] = []
+  if (includeMemory) {
+    reads.push('get_memory')
+    updates.push('`update_memory`')
+    distinctions.push('`update_memory` holds only durable, scene-independent canon')
+  }
+  if (includePlotOutline) {
+    reads.push('get_plot_plan')
+    updates.push('`future_plot_plan`')
+    distinctions.push('`future_plot_plan` holds only future directions')
+  }
+  if (includeWorldState) {
+    reads.push('get_state')
+    updates.push('`update_state`')
+    distinctions.push(
+      '`update_state` holds the current scene (positions, presence, held items, active tension)',
+    )
+  }
+  const distinctLine =
+    distinctions.length > 1 ? ` Keep the subsystems distinct: ${distinctions.join('; ')}.` : ''
+  return (
+    'The narration for this turn is complete. You are now acting as the Plotter: ' +
+    `compare the player’s input and the narration above against the current working data (see the ${reads.join(' / ')} results). ` +
+    `Record every material change by calling ${updates.join(', ')}, following each subsystem’s rules — batch every needed call into this single response.` +
+    distinctLine +
+    ' If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.'
+  )
+}
 
 /**
  * Thrown when the model ends its turn (finish_reason=stop) with tool calls
@@ -315,9 +351,14 @@ export async function runNarrator(
   // are kept, and the rest of the state simply carries forward.
   if (tools.length) {
     messages.push({ role: 'assistant', content: proseText })
+    const plotterInstruction = buildPlotterInstruction(
+      ctx.includeWorldState,
+      ctx.includePlotOutline,
+      ctx.includeMemory,
+    )
     const pivot = ctx.reminderAsSystem
-      ? { role: 'system' as const, content: PLOTTER_INSTRUCTION }
-      : { role: 'user' as const, content: `(OOC: ${PLOTTER_INSTRUCTION})` }
+      ? { role: 'system' as const, content: plotterInstruction }
+      : { role: 'user' as const, content: `(OOC: ${plotterInstruction})` }
     messages.push(pivot)
     trace = plotterTrace
     try {

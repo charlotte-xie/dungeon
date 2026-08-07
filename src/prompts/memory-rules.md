@@ -30,8 +30,8 @@ Typical entries:
 
 ## What does NOT belong here
 
-- **Temporary state of any kind**: where someone is standing right now, who is present, a mood or reaction of the moment, what's held or worn, the weather. That is `update_state`'s job — never fold current-scene status into a memory description.
-- Future intentions, planned beats, plot directions. → plot plan.
+- **Temporary state of any kind**: where someone is standing right now, who is present, a mood or reaction of the moment, what's held or worn, the weather. That is current-scene data — never fold current-scene status into a memory description.
+- Future intentions, planned beats, plot directions — planning data, not memory.
 - Irrelevant details: every door, every meal, every NPC greeted in passing.
 - Re-derivable flavor: the colour of a guard's cloak, a tavern's name when the tavern won't recur.
 

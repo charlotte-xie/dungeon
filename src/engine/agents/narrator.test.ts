@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAX_PLOTTER_ITERATIONS, runNarrator, type NarratorContext } from './narrator'
+import {
+  MAX_PLOTTER_ITERATIONS,
+  buildPlotterInstruction,
+  runNarrator,
+  type NarratorContext,
+} from './narrator'
 import { completeModel } from '../model/client'
 import type { ModelCompletion } from '../model/types'
 
@@ -173,6 +178,22 @@ describe('runNarrator two-phase flow', () => {
     expect(result.text).toBe('Prose.')
     expect(result.memory).toEqual({})
     expect(mockedModel).toHaveBeenCalledTimes(1 + MAX_PLOTTER_ITERATIONS)
+  })
+
+  it('builds a pivot that names only the enabled subsystems', () => {
+    const memoryOnly = buildPlotterInstruction(false, false, true)
+    expect(memoryOnly).toContain('get_memory')
+    expect(memoryOnly).toContain('`update_memory`')
+    expect(memoryOnly).not.toContain('get_state')
+    expect(memoryOnly).not.toContain('update_state')
+    expect(memoryOnly).not.toContain('future_plot_plan')
+    // A single subsystem needs no distinction clause.
+    expect(memoryOnly).not.toContain('Keep the subsystems distinct')
+
+    const all = buildPlotterInstruction(true, true, true)
+    expect(all).toContain('get_state')
+    expect(all).toContain('`update_state`')
+    expect(all).toContain('Keep the subsystems distinct')
   })
 
   it('skips the plotter phase when no subsystems are enabled', async () => {

@@ -29,7 +29,7 @@ export function buildTurnReminder(capabilities: TurnReminderCapabilities): strin
   const anyTools =
     capabilities.worldState || capabilities.plotOutline || capabilities.memory
   const toolReminder = anyTools
-    ? '- Do not call tools while narrating — write the prose reply only. After your reply, a separate Plotter pass reviews the turn and records state/memory/plan updates.'
+    ? '- Do not call tools while narrating — write the prose reply only. After your reply, a separate Plotter pass reviews the turn and records its bookkeeping.'
     : ''
   return fill(turnReminder, { toolReminder }).trim()
 }

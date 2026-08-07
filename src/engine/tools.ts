@@ -68,7 +68,7 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Update canonical long-term facts that should persist across scenes: recurring NPCs, locations, threads, secrets, and consequential past events. Apply the durability test — record only what will still be true and matter after the current scene ends (identity, appearance, motivations, relationships, secrets, consequential events). Never store temporary state: current positions, present company, momentary moods, held or worn items belong in \`update_state\`, not memory. Call only for a material change. \`set\` maps lowercase underscore slugs to complete replacement descriptions; \`delete\` removes entries that are genuinely no longer relevant. Deletes apply before sets. Each description is limited to ${MAX_MEMORY_STRING_CHARS} characters.`,
+      `Update canonical long-term facts that should persist across scenes: recurring NPCs, locations, threads, secrets, and consequential past events. Apply the durability test — record only what will still be true and matter after the current scene ends (identity, appearance, motivations, relationships, secrets, consequential events). Never store temporary state: current positions, present company, momentary moods, and held or worn items are current-scene data, not memory. Call only for a material change. \`set\` maps lowercase underscore slugs to complete replacement descriptions; \`delete\` removes entries that are genuinely no longer relevant. Deletes apply before sets. Each description is limited to ${MAX_MEMORY_STRING_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {
