@@ -89,35 +89,38 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
 
 // Context read tools. Each request seeds one "fake" assistant call to the
 // enabled read tools right before generation, delivering the current memory /
-// plot plan / state as tool results (see ../request.ts). The tools are also
-// advertised live, so the model can legitimately re-issue them to re-check a
-// value mid-turn; they never mutate anything.
+// plot plan / state as tool results (see ../request.ts). The framing is the
+// DM checking its own private notes after the player acts and before
+// narrating — "check", not "get", so the data reads as notes consulted for
+// consistency rather than retrieved material to work into the reply. The
+// tools are also advertised live, so the model can legitimately re-issue
+// them to re-check a value mid-turn; they never mutate anything.
 
-export const GET_STATE_TOOL: ModelToolDefinition = {
-    name: 'get_state',
+export const CHECK_STATE_TOOL: ModelToolDefinition = {
+    name: 'check_state',
     description:
-      'Read the current live-state JSON (current-scene consistency facts). The latest state is already in this conversation as a get_state result; call again only to re-check it after updates.',
+      'Check your private scene notes: the current live-state JSON (current-scene consistency facts). The latest state is already in this conversation as a check_state result; call again only to re-check it after updates.',
     parameters: { type: 'object', properties: {} },
 }
 
-export const GET_MEMORY_TOOL: ModelToolDefinition = {
-    name: 'get_memory',
+export const CHECK_MEMORY_TOOL: ModelToolDefinition = {
+    name: 'check_memory',
     description:
-      'Read the current long-term memory entries. The latest memory is already in this conversation as a get_memory result; call again only to re-check it after updates.',
+      'Check your private continuity notes: the current long-term memory entries. The latest memory is already in this conversation as a check_memory result; call again only to re-check it after updates.',
     parameters: { type: 'object', properties: {} },
 }
 
-export const GET_PLOT_PLAN_TOOL: ModelToolDefinition = {
-    name: 'get_plot_plan',
+export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
+    name: 'check_plot_plan',
     description:
-      'Read the current private future plot plan. The latest plan is already in this conversation as a get_plot_plan result; call again only to re-check it after updates.',
+      'Check your private planning notes: the current future plot plan. The latest plan is already in this conversation as a check_plot_plan result; call again only to re-check it after updates.',
     parameters: { type: 'object', properties: {} },
 }
 
 export const CONTEXT_READ_TOOL_NAMES: ReadonlySet<string> = new Set([
-  GET_STATE_TOOL.name,
-  GET_MEMORY_TOOL.name,
-  GET_PLOT_PLAN_TOOL.name,
+  CHECK_STATE_TOOL.name,
+  CHECK_MEMORY_TOOL.name,
+  CHECK_PLOT_PLAN_TOOL.name,
 ])
 
 export function isContextReadTool(name: string): boolean {

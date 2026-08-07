@@ -21,10 +21,10 @@ import {
   buildStatePayload,
 } from '../request'
 import {
+  CHECK_MEMORY_TOOL,
+  CHECK_PLOT_PLAN_TOOL,
+  CHECK_STATE_TOOL,
   FUTURE_PLOT_PLAN_TOOL,
-  GET_MEMORY_TOOL,
-  GET_PLOT_PLAN_TOOL,
-  GET_STATE_TOOL,
   UPDATE_MEMORY_TOOL,
   UPDATE_STATE_TOOL,
   executeEnabledTool,
@@ -93,17 +93,17 @@ export function buildPlotterInstruction(
   const updates: string[] = []
   const distinctions: string[] = []
   if (includeMemory) {
-    reads.push('get_memory')
+    reads.push('check_memory')
     updates.push('`update_memory`')
     distinctions.push('`update_memory` holds only durable, scene-independent canon')
   }
   if (includePlotOutline) {
-    reads.push('get_plot_plan')
+    reads.push('check_plot_plan')
     updates.push('`future_plot_plan`')
     distinctions.push('`future_plot_plan` holds only future directions')
   }
   if (includeWorldState) {
-    reads.push('get_state')
+    reads.push('check_state')
     updates.push('`update_state`')
     distinctions.push(
       '`update_state` holds the current scene (positions, presence, held items, active tension)',
@@ -175,15 +175,15 @@ export async function runNarrator(
   }
   if (ctx.includeMemory) {
     advertise(UPDATE_MEMORY_TOOL)
-    advertise(GET_MEMORY_TOOL)
+    advertise(CHECK_MEMORY_TOOL)
   }
   if (ctx.includeWorldState) {
     advertise(UPDATE_STATE_TOOL)
-    advertise(GET_STATE_TOOL)
+    advertise(CHECK_STATE_TOOL)
   }
   if (ctx.includePlotOutline) {
     advertise(FUTURE_PLOT_PLAN_TOOL)
-    advertise(GET_PLOT_PLAN_TOOL)
+    advertise(CHECK_PLOT_PLAN_TOOL)
   }
 
   const narratorTrace: TraceEvent[] = []
@@ -233,9 +233,9 @@ export async function runNarrator(
       if (enabledToolNames.has(call.name) && isContextReadTool(call.name)) {
         sawRead = true
         const payload =
-          call.name === GET_MEMORY_TOOL.name
+          call.name === CHECK_MEMORY_TOOL.name
             ? buildMemoryPayload(currentMemory)
-            : call.name === GET_PLOT_PLAN_TOOL.name
+            : call.name === CHECK_PLOT_PLAN_TOOL.name
               ? buildPlotPayload(currentPlot)
               : buildStatePayload(currentState, ctx.stateCleanupThreshold)
         pushToolResult(call, payload)

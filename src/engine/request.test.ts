@@ -67,9 +67,9 @@ describe('buildModelMessages layout', () => {
     const [call, ...results] = messages.slice(-4)
     expect(call.role).toBe('assistant')
     expect(call.toolCalls?.map((c) => c.name)).toEqual([
-      'get_memory',
-      'get_plot_plan',
-      'get_state',
+      'check_memory',
+      'check_plot_plan',
+      'check_state',
     ])
     expect(results.map((m) => m.role)).toEqual(['tool', 'tool', 'tool'])
     expect(results.map((m) => m.toolCallId)).toEqual(call.toolCalls?.map((c) => c.id))
@@ -103,7 +103,7 @@ describe('buildModelMessages layout', () => {
     ).toBe(false)
     const call = messages[messages.length - 2]
     expect(call.role).toBe('assistant')
-    expect(call.toolCalls?.map((c) => c.name)).toEqual(['get_state'])
+    expect(call.toolCalls?.map((c) => c.name)).toEqual(['check_state'])
   })
 
   it('never replays past turns\' tool activity — only the seeded injection', () => {
@@ -113,7 +113,7 @@ describe('buildModelMessages layout', () => {
         ...turn.reply,
         trace: [
           { kind: 'call', name: callName, arguments: '{"keep":[],"set":{}}', result: 'ok' },
-          { kind: 'call', name: 'get_state', arguments: '{}', result: '(stale)' },
+          { kind: 'call', name: 'check_state', arguments: '{}', result: '(stale)' },
           { kind: 'reasoning', text: 'private thinking' },
         ],
       },
@@ -126,7 +126,7 @@ describe('buildModelMessages layout', () => {
     const toolCallNames = messages
       .filter((m) => m.role === 'assistant' && m.toolCalls?.length)
       .flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
-    expect(toolCallNames).toEqual(['get_memory', 'get_plot_plan', 'get_state'])
+    expect(toolCallNames).toEqual(['check_memory', 'check_plot_plan', 'check_state'])
     expect(messages.filter((m) => m.role === 'tool')).toHaveLength(3)
     expect(messages.some((m) => m.content.includes('private thinking'))).toBe(false)
     expect(messages.some((m) => m.content.includes('(stale)'))).toBe(false)
@@ -163,9 +163,9 @@ describe('buildContextInjectionMessages', () => {
     const b = buildContextInjectionMessages({}, [], {}, 4000, true, true, true)
     expect(a).toEqual(b)
     expect(a[0].toolCalls?.map((c) => c.id)).toEqual([
-      'ctx-get-memory',
-      'ctx-get-plot-plan',
-      'ctx-get-state',
+      'ctx-check-memory',
+      'ctx-check-plot-plan',
+      'ctx-check-state',
     ])
   })
 })

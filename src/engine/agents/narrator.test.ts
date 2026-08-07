@@ -112,7 +112,7 @@ describe('runNarrator two-phase flow', () => {
   it('iterates after a context read so the model can act on it', async () => {
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
     mockedModel.mockResolvedValueOnce(
-      completion({ toolCalls: [{ id: 'r1', name: 'get_state', arguments: '{}' }] }),
+      completion({ toolCalls: [{ id: 'r1', name: 'check_state', arguments: '{}' }] }),
     )
     mockedModel.mockResolvedValueOnce(
       completion({
@@ -182,16 +182,16 @@ describe('runNarrator two-phase flow', () => {
 
   it('builds a pivot that names only the enabled subsystems', () => {
     const memoryOnly = buildPlotterInstruction(false, false, true)
-    expect(memoryOnly).toContain('get_memory')
+    expect(memoryOnly).toContain('check_memory')
     expect(memoryOnly).toContain('`update_memory`')
-    expect(memoryOnly).not.toContain('get_state')
+    expect(memoryOnly).not.toContain('check_state')
     expect(memoryOnly).not.toContain('update_state')
     expect(memoryOnly).not.toContain('future_plot_plan')
     // A single subsystem needs no distinction clause.
     expect(memoryOnly).not.toContain('Keep the subsystems distinct')
 
     const all = buildPlotterInstruction(true, true, true)
-    expect(all).toContain('get_state')
+    expect(all).toContain('check_state')
     expect(all).toContain('`update_state`')
     expect(all).toContain('Keep the subsystems distinct')
   })

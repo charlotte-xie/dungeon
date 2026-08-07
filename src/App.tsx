@@ -6,10 +6,10 @@ import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { applyTurnReminder, buildModelMessages } from './engine/request'
 import {
+  CHECK_MEMORY_TOOL,
+  CHECK_PLOT_PLAN_TOOL,
+  CHECK_STATE_TOOL,
   FUTURE_PLOT_PLAN_TOOL,
-  GET_MEMORY_TOOL,
-  GET_PLOT_PLAN_TOOL,
-  GET_STATE_TOOL,
   UPDATE_MEMORY_TOOL,
   UPDATE_STATE_TOOL,
 } from './engine/tools'
@@ -291,9 +291,11 @@ function App() {
               },
             )}
             tools={[
-              ...(context.includeMemory ? [UPDATE_MEMORY_TOOL, GET_MEMORY_TOOL] : []),
-              ...(context.includeWorldState ? [UPDATE_STATE_TOOL, GET_STATE_TOOL] : []),
-              ...(context.includePlotOutline ? [FUTURE_PLOT_PLAN_TOOL, GET_PLOT_PLAN_TOOL] : []),
+              ...(context.includeMemory ? [UPDATE_MEMORY_TOOL, CHECK_MEMORY_TOOL] : []),
+              ...(context.includeWorldState ? [UPDATE_STATE_TOOL, CHECK_STATE_TOOL] : []),
+              ...(context.includePlotOutline
+                ? [FUTURE_PLOT_PLAN_TOOL, CHECK_PLOT_PLAN_TOOL]
+                : []),
             ]}
             sampling={sampling}
             reviser={reviserPreview}
