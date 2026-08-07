@@ -201,4 +201,4 @@ export interface SaveFileV1 {
 }
 
 export const CONTINUE_DIRECTIVE =
-  '(OOC: The player pressed Continue instead of acting — usually a sign the previous turn stopped short of a satisfying decision point. Narrate more, not less: carry the scene forward with real momentum — time passing, an NPC making a move, a revelation surfacing, pressure mounting — and push well past the previous stopping place rather than lingering. Keep going until the player faces a concrete, meaningful choice; err toward narrating further rather than halting at a flat or premature moment. End on a strong narrated stimulus.)'
+  '(OOC: The player is skipping their turn — they want the narration to continue before they act. Carry the scene forward from exactly where it stopped and progress to the next player decision point. Do not restate or linger on the previous beat; if the scene needs fresh impetus, consider bringing in a development — your future plot plan may suggest one. Stop when the player faces a concrete, meaningful choice.)'
