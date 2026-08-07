@@ -209,6 +209,12 @@ export function useGameController(settings: GameSettings) {
 
   async function runTurn(args: {
     pendingTurn: Turn
+    // The recovery action for this turn. Its checkpoint is rebased in place
+    // when compaction commits mid-turn, so undo/retry/abort restore to the
+    // post-compaction world — the fold itself is never reverted or re-paid.
+    // (In-place mutation keeps the object identity the recovery reducer and
+    // abort closures rely on.)
+    action: RetryAction
     baseTurns: Turn[]
     baseState: WorldState
     basePlot: string[]
@@ -265,6 +271,17 @@ export function useGameController(settings: GameSettings) {
         commitChronicle(workingChronicle)
         commitCompactCutoff(workingCutoff)
         setTurns((ts) => stripTracesBefore(ts, workingCutoff))
+        // Compaction is story-invariant and already paid for: rebase the
+        // recovery checkpoint on the compacted world so undo reverts the
+        // in-flight turn but never the fold.
+        args.action.checkpoint = {
+          turns: stripTracesBefore(baseTurns, workingCutoff),
+          state: baseState,
+          plot: basePlot,
+          memory: baseMemory,
+          chronicle: workingChronicle,
+          compactCutoff: workingCutoff,
+        }
         setStatusText('DM is thinking…')
       }
 
@@ -428,6 +445,7 @@ export function useGameController(settings: GameSettings) {
     setTurns([...turns, pendingTurn])
     await runTurn({
       pendingTurn,
+      action,
       baseTurns: turns,
       baseState: state,
       basePlot: plot,
@@ -452,6 +470,7 @@ export function useGameController(settings: GameSettings) {
     setTurns([...turns, pendingTurn])
     await runTurn({
       pendingTurn,
+      action,
       baseTurns: turns,
       baseState: state,
       basePlot: plot,
@@ -481,6 +500,7 @@ export function useGameController(settings: GameSettings) {
     setTurns([...base.turns, pendingTurn])
     await runTurn({
       pendingTurn,
+      action,
       baseTurns: base.turns,
       baseState: base.state,
       basePlot: base.plot,
@@ -570,6 +590,7 @@ export function useGameController(settings: GameSettings) {
     setTurns([pendingTurn])
     await runTurn({
       pendingTurn,
+      action,
       baseTurns: [],
       baseState: freshState,
       basePlot: [],
