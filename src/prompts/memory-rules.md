@@ -30,10 +30,14 @@ Typical entries:
 
 ## What does NOT belong here
 
-- Routine scene-level details: where the player is right now, what they're holding, the weather, who's in the room. These live in the narration / current state.
+- **Temporary state of any kind**: where someone is standing right now, who is present, a mood or reaction of the moment, what's held or worn, the weather. That is `update_state`'s job — never fold current-scene status into a memory description.
 - Future intentions, planned beats, plot directions. → plot plan.
 - Irrelevant details: every door, every meal, every NPC greeted in passing.
 - Re-derivable flavor: the colour of a guard's cloak, a tavern's name when the tavern won't recur.
+
+## The durability test
+
+Before setting an entry, ask: *will this still be true and matter after the scene ends?* If it is only true right now, it belongs in live state or the prose, not memory. Write each description in scene-independent terms — who the person **is** (identity, look, motivations, relationships, secrets), not what they are currently doing or feeling. An event earns an entry only once its consequences outlast the scene.
 
 ## Tool: `update_memory`
 

@@ -82,7 +82,7 @@ const FINAL_NARRATIVE_INSTRUCTION =
   'Do not emit tool calls, JSON tool envelopes, XML function calls, analysis, or commentary. Return only the in-character narrative response now in 1-4 paragraphs.'
 
 const PLOTTER_INSTRUCTION =
-  'The narration for this turn is complete. You are now acting as the Plotter: compare the player’s input and the narration above against the current state, memory, and future plot plan (see the get_state / get_memory / get_plot_plan results). Record every material change by calling `update_state`, `update_memory`, and/or `future_plot_plan`, following each subsystem’s rules — batch every needed call into this single response. If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.'
+  'The narration for this turn is complete. You are now acting as the Plotter: compare the player’s input and the narration above against the current state, memory, and future plot plan (see the get_state / get_memory / get_plot_plan results). Record every material change by calling `update_state`, `update_memory`, and/or `future_plot_plan`, following each subsystem’s rules — batch every needed call into this single response. Keep the subsystems distinct: `update_state` holds the current scene (positions, presence, held items, active tension); `update_memory` holds only durable, scene-independent canon; `future_plot_plan` holds only future directions. If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.'
 
 /**
  * Thrown when the model ends its turn (finish_reason=stop) with tool calls
