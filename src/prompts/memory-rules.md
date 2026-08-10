@@ -20,7 +20,7 @@ Any entry:
 Characters add:
 
 - **`wants`** — specific goals and intentions.
-- **`facts`** — important established information, including what they know about the player.
+- **`facts`** — important established information, including what they know about the player. Track what they have actually witnessed or been told — this is what gates their dialogue — and record it when they learn something important.
 - **`bond`** — current relationship and attitude toward the player.
 - **`relationships`** — ties to other characters; itemize by character name when there are several.
 
