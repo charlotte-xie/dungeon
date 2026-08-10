@@ -8,6 +8,7 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 - Irreversible outcomes and changes to the current situation.
 - Unresolved discoveries, threats, mysteries, debts, promises, and objectives that can affect what comes later.
 - Changes in an NPC's intentions, knowledge, allegiance, or relationship with the player.
+- Who was present when something significant was revealed, done, or agreed — who knows what matters later.
 - Important resources, injuries, objects, access, or leverage gained or lost.
 - The minimum causal link needed to explain why the resulting situation exists.
 
