@@ -24,6 +24,7 @@ export const DEFAULT_REVISER_MODEL = 'grok-4-1-fast-non-reasoning'
 export const MODEL_OPTIONS = [
   'grok-4-1-fast-reasoning',
   'grok-4-1-fast-non-reasoning',
+  'grok-4.5',
   'grok-4.3',
   'grok-4.20-0309-reasoning',
   'grok-4',
