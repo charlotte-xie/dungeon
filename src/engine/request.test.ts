@@ -32,23 +32,23 @@ function build(
     includeMemory: true,
     ...overrides,
   }
-  return buildModelMessages(
-    'system prompt',
-    SLOTS,
-    [],
+  return buildModelMessages({
+    systemPrompt: 'system prompt',
+    slots: SLOTS,
+    chronicle: [],
     history,
-    {
+    data: {
       state: { scene: { location: 'the mill' } },
       plot: ['The miller returns at dusk'],
       memory: { player: 'A drifter with a debt.' },
     },
-    4000,
-    true,
-    flags.includeWorldState,
-    flags.includePlotOutline,
-    flags.includeMemory,
-    false,
-  )
+    stateCleanupThreshold: 4000,
+    includePriorPlayerTurns: true,
+    includeWorldState: flags.includeWorldState,
+    includePlotOutline: flags.includePlotOutline,
+    includeMemory: flags.includeMemory,
+    nsfw: false,
+  })
 }
 
 describe('buildModelMessages layout', () => {

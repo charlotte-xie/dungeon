@@ -185,19 +185,34 @@ export function buildContextInjectionMessages(
   return [{ role: 'assistant', content: '', toolCalls: calls }, ...results]
 }
 
-export function buildModelMessages(
-  systemPrompt: string,
-  slots: AdventureSlots,
-  chronicle: Chronicle,
-  history: Turn[],
-  data: StoryData,
-  stateCleanupThreshold: number,
-  includePriorPlayerTurns: boolean,
-  includeWorldState: boolean,
-  includePlotOutline: boolean,
-  includeMemory: boolean,
-  nsfw: boolean,
-): ModelMessage[] {
+export interface ModelMessagesArgs {
+  systemPrompt: string
+  slots: AdventureSlots
+  chronicle: Chronicle
+  history: Turn[]
+  data: StoryData
+  stateCleanupThreshold: number
+  includePriorPlayerTurns: boolean
+  includeWorldState: boolean
+  includePlotOutline: boolean
+  includeMemory: boolean
+  nsfw: boolean
+}
+
+export function buildModelMessages(args: ModelMessagesArgs): ModelMessage[] {
+  const {
+    systemPrompt,
+    slots,
+    chronicle,
+    history,
+    data,
+    stateCleanupThreshold,
+    includePriorPlayerTurns,
+    includeWorldState,
+    includePlotOutline,
+    includeMemory,
+    nsfw,
+  } = args
   const messages: ModelMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'system', content: nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT },

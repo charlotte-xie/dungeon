@@ -261,19 +261,19 @@ function App() {
         return (
           <ContextViewer
             messages={applyTurnReminder(
-              buildModelMessages(
+              buildModelMessages({
                 systemPrompt,
-                game.slots,
-                game.chronicle,
-                turns.slice(compactCutoff),
-                { state: game.state, plot: game.plot, memory: game.memory },
-                context.stateCleanupChars,
-                context.includePriorPlayerTurns,
-                context.includeWorldState,
-                context.includePlotOutline,
-                context.includeMemory,
-                context.nsfw,
-              ),
+                slots: game.slots,
+                chronicle: game.chronicle,
+                history: turns.slice(compactCutoff),
+                data: { state: game.state, plot: game.plot, memory: game.memory },
+                stateCleanupThreshold: context.stateCleanupChars,
+                includePriorPlayerTurns: context.includePriorPlayerTurns,
+                includeWorldState: context.includeWorldState,
+                includePlotOutline: context.includePlotOutline,
+                includeMemory: context.includeMemory,
+                nsfw: context.nsfw,
+              }),
               context.reminderAsSystem,
               {
                 worldState: context.includeWorldState,

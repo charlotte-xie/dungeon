@@ -115,19 +115,19 @@ export async function runNarrator(
   // the tail of these messages. From here on the conversation is append-only —
   // never rewritten mid-turn — so every loop iteration extends the provider's
   // cached prefix instead of invalidating it.
-  const messages = buildModelMessages(
-    ctx.systemPrompt,
-    ctx.slots,
-    ctx.chronicle,
-    ctx.history,
+  const messages = buildModelMessages({
+    systemPrompt: ctx.systemPrompt,
+    slots: ctx.slots,
+    chronicle: ctx.chronicle,
+    history: ctx.history,
     data,
-    ctx.stateCleanupThreshold,
-    ctx.includePriorPlayerTurns,
-    ctx.includeWorldState,
-    ctx.includePlotOutline,
-    ctx.includeMemory,
-    ctx.nsfw,
-  )
+    stateCleanupThreshold: ctx.stateCleanupThreshold,
+    includePriorPlayerTurns: ctx.includePriorPlayerTurns,
+    includeWorldState: ctx.includeWorldState,
+    includePlotOutline: ctx.includePlotOutline,
+    includeMemory: ctx.includeMemory,
+    nsfw: ctx.nsfw,
+  })
   const flags = {
     includeWorldState: ctx.includeWorldState,
     includePlotOutline: ctx.includePlotOutline,
