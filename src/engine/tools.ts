@@ -4,19 +4,20 @@
 import { buildMemoryRules, buildOocRules, buildPlotRules } from '../prompts'
 import type { ModelToolDefinition } from './model/types'
 import { deleteByPath, getByPath, isSafeStatePath, setByPath } from './state'
-import type { JsonValue, Memory, StoryData, WorldState } from './types'
+import type { JsonValue, Memory, MemoryEntry, StoryData, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
 export const MAX_PLOT_ITEM_CHARS = 300
 
-export const MAX_MEMORY_STRING_CHARS = 500
+export const MAX_MEMORY_FACET_CHARS = 300
+export const MAX_MEMORY_FACETS = 8
 
 export const MAX_OOC_ITEMS = 10
 export const MAX_OOC_ITEM_CHARS = 300
 
 export const PLOT_RULES = buildPlotRules(MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS)
 
-export const MEMORY_RULES = buildMemoryRules(MAX_MEMORY_STRING_CHARS)
+export const MEMORY_RULES = buildMemoryRules(MAX_MEMORY_FACET_CHARS, MAX_MEMORY_FACETS)
 
 export const OOC_RULES = buildOocRules(MAX_OOC_ITEMS, MAX_OOC_ITEM_CHARS)
 
@@ -73,20 +74,26 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things. Update an entry only when a durable fact about that entity is established or changed (e.g. the story reveals she keeps a dog called Benny) — never to log events. What happened belongs to the chronicle; an event survives here only as the facts it leaves on its subjects. Never store temporary state: current positions, present company, momentary moods, and held or worn items are current-scene data, not memory. \`set\` maps lowercase underscore slugs to complete replacement descriptions; \`delete\` removes entries that are genuinely no longer relevant. Deletes apply before sets. Each description is limited to ${MAX_MEMORY_STRING_CHARS} characters.`,
+      `Maintain the fact file about the story's recurring people, places, and things. Entries are objects of short string facets (is / wants / knows / bond / secret, plus free facets) keyed by lowercase underscore slugs. Edits are additive by dotted path — only the paths you name change; omission never deletes. Update a facet only when a durable fact about that entity is established or changed — never to log events (what happened belongs to the chronicle) and never for temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Maximum ${MAX_MEMORY_FACETS} facets per entry, ${MAX_MEMORY_FACET_CHARS} characters per facet.`,
     parameters: {
       type: 'object',
       properties: {
-        set: {
+        move: {
           type: 'object',
-          description: `Map of slug → string description. Slugs are lowercase with underscores, no periods or spaces. Each value is a single complete English description, <= ${MAX_MEMORY_STRING_CHARS} chars. Setting a slug fully replaces its existing description.`,
+          description:
+            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate a facet (`slug.facet` → `slug.facet`).',
           additionalProperties: { type: 'string' },
         },
         delete: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Slugs to remove entirely. Applied before sets. Only delete when the target is genuinely no longer relevant to the story.',
+            'Paths to remove: `slug.facet` for a facet that stopped being true, or `slug` for an entity genuinely no longer relevant.',
+        },
+        set: {
+          type: 'object',
+          description: `Map of \`slug.facet\` → string (preferred — surgical), or \`slug\` → full facet object (replaces that entry; use sparingly). Facet values are complete present-tense phrases, <= ${MAX_MEMORY_FACET_CHARS} chars.`,
+          additionalProperties: true,
         },
       },
     },
@@ -368,74 +375,218 @@ export function executeTool(
     try {
       const args = JSON.parse(rawArgs) as {
         set?: Record<string, unknown>
-        delete?: string[]
+        delete?: unknown
+        move?: Record<string, unknown>
       }
-      const setEntries: [string, unknown][] =
-        args.set && typeof args.set === 'object' && !Array.isArray(args.set)
-          ? Object.entries(args.set).filter(
-              (e): e is [string, unknown] => typeof e[0] === 'string' && e[0].length > 0,
-            )
+      const moveEntries =
+        args.move && typeof args.move === 'object' && !Array.isArray(args.move)
+          ? Object.entries(args.move)
           : []
-      const deleteSlugs = Array.isArray(args.delete)
+      const deletePaths = Array.isArray(args.delete)
         ? args.delete.filter((p): p is string => typeof p === 'string' && p.length > 0)
         : []
-      if (setEntries.length === 0 && deleteSlugs.length === 0) {
+      const setEntries =
+        args.set && typeof args.set === 'object' && !Array.isArray(args.set)
+          ? Object.entries(args.set)
+          : []
+      if (!moveEntries.length && !deletePaths.length && !setEntries.length) {
         return unchanged(
-          'error: update_memory requires a non-empty `set` map, a non-empty `delete` array, or both.',
+          'error: update_memory requires a non-empty `set`, `delete`, or `move`.',
         )
       }
       const notes: string[] = []
       let failed = false
-      let nextMemory: Memory = memory
-      for (const slug of deleteSlugs) {
-        if (slug.includes('.')) {
+      let next: Memory = memory
+
+      // Paths are `slug` or `slug.facet` — two levels, nothing deeper.
+      const parsePath = (path: string): { slug: string; facet?: string } | null => {
+        const segments = path.split('.')
+        if (segments.length < 1 || segments.length > 2) return null
+        if (segments.some((s) => !s || !isSafeStatePath(s))) return null
+        return { slug: segments[0], facet: segments[1] }
+      }
+      const dropSlug = (m: Memory, slug: string): Memory => {
+        const copy = { ...m }
+        delete copy[slug]
+        return copy
+      }
+      const setFacet = (m: Memory, slug: string, facet: string, value: string): Memory => ({
+        ...m,
+        [slug]: { ...(m[slug] ?? {}), [facet]: value },
+      })
+      const validateFacetValue = (path: string, value: unknown): string | null => {
+        if (typeof value !== 'string' || !value.trim()) {
+          notes.push(`REJECTED set ${path}: facet values must be non-empty strings. Unchanged.`)
+          failed = true
+          return null
+        }
+        if (value.length > MAX_MEMORY_FACET_CHARS) {
           notes.push(
-            `REJECTED delete ${slug}: memory slugs cannot contain periods. Use the bare slug (e.g. "lady_veyra"). Existing value unchanged.`,
+            `REJECTED set ${path}: facet too long (${value.length} chars, max ${MAX_MEMORY_FACET_CHARS}). Rewrite tighter — state the present truth, not the story. Unchanged.`,
           )
+          failed = true
+          return null
+        }
+        return value
+      }
+
+      // Moves first: rename entities or relocate facets.
+      for (const [fromRaw, toRaw] of moveEntries) {
+        if (typeof toRaw !== 'string') {
+          notes.push(`REJECTED move ${fromRaw}: target must be a path string.`)
           failed = true
           continue
         }
-        if (slug in nextMemory) {
-          const copy = { ...nextMemory }
-          delete copy[slug]
-          nextMemory = copy
-          notes.push(`deleted ${slug}`)
+        const from = parsePath(fromRaw)
+        const to = parsePath(toRaw)
+        if (!from || !to) {
+          notes.push(`REJECTED move ${fromRaw} → ${toRaw}: paths must be \`slug\` or \`slug.facet\`.`)
+          failed = true
+          continue
+        }
+        if (Boolean(from.facet) !== Boolean(to.facet)) {
+          notes.push(`REJECTED move ${fromRaw} → ${toRaw}: cannot move between a whole entry and a facet.`)
+          failed = true
+          continue
+        }
+        if (from.facet && to.facet) {
+          const value = next[from.slug]?.[from.facet]
+          if (value === undefined) {
+            notes.push(`move ${fromRaw} (no-op; not present)`)
+            continue
+          }
+          if (next[to.slug]?.[to.facet] !== undefined) {
+            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: target facet already exists. Delete it first or set it directly.`)
+            failed = true
+            continue
+          }
+          const fromEntry = { ...next[from.slug] }
+          delete fromEntry[from.facet]
+          next = Object.keys(fromEntry).length
+            ? { ...next, [from.slug]: fromEntry }
+            : dropSlug(next, from.slug)
+          next = setFacet(next, to.slug, to.facet, value)
+          notes.push(`moved ${fromRaw} → ${toRaw}`)
         } else {
-          notes.push(`deleted ${slug} (no-op; not present)`)
+          const entry = next[from.slug]
+          if (entry === undefined) {
+            notes.push(`move ${fromRaw} (no-op; not present)`)
+            continue
+          }
+          if (next[to.slug] !== undefined) {
+            notes.push(`REJECTED move ${from.slug} → ${to.slug}: slug ${to.slug} already exists — merge or delete it explicitly first.`)
+            failed = true
+            continue
+          }
+          next = dropSlug(next, from.slug)
+          next = { ...next, [to.slug]: entry }
+          notes.push(`renamed ${from.slug} → ${to.slug}`)
         }
       }
-      for (const [slug, value] of setEntries) {
-        if (slug.includes('.')) {
-          notes.push(
-            `REJECTED set ${slug}: memory slugs cannot contain periods. Use the bare slug (e.g. "lady_veyra"). Existing value unchanged.`,
-          )
+
+      // Deletes: facets that stopped being true, or whole entries.
+      for (const raw of deletePaths) {
+        const p = parsePath(raw)
+        if (!p) {
+          notes.push(`REJECTED delete ${raw}: paths must be \`slug\` or \`slug.facet\`.`)
           failed = true
           continue
         }
-        if (typeof value !== 'string') {
-          const got = Array.isArray(value)
-            ? 'array'
-            : value === null
-              ? 'null'
-              : typeof value
-          notes.push(
-            `REJECTED set ${slug}: memory values must be strings (a single complete English description). Got ${got}. Existing value unchanged.`,
-          )
-          failed = true
-          continue
+        if (p.facet) {
+          if (next[p.slug]?.[p.facet] === undefined) {
+            notes.push(`deleted ${raw} (no-op; not present)`)
+            continue
+          }
+          const entry = { ...next[p.slug] }
+          delete entry[p.facet]
+          if (Object.keys(entry).length === 0) {
+            next = dropSlug(next, p.slug)
+            notes.push(`deleted ${raw} (entry now empty — removed)`)
+          } else {
+            next = { ...next, [p.slug]: entry }
+            notes.push(`deleted ${raw}`)
+          }
+        } else if (next[p.slug] === undefined) {
+          notes.push(`deleted ${p.slug} (no-op; not present)`)
+        } else {
+          next = dropSlug(next, p.slug)
+          notes.push(`deleted ${p.slug}`)
         }
-        if (value.length > MAX_MEMORY_STRING_CHARS) {
-          notes.push(
-            `REJECTED set ${slug}: description too long (${value.length} chars, max ${MAX_MEMORY_STRING_CHARS}). Existing value unchanged. Split across two slugs or rewrite tighter.`,
-          )
-          failed = true
-          continue
-        }
-        nextMemory = { ...nextMemory, [slug]: value }
-        notes.push(`set ${slug}`)
       }
+
+      // Sets last: surgical facet writes, or whole-entry replacement.
+      for (const [raw, value] of setEntries) {
+        const p = parsePath(raw)
+        if (!p) {
+          notes.push(`REJECTED set ${raw}: paths must be \`slug\` or \`slug.facet\`.`)
+          failed = true
+          continue
+        }
+        if (p.facet) {
+          const validated = validateFacetValue(raw, value)
+          if (validated === null) continue
+          const entry = next[p.slug]
+          if (
+            entry &&
+            entry[p.facet] === undefined &&
+            Object.keys(entry).length >= MAX_MEMORY_FACETS
+          ) {
+            notes.push(
+              `REJECTED set ${raw}: entry already has ${MAX_MEMORY_FACETS} facets. Delete or condense one first.`,
+            )
+            failed = true
+            continue
+          }
+          next = setFacet(next, p.slug, p.facet, validated)
+          notes.push(`set ${raw}`)
+        } else {
+          // Whole entry: an object of string facets, or a bare string coerced
+          // to { is: value } for convenience.
+          const entryObj =
+            typeof value === 'string'
+              ? { is: value }
+              : value && typeof value === 'object' && !Array.isArray(value)
+                ? (value as Record<string, unknown>)
+                : null
+          if (!entryObj) {
+            notes.push(
+              `REJECTED set ${p.slug}: an entry must be an object of string facets (or a single string for \`is\`). Unchanged.`,
+            )
+            failed = true
+            continue
+          }
+          const facets = Object.entries(entryObj)
+          if (!facets.length || facets.length > MAX_MEMORY_FACETS) {
+            notes.push(
+              `REJECTED set ${p.slug}: entries need 1-${MAX_MEMORY_FACETS} facets (got ${facets.length}). Unchanged.`,
+            )
+            failed = true
+            continue
+          }
+          let ok = true
+          const validated: MemoryEntry = {}
+          for (const [facet, facetValue] of facets) {
+            if (!facet || facet.includes('.') || !isSafeStatePath(facet)) {
+              notes.push(`REJECTED set ${p.slug}: bad facet name "${facet}". Unchanged.`)
+              failed = true
+              ok = false
+              break
+            }
+            const v = validateFacetValue(`${p.slug}.${facet}`, facetValue)
+            if (v === null) {
+              ok = false
+              break
+            }
+            validated[facet] = v
+          }
+          if (!ok) continue
+          next = { ...next, [p.slug]: validated }
+          notes.push(`set ${p.slug} (${facets.length} facet${facets.length === 1 ? '' : 's'})`)
+        }
+      }
+
       const result = `${failed ? 'partial' : 'ok'} — memory: ${notes.join('; ')}`
-      return { data: { state, plot, memory: nextMemory, ooc }, result }
+      return { data: { state, plot, memory: next, ooc }, result }
     } catch (err) {
       return unchanged(`error: ${err instanceof Error ? err.message : String(err)}`)
     }

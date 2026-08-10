@@ -53,10 +53,15 @@ export type JsonValue =
 
 export type WorldState = { [key: string]: JsonValue }
 
-// Long-term memory: a slug → freeform string description of canonical entities
-// (NPCs, locations, plot themes, key events) that persist across scenes. Each
-// value is a single complete English description for that entity.
-export type Memory = { [key: string]: string }
+// One long-term memory entry: a flat object of short string facets about a
+// single entity (e.g. is / wants / knows / bond / secret). Two levels only —
+// slug.facet — so facts stay findable and edits stay surgical.
+export type MemoryEntry = { [facet: string]: string }
+
+// Long-term memory: slug → facet object for each canonical entity (people,
+// places, things) that persists across scenes. Edited additively by dotted
+// path: only paths named in a call change; omission never deletes.
+export type Memory = { [slug: string]: MemoryEntry }
 
 // The working data a turn threads through the narrator, plotter, and tool
 // executor as one unit: current-scene state, future plot plan, and the

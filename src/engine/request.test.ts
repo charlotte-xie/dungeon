@@ -28,7 +28,7 @@ function build(history: Turn[], overrides?: Partial<ContextFlags>): ModelMessage
     data: {
       state: { scene: { location: 'the mill' } },
       plot: ['The miller returns at dusk'],
-      memory: { player: 'A drifter with a debt.' },
+      memory: { player: { is: 'A drifter with a debt.' } },
       ooc: ['Keep replies short.'],
     },
     stateCleanupThreshold: 4000,

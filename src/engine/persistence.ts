@@ -60,8 +60,31 @@ function isWorldStateLike(value: unknown): value is WorldState {
   return isRecord(value) && Object.values(value).every(isJsonValue)
 }
 
-function isMemoryLike(value: unknown): value is Memory {
-  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
+function isMemoryEntryLike(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((facet) => typeof facet === 'string')
+}
+
+// Accepts both the current faceted shape and the legacy slug → string shape;
+// normalizeMemoryShape upgrades legacy entries on load.
+function isMemoryLike(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.values(value).every(
+      (entry) => typeof entry === 'string' || isMemoryEntryLike(entry),
+    )
+  )
+}
+
+// Upgrade legacy string entries to the faceted shape ({ is: <old text> }) so
+// nothing is lost and the plotter can refactor entries as it touches them.
+export function normalizeMemoryShape(value: unknown): Memory {
+  if (!isRecord(value)) return {}
+  const out: Memory = {}
+  for (const [slug, entry] of Object.entries(value)) {
+    if (typeof entry === 'string') out[slug] = { is: entry }
+    else if (isMemoryEntryLike(entry)) out[slug] = entry
+  }
+  return out
 }
 
 function isTraceLike(value: unknown): boolean {
@@ -238,7 +261,7 @@ export function loadStoredMemory(): Memory {
     if (!isMemoryLike(parsed)) {
       return structuredClone(DEFAULT_MEMORY)
     }
-    return parsed
+    return normalizeMemoryShape(parsed)
   } catch {
     return structuredClone(DEFAULT_MEMORY)
   }
@@ -586,10 +609,7 @@ export function normalizeSavedGame(
   } else {
     chronicle = []
   }
-  const memory: Memory =
-    isMemoryLike(legacy.memory)
-      ? legacy.memory
-      : {}
+  const memory: Memory = normalizeMemoryShape(legacy.memory)
   return {
     id: legacy.id,
     name: legacy.name,

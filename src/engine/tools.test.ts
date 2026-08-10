@@ -39,6 +39,92 @@ describe('tool execution boundaries', () => {
     expect(deleted.result).toContain('OOC list now has 1 entry')
   })
 
+  it('edits memory facets surgically by dotted path', () => {
+    const data = {
+      state: {},
+      plot: [],
+      memory: { the_baker: { is: 'Hesta the baker', bond: 'wary of the player' } },
+      ooc: [],
+    }
+    const result = executeTool(
+      'update_memory',
+      JSON.stringify({ set: { 'the_baker.bond': 'blames the player for the raid' } }),
+      data,
+    )
+    expect(result.data.memory).toEqual({
+      the_baker: { is: 'Hesta the baker', bond: 'blames the player for the raid' },
+    })
+    expect(result.result).toBe('ok — memory: set the_baker.bond')
+  })
+
+  it('renames an entity with move and refuses to clobber an existing slug', () => {
+    const data = {
+      state: {},
+      plot: [],
+      memory: {
+        dark_haired_boy: { is: 'dark-haired sixth-former, easy charm' },
+        chloe: { is: 'blonde student' },
+      },
+      ooc: [],
+    }
+    const renamed = executeTool(
+      'update_memory',
+      JSON.stringify({
+        move: { dark_haired_boy: 'daniel' },
+        set: { 'daniel.bond': 'walked the player to the common room' },
+      }),
+      data,
+    )
+    expect(Object.keys(renamed.data.memory).sort()).toEqual(['chloe', 'daniel'])
+    expect(renamed.data.memory.daniel).toEqual({
+      is: 'dark-haired sixth-former, easy charm',
+      bond: 'walked the player to the common room',
+    })
+
+    const clobber = executeTool(
+      'update_memory',
+      JSON.stringify({ move: { daniel: 'chloe' } }),
+      renamed.data,
+    )
+    expect(clobber.result).toContain('already exists')
+    expect(clobber.data.memory.chloe).toEqual({ is: 'blonde student' })
+  })
+
+  it('deletes facets and drops an entry when its last facet goes', () => {
+    const data = {
+      state: {},
+      plot: [],
+      memory: { the_baker: { is: 'Hesta', secret: 'hiding her son' }, stub: { is: 'stub' } },
+      ooc: [],
+    }
+    const result = executeTool(
+      'update_memory',
+      JSON.stringify({ delete: ['the_baker.secret', 'stub.is'] }),
+      data,
+    )
+    expect(result.data.memory).toEqual({ the_baker: { is: 'Hesta' } })
+    expect(result.result).toContain('entry now empty — removed')
+  })
+
+  it('rejects oversized facets and unsafe paths without partial writes', () => {
+    const data = { state: {}, plot: [], memory: {}, ooc: [] }
+    const tooLong = executeTool(
+      'update_memory',
+      JSON.stringify({ set: { 'npc.is': 'x'.repeat(400) } }),
+      data,
+    )
+    expect(tooLong.data.memory).toEqual({})
+    expect(tooLong.result).toContain('facet too long')
+
+    const unsafe = executeTool(
+      'update_memory',
+      JSON.stringify({ set: { '__proto__.polluted': 'yes' } }),
+      data,
+    )
+    expect(unsafe.result).toContain('REJECTED')
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
   it('reports list-editor errors with the OOC noun', () => {
     const data = { state: {}, plot: [], memory: {}, ooc: [] }
     const result = executeTool('update_ooc', JSON.stringify({ op: 'delete', position: 3 }), data)

@@ -170,17 +170,30 @@ export function StateViewer({
       return
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      setMemoryError('Memory must be a JSON object mapping slugs to string descriptions.')
+      setMemoryError('Memory must be a JSON object mapping slugs to facet objects.')
       return
     }
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v !== 'string') {
-        setMemoryError(`Memory value for "${k}" must be a string description.`)
+    const normalized: Memory = {}
+    for (const [slug, entry] of Object.entries(parsed)) {
+      // Accept a legacy string entry and upgrade it to { is: ... } on save.
+      if (typeof entry === 'string') {
+        normalized[slug] = { is: entry }
+        continue
+      }
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        setMemoryError(`Entry "${slug}" must be an object of string facets (e.g. { "is": "..." }).`)
         return
       }
+      for (const [facet, value] of Object.entries(entry)) {
+        if (typeof value !== 'string') {
+          setMemoryError(`Facet "${slug}.${facet}" must be a string.`)
+          return
+        }
+      }
+      normalized[slug] = entry as Memory[string]
     }
     setMemoryError(null)
-    onSaveMemory(parsed as Memory)
+    onSaveMemory(normalized)
   }
 
   return (
@@ -202,9 +215,11 @@ export function StateViewer({
             <h2>Long-term memory</h2>
             <p className="hint">
               The DM maintains this JSON via the <code>update_memory</code> tool — the
-              canonical record of <strong>NPCs, locations, plot themes, and key past events</strong>{' '}
-              that persist across scenes. Each key is a slug; each value is a single
-              string description of that entity. Current: {memoryEntries} entr
+              fact file of <strong>people, places, and things</strong> that persist across
+              scenes. Each key is a slug; each value is an object of short string facets
+              (<code>is</code>, <code>wants</code>, <code>knows</code>, <code>bond</code>,{' '}
+              <code>secret</code>, …). Edits are additive by dotted path, with rename via{' '}
+              <code>move</code>. Current: {memoryEntries} entr
               {memoryEntries === 1 ? 'y' : 'ies'}.
             </p>
             <textarea
