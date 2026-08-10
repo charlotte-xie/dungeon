@@ -15,12 +15,12 @@ Any entry:
 - **`is`** — definition and description in one dense phrase. Every entry has this.
 - **`notes`** — miscellaneous info worth keeping that fits no other facet.
 - **`history`** — notable past story events involving this entity that still shape the present. Curated highlights, not a log — the chronicle records everything else.
-- **`secret`** — what is true but not yet revealed in the narrative, and exactly who knows; update the who-knows list the moment it spreads.
+- **`secret`** — what is true but not yet revealed in the narrative, and who knows.
 
 Characters add:
 
 - **`wants`** — specific goals and intentions.
-- **`facts`** — important established information, including what they know about the player. Track what they have actually witnessed or been told — this is what gates their dialogue — and record it the moment they learn something important: knowledge spreads between characters only when recorded here.
+- **`facts`** — important established information, including what they know about the player and anything notable they have witnessed or been told.
 - **`bond`** — current relationship and attitude toward the player.
 - **`relationships`** — ties to other characters; itemize by character name when there are several.
 
