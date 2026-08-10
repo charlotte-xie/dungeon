@@ -874,6 +874,19 @@ textarea.state-json-editor {
   flex: 1;
 }
 
+/* Pinned variant: sticks to the bottom of the scrolling modal (mirror of the
+   sticky header), spanning the modal's full width over its padding. */
+.modal-actions.pinned {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: #161616;
+  border-top: 1px solid #3a3a3a;
+  margin: 0.25rem -1.25rem -1rem;
+  padding: 0.6rem 1.25rem 1rem;
+  flex-wrap: wrap;
+}
+
 .modal-actions > button:not(.ghost) {
   padding: 0.45rem 1rem;
   font: inherit;

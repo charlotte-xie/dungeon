@@ -115,66 +115,94 @@ export function StateViewer({
     0,
   )
 
-  function handleSave() {
+  // Validators: return the parsed value on success, null on failure (setting
+  // the section's inline error either way). Save Changes is atomic — it saves
+  // nothing unless every dirty section validates.
+  function validateState(): WorldState | null {
     let parsed: unknown
     try {
       parsed = JSON.parse(draft)
     } catch (err) {
       setParseError(err instanceof Error ? err.message : String(err))
-      return
+      return null
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       setParseError('State must be a JSON object (e.g. { "scene": {...} }).')
-      return
+      return null
     }
     setParseError(null)
-    onSaveState(parsed as WorldState)
+    return parsed as WorldState
   }
 
-  function handleSavePlot() {
+  function validatePlot(): string[] | null {
     const parsed = parsePlotDraft(plotDraft)
     if (parsed.length > MAX_PLOT_ITEMS) {
       setPlotError(`Too many bullets (${parsed.length}, max ${MAX_PLOT_ITEMS}).`)
-      return
+      return null
     }
     const tooLong = parsed.find((s) => s.length > MAX_PLOT_ITEM_CHARS)
     if (tooLong) {
       setPlotError(`A bullet is too long (${tooLong.length} chars, max ${MAX_PLOT_ITEM_CHARS}).`)
-      return
+      return null
     }
     setPlotError(null)
-    onSavePlot(parsed)
+    return parsed
   }
 
-  function handleSaveOoc() {
+  function validateOoc(): string[] | null {
     const parsed = parsePlotDraft(oocDraft)
     if (parsed.length > MAX_OOC_ITEMS) {
       setOocError(`Too many entries (${parsed.length}, max ${MAX_OOC_ITEMS}).`)
-      return
+      return null
     }
     const tooLong = parsed.find((s) => s.length > MAX_OOC_ITEM_CHARS)
     if (tooLong) {
       setOocError(`An entry is too long (${tooLong.length} chars, max ${MAX_OOC_ITEM_CHARS}).`)
-      return
+      return null
     }
     setOocError(null)
-    onSaveOoc(parsed)
+    return parsed
   }
 
-  function handleSaveMemory() {
+  function validateMemory(): Memory | null {
     let parsed: unknown
     try {
       parsed = JSON.parse(memoryDraft)
     } catch (err) {
       setMemoryError(err instanceof Error ? err.message : String(err))
-      return
+      return null
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      setMemoryError('Memory must be a JSON object mapping slugs to facet objects.')
-      return
+      setMemoryError('Memory must be a JSON object mapping slugs to entries.')
+      return null
     }
     setMemoryError(null)
-    onSaveMemory(parsed as Memory)
+    return parsed as Memory
+  }
+
+  const wantState = context.includeWorldState && stateDirty
+  const wantPlot = context.includePlotOutline && plotDirty
+  const wantOoc = context.includeOoc && oocDirty
+  const wantMemory = context.includeMemory && memoryDirty
+  const anyDirty = wantState || wantPlot || wantOoc || wantMemory
+
+  function handleSaveChanges() {
+    const nextState = wantState ? validateState() : undefined
+    const nextPlot = wantPlot ? validatePlot() : undefined
+    const nextOoc = wantOoc ? validateOoc() : undefined
+    const nextMemory = wantMemory ? validateMemory() : undefined
+    if (
+      (wantState && nextState === null) ||
+      (wantPlot && nextPlot === null) ||
+      (wantOoc && nextOoc === null) ||
+      (wantMemory && nextMemory === null)
+    ) {
+      return
+    }
+    if (nextState !== undefined && nextState !== null) onSaveState(nextState)
+    if (nextPlot !== undefined && nextPlot !== null) onSavePlot(nextPlot)
+    if (nextOoc !== undefined && nextOoc !== null) onSaveOoc(nextOoc)
+    if (nextMemory !== undefined && nextMemory !== null) onSaveMemory(nextMemory)
   }
 
   return (
@@ -333,7 +361,7 @@ export function StateViewer({
           </div>
         )}
 
-        <div className="modal-actions">
+        <div className="modal-actions pinned">
           {context.includeMemory && (
             <button
               className="ghost"
@@ -389,26 +417,9 @@ export function StateViewer({
           </button>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
-          {context.includeMemory && (
-            <button onClick={handleSaveMemory} disabled={busy || !memoryDirty}>
-              Save memory
-            </button>
-          )}
-          {context.includeWorldState && (
-            <button onClick={handleSave} disabled={busy || !stateDirty}>
-              Save state
-            </button>
-          )}
-          {context.includePlotOutline && (
-            <button onClick={handleSavePlot} disabled={busy || !plotDirty}>
-              Save plot
-            </button>
-          )}
-          {context.includeOoc && (
-            <button onClick={handleSaveOoc} disabled={busy || !oocDirty}>
-              Save OOC
-            </button>
-          )}
+          <button onClick={handleSaveChanges} disabled={busy || !anyDirty}>
+            Save Changes
+          </button>
         </div>
       </div>
     </div>
