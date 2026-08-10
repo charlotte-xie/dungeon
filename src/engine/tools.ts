@@ -1,7 +1,7 @@
 // Provider-neutral tool schemas plus the game-state executor. Wire-format
 // conversion and text-protocol recovery live under ./model.
 
-import { buildMemoryRules, buildPlotRules } from '../prompts'
+import { buildMemoryRules, buildOocRules, buildPlotRules } from '../prompts'
 import type { ModelToolDefinition } from './model/types'
 import { deleteByPath, getByPath, isSafeStatePath, setByPath } from './state'
 import type { JsonValue, Memory, StoryData, WorldState } from './types'
@@ -11,9 +11,14 @@ export const MAX_PLOT_ITEM_CHARS = 300
 
 export const MAX_MEMORY_STRING_CHARS = 500
 
+export const MAX_OOC_ITEMS = 10
+export const MAX_OOC_ITEM_CHARS = 300
+
 export const PLOT_RULES = buildPlotRules(MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS)
 
 export const MEMORY_RULES = buildMemoryRules(MAX_MEMORY_STRING_CHARS)
+
+export const OOC_RULES = buildOocRules(MAX_OOC_ITEMS, MAX_OOC_ITEM_CHARS)
 
 export const UPDATE_STATE_TOOL: ModelToolDefinition = {
     name: 'update_state',
@@ -117,9 +122,141 @@ export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
     parameters: { type: 'object', properties: {} },
 }
 
+export const UPDATE_OOC_TOOL: ModelToolDefinition = {
+    name: 'update_ooc',
+    description:
+      `Edit the numbered list of the player's standing out-of-character instructions. Call only when the player's input adds, changes, or withdraws a standing directive, or when an entry is completed or no longer relevant (delete it). One-shot commands fulfilled this turn are not recorded. Use one operation per call: \`append\` or \`insert\` a new directive, \`update\` one the player superseded, or \`delete\` one that no longer applies. Positions are 1-indexed. Maximum ${MAX_OOC_ITEMS} entries and ${MAX_OOC_ITEM_CHARS} characters per entry.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        op: {
+          type: 'string',
+          enum: ['append', 'insert', 'update', 'delete'],
+          description: 'Update operation to perform.',
+        },
+        position: {
+          type: 'integer',
+          minimum: 1,
+          description:
+            '1-indexed slot. Required for insert/update/delete. For insert, may equal length+1 (append at end). Ignored for append.',
+        },
+        text: {
+          type: 'string',
+          description: `New entry content. Required for append/insert/update. Must be <= ${MAX_OOC_ITEM_CHARS} chars. Ignored for delete.`,
+        },
+      },
+      required: ['op'],
+    },
+}
+
+export const CHECK_OOC_TOOL: ModelToolDefinition = {
+    name: 'check_ooc',
+    description:
+      "Check your private notes: the player's standing out-of-character instructions. The latest list is already in this conversation as a check_ooc result; call again only to re-check it after updates.",
+    parameters: { type: 'object', properties: {} },
+}
+
 export interface ToolExecResult {
   data: StoryData
   result: string
+}
+
+interface ListEditSpec {
+  toolName: string
+  // Lower-case noun used in result messages ('plan', 'OOC list').
+  noun: string
+  // Guidance appended when the list is at max capacity.
+  capAdvice: string
+  maxItems: number
+  maxItemChars: number
+}
+
+// Shared editor for the numbered-list subsystems (future plot plan, OOC
+// instructions): one op per call, 1-indexed positions. Returns the edited
+// list, or null when the edit was rejected (explanation in `result`).
+function executeListEdit(
+  rawArgs: string,
+  list: string[],
+  spec: ListEditSpec,
+): { list: string[] | null; result: string } {
+  const { toolName, noun, capAdvice, maxItems, maxItemChars } = spec
+  const capNoun = noun.charAt(0).toUpperCase() + noun.slice(1)
+  try {
+    const args = JSON.parse(rawArgs) as { op?: unknown; position?: unknown; text?: unknown }
+    const op = args.op
+    if (op !== 'append' && op !== 'insert' && op !== 'update' && op !== 'delete') {
+      return {
+        list: null,
+        result: `error: ${toolName} requires \`op\` to be one of "append","insert","update","delete". ${capNoun} unchanged.`,
+      }
+    }
+    const text = typeof args.text === 'string' ? args.text.trim() : ''
+    const positionRaw = typeof args.position === 'number' ? args.position : NaN
+    const position = Number.isFinite(positionRaw) ? Math.trunc(positionRaw) : NaN
+    const requireText = op === 'append' || op === 'insert' || op === 'update'
+    if (requireText && !text) {
+      return {
+        list: null,
+        result: `error: ${toolName} op="${op}" requires non-empty \`text\`. ${capNoun} unchanged.`,
+      }
+    }
+    if (requireText && text.length > maxItemChars) {
+      return {
+        list: null,
+        result: `error: ${noun} entry too long (${text.length} chars, max ${maxItemChars}). Rewrite shorter. ${capNoun} unchanged.`,
+      }
+    }
+    if (op === 'append' || op === 'insert') {
+      if (list.length >= maxItems) {
+        return {
+          list: null,
+          result: `error: ${noun} already at max ${maxItems} entries. ${capAdvice} ${capNoun} unchanged.`,
+        }
+      }
+    }
+    if (op === 'append') {
+      const next = [...list, text]
+      return { list: next, result: `ok — appended as entry ${next.length}.` }
+    }
+    if (op === 'insert') {
+      if (!Number.isInteger(position) || position < 1 || position > list.length + 1) {
+        return {
+          list: null,
+          result: `error: insert position ${args.position ?? '(missing)'} out of range. Valid: 1..${list.length + 1}. ${capNoun} unchanged.`,
+        }
+      }
+      const next = [...list.slice(0, position - 1), text, ...list.slice(position - 1)]
+      return {
+        list: next,
+        result: `ok — inserted at position ${position}. ${capNoun} now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
+      }
+    }
+    if (op === 'update') {
+      if (!Number.isInteger(position) || position < 1 || position > list.length) {
+        return {
+          list: null,
+          result: `error: update position ${args.position ?? '(missing)'} out of range. Valid: 1..${list.length}. ${capNoun} unchanged.`,
+        }
+      }
+      const next = list.slice()
+      next[position - 1] = text
+      return { list: next, result: `ok — updated entry ${position}.` }
+    }
+    // op === 'delete'
+    if (!Number.isInteger(position) || position < 1 || position > list.length) {
+      return {
+        list: null,
+        result: `error: delete position ${args.position ?? '(missing)'} out of range. Valid: 1..${list.length}. ${capNoun} unchanged.`,
+      }
+    }
+    const next = [...list.slice(0, position - 1), ...list.slice(position)]
+    return {
+      list: next,
+      result: `ok — deleted entry ${position}. ${capNoun} now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
+    }
+  } catch (err) {
+    return { list: null, result: `error: ${err instanceof Error ? err.message : String(err)}` }
+  }
 }
 
 export function executeTool(
@@ -127,7 +264,7 @@ export function executeTool(
   rawArgs: string,
   data: StoryData,
 ): ToolExecResult {
-  const { state, plot, memory } = data
+  const { state, plot, memory, ooc } = data
   // Most outcomes leave the data untouched (validation errors, unknown
   // tools). `unchanged` returns the same StoryData reference, so callers can
   // rely on identity to detect no-ops.
@@ -220,7 +357,7 @@ export function executeTool(
           : `kept ${keepPaths.length} path${keepPaths.length === 1 ? '' : 's'}, set ${setWrites.length} path${setWrites.length === 1 ? '' : 's'}${deleteNote}; ${newTopKeys} top-level key${newTopKeys === 1 ? '' : 's'} now`
       const notes = keepNotes.length ? `; ${keepNotes.join('; ')}` : ''
       return {
-        data: { state: nextState, plot, memory },
+        data: { state: nextState, plot, memory, ooc },
         result: `ok — ${summary}${notes}. Anything not in \`keep\` and not in \`set\` has been dropped.`,
       }
     } catch (err) {
@@ -298,88 +435,34 @@ export function executeTool(
         notes.push(`set ${slug}`)
       }
       const result = `${failed ? 'partial' : 'ok'} — memory: ${notes.join('; ')}`
-      return { data: { state, plot, memory: nextMemory }, result }
+      return { data: { state, plot, memory: nextMemory, ooc }, result }
     } catch (err) {
       return unchanged(`error: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
   if (name === 'future_plot_plan') {
-    try {
-      const args = JSON.parse(rawArgs) as {
-        op?: unknown
-        position?: unknown
-        text?: unknown
-      }
-      const op = args.op
-      if (op !== 'append' && op !== 'insert' && op !== 'update' && op !== 'delete') {
-        return unchanged(
-          'error: future_plot_plan requires `op` to be one of "append","insert","update","delete". Plan unchanged.',
-        )
-      }
-      const text = typeof args.text === 'string' ? args.text.trim() : ''
-      const positionRaw = typeof args.position === 'number' ? args.position : NaN
-      const position = Number.isFinite(positionRaw) ? Math.trunc(positionRaw) : NaN
-      const requireText = op === 'append' || op === 'insert' || op === 'update'
-      if (requireText && !text) {
-        return unchanged(
-          `error: future_plot_plan op="${op}" requires non-empty \`text\`. Plan unchanged.`,
-        )
-      }
-      if (requireText && text.length > MAX_PLOT_ITEM_CHARS) {
-        return unchanged(
-          `error: plan entry too long (${text.length} chars, max ${MAX_PLOT_ITEM_CHARS}). Rewrite shorter. Plan unchanged.`,
-        )
-      }
-      if (op === 'append') {
-        if (plot.length >= MAX_PLOT_ITEMS) {
-          return unchanged(
-            `error: plan already at max ${MAX_PLOT_ITEMS} entries. Delete a past-event or stale entry instead. Plan unchanged.`,
-          )
-        }
-        const next = [...plot, text]
-        return { data: { state, plot: next, memory }, result: `ok — appended as entry ${next.length}.` }
-      }
-      if (op === 'insert') {
-        if (plot.length >= MAX_PLOT_ITEMS) {
-          return unchanged(
-            `error: plan already at max ${MAX_PLOT_ITEMS} entries. Delete a past-event or stale entry instead. Plan unchanged.`,
-          )
-        }
-        if (!Number.isInteger(position) || position < 1 || position > plot.length + 1) {
-          return unchanged(
-            `error: insert position ${args.position ?? '(missing)'} out of range. Valid: 1..${plot.length + 1}. Plan unchanged.`,
-          )
-        }
-        const next = [...plot.slice(0, position - 1), text, ...plot.slice(position - 1)]
-        return {
-          data: { state, plot: next, memory },
-          result: `ok — inserted at position ${position}. Plan now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
-        }
-      }
-      if (op === 'update') {
-        if (!Number.isInteger(position) || position < 1 || position > plot.length) {
-          return unchanged(
-            `error: update position ${args.position ?? '(missing)'} out of range. Valid: 1..${plot.length}. Plan unchanged.`,
-          )
-        }
-        const next = plot.slice()
-        next[position - 1] = text
-        return { data: { state, plot: next, memory }, result: `ok — updated entry ${position}.` }
-      }
-      // op === 'delete'
-      if (!Number.isInteger(position) || position < 1 || position > plot.length) {
-        return unchanged(
-          `error: delete position ${args.position ?? '(missing)'} out of range. Valid: 1..${plot.length}. Plan unchanged.`,
-        )
-      }
-      const next = [...plot.slice(0, position - 1), ...plot.slice(position)]
-      return {
-        data: { state, plot: next, memory },
-        result: `ok — deleted entry ${position}. Plan now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
-      }
-    } catch (err) {
-      return unchanged(`error: ${err instanceof Error ? err.message : String(err)}`)
-    }
+    const edit = executeListEdit(rawArgs, plot, {
+      toolName: 'future_plot_plan',
+      noun: 'plan',
+      capAdvice: 'Delete a past-event or stale entry instead.',
+      maxItems: MAX_PLOT_ITEMS,
+      maxItemChars: MAX_PLOT_ITEM_CHARS,
+    })
+    return edit.list
+      ? { data: { state, plot: edit.list, memory, ooc }, result: edit.result }
+      : unchanged(edit.result)
+  }
+  if (name === 'update_ooc') {
+    const edit = executeListEdit(rawArgs, ooc, {
+      toolName: 'update_ooc',
+      noun: 'OOC list',
+      capAdvice: 'Delete a completed or stale entry instead.',
+      maxItems: MAX_OOC_ITEMS,
+      maxItemChars: MAX_OOC_ITEM_CHARS,
+    })
+    return edit.list
+      ? { data: { state, plot, memory, ooc: edit.list }, result: edit.result }
+      : unchanged(edit.result)
   }
   return unchanged(`error: unknown tool ${name}`)
 }

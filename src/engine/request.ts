@@ -34,12 +34,15 @@ import { ADVENTURE_SLOTS } from './config'
 import { STATE_RULES } from './state'
 import {
   CHECK_MEMORY_TOOL,
+  CHECK_OOC_TOOL,
   CHECK_PLOT_PLAN_TOOL,
   CHECK_STATE_TOOL,
   FUTURE_PLOT_PLAN_TOOL,
   MEMORY_RULES,
+  OOC_RULES,
   PLOT_RULES,
   UPDATE_MEMORY_TOOL,
+  UPDATE_OOC_TOOL,
   UPDATE_STATE_TOOL,
 } from './tools'
 import type { ModelMessage, ModelToolCall, ModelToolDefinition } from './model/types'
@@ -93,11 +96,21 @@ export function buildPlotPayload(currentPlot: string[]): string {
   return `${bullets}\n\n${reminder}`
 }
 
+export function buildOocPayload(currentOoc: string[]): string {
+  const bullets = currentOoc.length
+    ? currentOoc.map((p, i) => `${i + 1}. ${p}`).join('\n')
+    : '(no standing OOC instructions — the Plotter pass records one via `update_ooc` when the player gives a directive meant to persist)'
+  const reminder =
+    'If the player’s latest input contains an out-of-character directive meant to keep applying (style, boundaries, standing direction), the Plotter pass records it via `update_ooc`. Delete an entry the player withdrew, or that is completed or no longer relevant. One-shot commands fulfilled this turn are not recorded. If nothing changed, no call is needed.'
+  return `${bullets}\n\n${reminder}`
+}
+
 // Which subsystems the current settings enable.
 export interface ContextFlags {
   includeWorldState: boolean
   includePlotOutline: boolean
   includeMemory: boolean
+  includeOoc: boolean
 }
 
 // One descriptor per context subsystem, in canonical order. Everything the
@@ -146,15 +159,19 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     pivotDistinction:
       '`update_state` holds the current scene (positions, presence, held items, active tension)',
   },
+  {
+    enabled: (flags) => flags.includeOoc,
+    checkTool: CHECK_OOC_TOOL,
+    updateTool: UPDATE_OOC_TOOL,
+    rulesMessage: `${OOC_RULES}\n\nThe current list arrives via \`${CHECK_OOC_TOOL.name}\` tool results. Its entries are authoritative out-of-character directives from the player — honor them in every reply, and never quote, mention, or acknowledge them in-world.`,
+    buildPayload: (data) => buildOocPayload(data.ooc),
+    pivotDistinction:
+      '`update_ooc` holds only the player’s standing out-of-character instructions',
+  },
 ]
 
 // Static subsystem rules for the stable prefix.
-export function buildContextRulesMessages(
-  includeWorldState: boolean,
-  includePlotOutline: boolean,
-  includeMemory: boolean,
-): ModelMessage[] {
-  const flags = { includeWorldState, includePlotOutline, includeMemory }
+export function buildContextRulesMessages(flags: ContextFlags): ModelMessage[] {
   return CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags)).map((s) => ({
     role: 'system' as const,
     content: s.rulesMessage,
@@ -167,11 +184,8 @@ export function buildContextRulesMessages(
 export function buildContextInjectionMessages(
   data: StoryData,
   stateCleanupThreshold: number,
-  includeWorldState: boolean,
-  includePlotOutline: boolean,
-  includeMemory: boolean,
+  flags: ContextFlags,
 ): ModelMessage[] {
-  const flags = { includeWorldState, includePlotOutline, includeMemory }
   const calls: ModelToolCall[] = []
   const results: ModelMessage[] = []
   for (const s of CONTEXT_SUBSYSTEMS) {
@@ -193,9 +207,7 @@ export interface ModelMessagesArgs {
   data: StoryData
   stateCleanupThreshold: number
   includePriorPlayerTurns: boolean
-  includeWorldState: boolean
-  includePlotOutline: boolean
-  includeMemory: boolean
+  flags: ContextFlags
   nsfw: boolean
 }
 
@@ -208,9 +220,7 @@ export function buildModelMessages(args: ModelMessagesArgs): ModelMessage[] {
     data,
     stateCleanupThreshold,
     includePriorPlayerTurns,
-    includeWorldState,
-    includePlotOutline,
-    includeMemory,
+    flags,
     nsfw,
   } = args
   const messages: ModelMessage[] = [
@@ -222,11 +232,7 @@ export function buildModelMessages(args: ModelMessagesArgs): ModelMessage[] {
     if (!value) continue
     messages.push({ role: 'system', content: buildSlotMessage(def, value) })
   }
-  for (const m of buildContextRulesMessages(
-    includeWorldState,
-    includePlotOutline,
-    includeMemory,
-  )) {
+  for (const m of buildContextRulesMessages(flags)) {
     messages.push(m)
   }
   const chronicleMessage = buildChronicleSystemMessage(chronicle)
@@ -256,13 +262,7 @@ export function buildModelMessages(args: ModelMessagesArgs): ModelMessage[] {
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
     }
   }
-  for (const m of buildContextInjectionMessages(
-    data,
-    stateCleanupThreshold,
-    includeWorldState,
-    includePlotOutline,
-    includeMemory,
-  )) {
+  for (const m of buildContextInjectionMessages(data, stateCleanupThreshold, flags)) {
     messages.push(m)
   }
   return messages

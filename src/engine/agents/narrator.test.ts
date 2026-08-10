@@ -38,14 +38,17 @@ const CTX: NarratorContext = {
       reply: { id: 't1-reply', model: 'test-model', text: '' },
     },
   ],
-  initialData: { state: {}, plot: [], memory: {} },
+  initialData: { state: {}, plot: [], memory: {}, ooc: [] },
   sampling: { temperature: 0.7 },
   stateCleanupThreshold: 4000,
   includePriorPlayerTurns: true,
   reminderAsSystem: true,
-  includeWorldState: true,
-  includePlotOutline: true,
-  includeMemory: true,
+  flags: {
+    includeWorldState: true,
+    includePlotOutline: true,
+    includeMemory: true,
+    includeOoc: true,
+  },
   nsfw: false,
 }
 
@@ -179,18 +182,30 @@ describe('runNarrator two-phase flow', () => {
   })
 
   it('builds a pivot that names only the enabled subsystems', () => {
-    const memoryOnly = buildPlotterInstruction(false, false, true)
+    const memoryOnly = buildPlotterInstruction({
+      includeWorldState: false,
+      includePlotOutline: false,
+      includeMemory: true,
+      includeOoc: false,
+    })
     expect(memoryOnly).toContain('check_memory')
     expect(memoryOnly).toContain('`update_memory`')
     expect(memoryOnly).not.toContain('check_state')
     expect(memoryOnly).not.toContain('update_state')
     expect(memoryOnly).not.toContain('future_plot_plan')
+    expect(memoryOnly).not.toContain('update_ooc')
     // A single subsystem needs no distinction clause.
     expect(memoryOnly).not.toContain('Keep the subsystems distinct')
 
-    const all = buildPlotterInstruction(true, true, true)
+    const all = buildPlotterInstruction({
+      includeWorldState: true,
+      includePlotOutline: true,
+      includeMemory: true,
+      includeOoc: true,
+    })
     expect(all).toContain('check_state')
     expect(all).toContain('`update_state`')
+    expect(all).toContain('`update_ooc`')
     expect(all).toContain('Keep the subsystems distinct')
   })
 
@@ -198,7 +213,15 @@ describe('runNarrator two-phase flow', () => {
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
 
     const result = await runNarrator(
-      { ...CTX, includeWorldState: false, includePlotOutline: false, includeMemory: false },
+      {
+        ...CTX,
+        flags: {
+          includeWorldState: false,
+          includePlotOutline: false,
+          includeMemory: false,
+          includeOoc: false,
+        },
+      },
       new AbortController().signal,
     )
 

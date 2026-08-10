@@ -228,6 +228,7 @@ function App() {
           state={game.state}
           plot={game.plot}
           memory={game.memory}
+          ooc={game.ooc}
           chronicle={game.chronicle}
           context={context}
           busy={thinking}
@@ -236,8 +237,10 @@ function App() {
           onSaveState={game.commitState}
           onSavePlot={game.commitPlot}
           onSaveMemory={game.commitMemory}
+          onSaveOoc={game.commitOoc}
           onClearPlot={() => game.commitPlot([])}
           onClearMemory={() => game.commitMemory({})}
+          onClearOoc={() => game.commitOoc([])}
           onClearChronicle={() => {
             game.commitChronicle([])
             game.commitCompactCutoff(0)
@@ -266,12 +269,15 @@ function App() {
                 slots: game.slots,
                 chronicle: game.chronicle,
                 history: turns.slice(compactCutoff),
-                data: { state: game.state, plot: game.plot, memory: game.memory },
+                data: {
+                  state: game.state,
+                  plot: game.plot,
+                  memory: game.memory,
+                  ooc: game.ooc,
+                },
                 stateCleanupThreshold: context.stateCleanupChars,
                 includePriorPlayerTurns: context.includePriorPlayerTurns,
-                includeWorldState: context.includeWorldState,
-                includePlotOutline: context.includePlotOutline,
-                includeMemory: context.includeMemory,
+                flags: context,
                 nsfw: context.nsfw,
               }),
               context.reminderAsSystem,
@@ -279,6 +285,7 @@ function App() {
                 worldState: context.includeWorldState,
                 plotOutline: context.includePlotOutline,
                 memory: context.includeMemory,
+                ooc: context.includeOoc,
               },
             )}
             tools={CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(context)).flatMap((s) => [

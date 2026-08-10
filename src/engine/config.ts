@@ -90,6 +90,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includeWorldState: false,
   includePlotOutline: true,
   includeMemory: true,
+  includeOoc: true,
   useReviser: false,
   reviserModel: DEFAULT_REVISER_MODEL,
   nsfw: true,

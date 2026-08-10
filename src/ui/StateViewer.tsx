@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS } from '../engine/tools'
+import {
+  MAX_OOC_ITEMS,
+  MAX_OOC_ITEM_CHARS,
+  MAX_PLOT_ITEMS,
+  MAX_PLOT_ITEM_CHARS,
+} from '../engine/tools'
 import type { Chronicle, ContextConfig, Memory, WorldState } from '../engine/types'
 
 interface StateViewerProps {
   state: WorldState
   plot: string[]
   memory: Memory
+  ooc: string[]
   chronicle: Chronicle
   context: ContextConfig
   busy: boolean
@@ -14,8 +20,10 @@ interface StateViewerProps {
   onSaveState: (next: WorldState) => void
   onSavePlot: (next: string[]) => void
   onSaveMemory: (next: Memory) => void
+  onSaveOoc: (next: string[]) => void
   onClearPlot: () => void
   onClearMemory: () => void
+  onClearOoc: () => void
   onClearChronicle: () => void
 }
 
@@ -41,6 +49,7 @@ export function StateViewer({
   state,
   plot,
   memory,
+  ooc,
   chronicle,
   context,
   busy,
@@ -49,14 +58,18 @@ export function StateViewer({
   onSaveState,
   onSavePlot,
   onSaveMemory,
+  onSaveOoc,
   onClearPlot,
   onClearMemory,
+  onClearOoc,
   onClearChronicle,
 }: StateViewerProps) {
   const [draft, setDraft] = useState(() => JSON.stringify(state, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
   const [plotDraft, setPlotDraft] = useState(() => plotToDraft(plot))
   const [plotError, setPlotError] = useState<string | null>(null)
+  const [oocDraft, setOocDraft] = useState(() => plotToDraft(ooc))
+  const [oocError, setOocError] = useState<string | null>(null)
   const [memoryDraft, setMemoryDraft] = useState(() => JSON.stringify(memory, null, 2))
   const [memoryError, setMemoryError] = useState<string | null>(null)
 
@@ -81,11 +94,18 @@ export function StateViewer({
     setMemoryDraft(JSON.stringify(memory, null, 2))
     setMemoryError(null)
   }
+  const [prevOoc, setPrevOoc] = useState(ooc)
+  if (prevOoc !== ooc) {
+    setPrevOoc(ooc)
+    setOocDraft(plotToDraft(ooc))
+    setOocError(null)
+  }
 
   const currentJson = JSON.stringify(state, null, 2)
   const currentMemoryJson = JSON.stringify(memory, null, 2)
   const stateDirty = draft !== currentJson
   const plotDirty = plotDraft !== plotToDraft(plot)
+  const oocDirty = oocDraft !== plotToDraft(ooc)
   const memoryDirty = memoryDraft !== currentMemoryJson
   const memoryEntries = Object.keys(memory).length
 
@@ -124,6 +144,21 @@ export function StateViewer({
     }
     setPlotError(null)
     onSavePlot(parsed)
+  }
+
+  function handleSaveOoc() {
+    const parsed = parsePlotDraft(oocDraft)
+    if (parsed.length > MAX_OOC_ITEMS) {
+      setOocError(`Too many entries (${parsed.length}, max ${MAX_OOC_ITEMS}).`)
+      return
+    }
+    const tooLong = parsed.find((s) => s.length > MAX_OOC_ITEM_CHARS)
+    if (tooLong) {
+      setOocError(`An entry is too long (${tooLong.length} chars, max ${MAX_OOC_ITEM_CHARS}).`)
+      return
+    }
+    setOocError(null)
+    onSaveOoc(parsed)
   }
 
   function handleSaveMemory() {
@@ -230,6 +265,32 @@ export function StateViewer({
           </>
         )}
 
+        {context.includeOoc && (
+          <>
+            <h2>OOC instructions</h2>
+            <p className="hint">
+              The DM maintains this numbered list via the <code>update_ooc</code> tool
+              (append/insert/update/delete by 1-indexed position) — the player's{' '}
+              <strong>standing out-of-character directives</strong>: style and pacing
+              preferences, boundaries, and corrections that should keep applying. Entries
+              are deleted when withdrawn, completed, or no longer relevant. One entry per
+              line; leading <code>-</code>, <code>*</code>, or <code>1.</code> numbering
+              is stripped on save. Max {MAX_OOC_ITEMS} entries, each up to{' '}
+              {MAX_OOC_ITEM_CHARS} chars. Current: {ooc.length} entr
+              {ooc.length === 1 ? 'y' : 'ies'}.
+            </p>
+            <textarea
+              className="state-json state-json-editor"
+              spellCheck={false}
+              value={oocDraft}
+              onChange={(e) => setOocDraft(e.target.value)}
+              readOnly={busy}
+              placeholder="(no standing OOC instructions — one entry per line)"
+            />
+            {oocError && <p className="error-text">{oocError}</p>}
+          </>
+        )}
+
         <h2>Chronicle</h2>
         <p className="hint">
           Auto-generated levels of compaction. When the live tail reaches{' '}
@@ -310,6 +371,17 @@ export function StateViewer({
               Clear plan
             </button>
           )}
+          {context.includeOoc && (
+            <button
+              className="ghost"
+              onClick={() => {
+                if (ooc.length && confirm('Clear all standing OOC instructions?')) onClearOoc()
+              }}
+              disabled={busy || ooc.length === 0}
+            >
+              Clear OOC
+            </button>
+          )}
           <button
             className="ghost"
             onClick={() => {
@@ -334,6 +406,11 @@ export function StateViewer({
           {context.includePlotOutline && (
             <button onClick={handleSavePlot} disabled={busy || !plotDirty}>
               Save plot
+            </button>
+          )}
+          {context.includeOoc && (
+            <button onClick={handleSaveOoc} disabled={busy || !oocDirty}>
+              Save OOC
             </button>
           )}
         </div>

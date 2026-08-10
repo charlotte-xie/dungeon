@@ -10,6 +10,7 @@ function action(kind: RetryAction['kind'] = 'player'): RetryAction {
       state: DEFAULT_STATE,
       plot: [],
       memory: {},
+      ooc: [],
       chronicle: [],
       compactCutoff: 0,
     },

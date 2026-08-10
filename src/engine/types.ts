@@ -64,6 +64,9 @@ export interface StoryData {
   state: WorldState
   plot: string[]
   memory: Memory
+  // Standing out-of-character player directives, as a numbered list like the
+  // plot plan. Entries persist until withdrawn, superseded, or completed.
+  ooc: string[]
 }
 
 export type SlotKey = 'scenario' | 'styleGuide'
@@ -104,6 +107,7 @@ export interface ContextConfig {
   includeWorldState: boolean
   includePlotOutline: boolean
   includeMemory: boolean
+  includeOoc: boolean
   // When true, run a second model pass after the narrator to polish its draft
   // into clean English. The revised text replaces the narrator output as the
   // visible reply; the original draft is preserved on Turn.narrator.
@@ -139,6 +143,7 @@ export interface TurnCheckpoint {
   state: WorldState
   plot: string[]
   memory: Memory
+  ooc: string[]
   chronicle: Chronicle
   compactCutoff: number
 }
@@ -159,6 +164,7 @@ export interface SavedGame {
   state: WorldState
   plot: string[]
   memory: Memory
+  ooc: string[]
   chronicle: Chronicle
   turns: Turn[]
   compactCutoff: number

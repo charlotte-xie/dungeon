@@ -13,7 +13,12 @@
 // rather than what the model intended to write. Provider transport and
 // response-format quirks live under ../model.
 
-import { CONTEXT_SUBSYSTEMS, applyTurnReminder, buildModelMessages } from '../request'
+import {
+  CONTEXT_SUBSYSTEMS,
+  applyTurnReminder,
+  buildModelMessages,
+  type ContextFlags,
+} from '../request'
 import { executeEnabledTool } from '../tools'
 import { completeModel } from '../model/client'
 import type { ModelToolCall, ModelToolDefinition } from '../model/types'
@@ -39,9 +44,7 @@ export interface NarratorContext {
   stateCleanupThreshold: number
   includePriorPlayerTurns: boolean
   reminderAsSystem: boolean
-  includeWorldState: boolean
-  includePlotOutline: boolean
-  includeMemory: boolean
+  flags: ContextFlags
   nsfw: boolean
 }
 
@@ -64,12 +67,7 @@ const FINAL_NARRATIVE_INSTRUCTION =
 // The plotter pivot names only the subsystems that are actually enabled —
 // a static text would point the model at injections that don't exist and
 // tools that aren't advertised whenever a subsystem is switched off.
-export function buildPlotterInstruction(
-  includeWorldState: boolean,
-  includePlotOutline: boolean,
-  includeMemory: boolean,
-): string {
-  const flags = { includeWorldState, includePlotOutline, includeMemory }
+export function buildPlotterInstruction(flags: ContextFlags): string {
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
   const reads = enabled.map((s) => s.checkTool.name)
   const updates = enabled.map((s) => `\`${s.updateTool.name}\``)
@@ -123,20 +121,13 @@ export async function runNarrator(
     data,
     stateCleanupThreshold: ctx.stateCleanupThreshold,
     includePriorPlayerTurns: ctx.includePriorPlayerTurns,
-    includeWorldState: ctx.includeWorldState,
-    includePlotOutline: ctx.includePlotOutline,
-    includeMemory: ctx.includeMemory,
+    flags: ctx.flags,
     nsfw: ctx.nsfw,
   })
-  const flags = {
-    includeWorldState: ctx.includeWorldState,
-    includePlotOutline: ctx.includePlotOutline,
-    includeMemory: ctx.includeMemory,
-  }
   const tools: ModelToolDefinition[] = []
   const enabledToolNames = new Set<string>()
   for (const s of CONTEXT_SUBSYSTEMS) {
-    if (!s.enabled(flags)) continue
+    if (!s.enabled(ctx.flags)) continue
     tools.push(s.updateTool, s.checkTool)
     enabledToolNames.add(s.updateTool.name)
     enabledToolNames.add(s.checkTool.name)
@@ -206,9 +197,10 @@ export async function runNarrator(
   for (let iter = 0; iter < MAX_NARRATOR_ITERATIONS; iter++) {
     const finalNarrativeAttempt = iter === MAX_NARRATOR_ITERATIONS - 1
     const reminded = applyTurnReminder(messages, ctx.reminderAsSystem, {
-      worldState: !finalNarrativeAttempt && ctx.includeWorldState,
-      plotOutline: !finalNarrativeAttempt && ctx.includePlotOutline,
-      memory: !finalNarrativeAttempt && ctx.includeMemory,
+      worldState: !finalNarrativeAttempt && ctx.flags.includeWorldState,
+      plotOutline: !finalNarrativeAttempt && ctx.flags.includePlotOutline,
+      memory: !finalNarrativeAttempt && ctx.flags.includeMemory,
+      ooc: !finalNarrativeAttempt && ctx.flags.includeOoc,
     })
     if (finalNarrativeAttempt) {
       const message = ctx.reminderAsSystem
@@ -290,11 +282,7 @@ export async function runNarrator(
   // are kept, and the rest of the state simply carries forward.
   if (tools.length) {
     messages.push({ role: 'assistant', content: proseText })
-    const plotterInstruction = buildPlotterInstruction(
-      ctx.includeWorldState,
-      ctx.includePlotOutline,
-      ctx.includeMemory,
-    )
+    const plotterInstruction = buildPlotterInstruction(ctx.flags)
     const pivot = ctx.reminderAsSystem
       ? { role: 'system' as const, content: plotterInstruction }
       : { role: 'user' as const, content: `(OOC: ${plotterInstruction})` }

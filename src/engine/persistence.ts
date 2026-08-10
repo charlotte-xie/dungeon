@@ -26,6 +26,7 @@ export const LS_BASE_URL = 'dm.baseUrl'
 export const LS_STATE = 'dm.state'
 export const LS_PLOT = 'dm.plot'
 export const LS_MEMORY = 'dm.memory'
+export const LS_OOC = 'dm.ooc'
 export const LS_CHRONICLE = 'dm.chronicle'
 
 const LS_SUMMARY_V2 = 'dm.summary'
@@ -208,6 +209,27 @@ export function persistPlot(plot: string[]) {
   }
 }
 
+export function loadStoredOoc(): string[] {
+  try {
+    const raw = localStorage.getItem(LS_OOC)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((p): p is string => typeof p === 'string')
+  } catch {
+    return []
+  }
+}
+
+export function persistOoc(ooc: string[]) {
+  try {
+    if (ooc.length) localStorage.setItem(LS_OOC, JSON.stringify(ooc))
+    else localStorage.removeItem(LS_OOC)
+  } catch {
+    // ignore quota / disabled storage
+  }
+}
+
 export function loadStoredMemory(): Memory {
   try {
     const raw = localStorage.getItem(LS_MEMORY)
@@ -338,6 +360,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.includeMemory === 'boolean'
           ? parsed.includeMemory
           : DEFAULT_CONTEXT.includeMemory,
+      includeOoc:
+        typeof parsed.includeOoc === 'boolean'
+          ? parsed.includeOoc
+          : DEFAULT_CONTEXT.includeOoc,
       useReviser:
         typeof parsed.useReviser === 'boolean'
           ? parsed.useReviser
@@ -455,6 +481,9 @@ export function isSavedGameLike(
     s.plot === undefined ||
     (Array.isArray(s.plot) && s.plot.every((entry) => typeof entry === 'string'))
   const memoryValid = s.memory === undefined || isMemoryLike(s.memory)
+  const oocValid =
+    s.ooc === undefined ||
+    (Array.isArray(s.ooc) && s.ooc.every((entry) => typeof entry === 'string'))
   return (
     typeof s.id === 'string' &&
     typeof s.name === 'string' &&
@@ -465,7 +494,8 @@ export function isSavedGameLike(
     hasTurnsOrMessages &&
     isWorldStateLike(s.state) &&
     plotValid &&
-    memoryValid
+    memoryValid &&
+    oocValid
   )
 }
 
@@ -527,6 +557,10 @@ export function normalizeSavedGame(
   const plot = Array.isArray(legacy.plot)
     ? legacy.plot.filter((p): p is string => typeof p === 'string')
     : []
+  const oocRaw = (legacy as { ooc?: unknown }).ooc
+  const ooc = Array.isArray(oocRaw)
+    ? oocRaw.filter((p): p is string => typeof p === 'string')
+    : []
   let turns: Turn[]
   let cutoff: number
   if (Array.isArray(legacy.turns)) {
@@ -560,6 +594,7 @@ export function normalizeSavedGame(
     state: isWorldStateLike(legacy.state) ? legacy.state : structuredClone(DEFAULT_STATE),
     plot,
     memory,
+    ooc,
     chronicle,
     turns,
     compactCutoff: cutoff,

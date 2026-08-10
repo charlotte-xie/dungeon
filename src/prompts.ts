@@ -2,6 +2,7 @@ import dmSystem from './prompts/dm-system.md?raw'
 import stateRulesTemplate from './prompts/state-rules.md?raw'
 import memoryRulesTemplate from './prompts/memory-rules.md?raw'
 import plotRulesTemplate from './prompts/plot-rules.md?raw'
+import oocRulesTemplate from './prompts/ooc-rules.md?raw'
 import turnReminder from './prompts/turn-reminder.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
@@ -23,11 +24,15 @@ export interface TurnReminderCapabilities {
   worldState: boolean
   plotOutline: boolean
   memory: boolean
+  ooc: boolean
 }
 
 export function buildTurnReminder(capabilities: TurnReminderCapabilities): string {
   const anyTools =
-    capabilities.worldState || capabilities.plotOutline || capabilities.memory
+    capabilities.worldState ||
+    capabilities.plotOutline ||
+    capabilities.memory ||
+    capabilities.ooc
   const toolReminder = anyTools
     ? '- Do not call tools while narrating — write the prose reply only. After your reply, a separate Plotter pass reviews the turn and records its bookkeeping.'
     : ''
@@ -48,6 +53,10 @@ export function buildMemoryRules(maxMemoryStringChars: number): string {
 
 export function buildPlotRules(maxPlotItems: number, maxPlotItemChars: number): string {
   return fill(plotRulesTemplate, { maxPlotItems, maxPlotItemChars }).trim()
+}
+
+export function buildOocRules(maxOocItems: number, maxOocItemChars: number): string {
+  return fill(oocRulesTemplate, { maxOocItems, maxOocItemChars }).trim()
 }
 
 export function buildSummarizerPrompt(targetChars: number): string {

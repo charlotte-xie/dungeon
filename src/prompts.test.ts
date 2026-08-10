@@ -13,6 +13,7 @@ describe('capability-aware prompts', () => {
       worldState: false,
       plotOutline: true,
       memory: false,
+      ooc: false,
     })
     expect(reminder).toContain('Do not call tools while narrating')
     expect(reminder).toContain('Plotter pass')
@@ -21,6 +22,7 @@ describe('capability-aware prompts', () => {
       worldState: false,
       plotOutline: false,
       memory: false,
+      ooc: false,
     })
     expect(bare).not.toContain('Plotter pass')
   })
@@ -41,6 +43,7 @@ describe('capability-aware prompts', () => {
       worldState: false,
       plotOutline: false,
       memory: false,
+      ooc: false,
     })
     expect(reminder).toContain('advance one existing cause into a new consequence')
     expect(reminder).toContain('Prefer concrete progression')

@@ -433,6 +433,17 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
+            title={`When off, the OOC-instructions rules are dropped AND the update_ooc tool is not advertised — standing player directives only apply while their message remains in the live transcript. Default ${DEFAULT_CONTEXT.includeOoc ? 'on' : 'off'}.`}
+          >
+            <input
+              type="checkbox"
+              checked={draftContext.includeOoc}
+              onChange={(e) => setContextField('includeOoc', e.target.checked)}
+            />
+            <strong>Include OOC instructions</strong>
+          </label>
+          <label
+            className="flag-field"
             title={`When on, the DM is told the player is a consenting adult and may include dark, mature, or NSFW themes if they fit the story. When off, the DM is told to avoid NSFW descriptions or plot developments. Default ${DEFAULT_CONTEXT.nsfw ? 'on' : 'off'}.`}
           >
             <input

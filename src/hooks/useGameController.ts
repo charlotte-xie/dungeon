@@ -16,12 +16,14 @@ import {
   LS_TURNS,
   loadStoredChronicle,
   loadStoredMemory,
+  loadStoredOoc,
   loadStoredPlot,
   loadStoredSlots,
   loadStoredState,
   loadStoredTurnsAndCutoff,
   persistChronicle,
   persistMemory,
+  persistOoc,
   persistPlot,
   persistSlots,
   persistState,
@@ -83,6 +85,7 @@ export function useGameController(settings: GameSettings) {
   const [state, setState] = useState<WorldState>(() => loadStoredState())
   const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
   const [memory, setMemory] = useState<Memory>(() => loadStoredMemory())
+  const [ooc, setOoc] = useState<string[]>(() => loadStoredOoc())
   const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
   const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
   const [turns, setTurns] = useState<Turn[]>(initialTurns)
@@ -149,6 +152,11 @@ export function useGameController(settings: GameSettings) {
     persistPlot(next)
   }
 
+  function commitOoc(next: string[]) {
+    setOoc(next)
+    persistOoc(next)
+  }
+
   function commitMemory(next: Memory) {
     setMemory(next)
     persistMemory(next)
@@ -175,7 +183,7 @@ export function useGameController(settings: GameSettings) {
   }
 
   function checkpoint(): TurnCheckpoint {
-    return { turns, state, plot, memory, chronicle, compactCutoff }
+    return { turns, state, plot, memory, ooc, chronicle, compactCutoff }
   }
 
   function restoreCheckpoint(saved: TurnCheckpoint) {
@@ -183,6 +191,7 @@ export function useGameController(settings: GameSettings) {
     commitState(saved.state)
     commitPlot([...saved.plot])
     commitMemory(structuredClone(saved.memory))
+    commitOoc([...saved.ooc])
     commitChronicle(saved.chronicle)
     commitCompactCutoff(saved.compactCutoff)
   }
@@ -277,6 +286,7 @@ export function useGameController(settings: GameSettings) {
           state: baseData.state,
           plot: baseData.plot,
           memory: baseData.memory,
+          ooc: baseData.ooc,
           chronicle: workingChronicle,
           compactCutoff: workingCutoff,
         }
@@ -297,9 +307,12 @@ export function useGameController(settings: GameSettings) {
           stateCleanupThreshold: context.stateCleanupChars,
           includePriorPlayerTurns: context.includePriorPlayerTurns,
           reminderAsSystem: context.reminderAsSystem,
-          includeWorldState: context.includeWorldState,
-          includePlotOutline: context.includePlotOutline,
-          includeMemory: context.includeMemory,
+          flags: {
+            includeWorldState: context.includeWorldState,
+            includePlotOutline: context.includePlotOutline,
+            includeMemory: context.includeMemory,
+            includeOoc: context.includeOoc,
+          },
           nsfw: context.nsfw,
         },
         controller.signal,
@@ -392,6 +405,7 @@ export function useGameController(settings: GameSettings) {
       commitState(result.data.state)
       commitPlot(result.data.plot)
       commitMemory(result.data.memory)
+      commitOoc(result.data.ooc)
     } catch (err) {
       if (controller.signal.aborted || !isCurrentOperation(operation)) {
         if (isCurrentOperation(operation)) args.onAbortRestore()
@@ -443,7 +457,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: turns,
-      baseData: { state, plot, memory },
+      baseData: { state, plot, memory, ooc },
       baseChronicle: chronicle,
       baseCutoff: compactCutoff,
       onAbortRestore: () => restoreAbortedAction(action),
@@ -466,7 +480,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: turns,
-      baseData: { state, plot, memory },
+      baseData: { state, plot, memory, ooc },
       baseChronicle: chronicle,
       baseCutoff: compactCutoff,
       onAbortRestore: () => restoreAbortedAction(action),
@@ -494,7 +508,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: base.turns,
-      baseData: { state: base.state, plot: base.plot, memory: base.memory },
+      baseData: { state: base.state, plot: base.plot, memory: base.memory, ooc: base.ooc },
       baseChronicle: base.chronicle,
       baseCutoff: base.compactCutoff,
       slotsForTurn: action.slots,
@@ -559,6 +573,7 @@ export function useGameController(settings: GameSettings) {
     commitState(freshState)
     commitPlot([])
     commitMemory({})
+    commitOoc([])
     commitChronicle([])
     commitCompactCutoff(0)
     const action: RetryAction = {
@@ -567,6 +582,7 @@ export function useGameController(settings: GameSettings) {
         state: freshState,
         plot: [],
         memory: {},
+        ooc: [],
         chronicle: [],
         compactCutoff: 0,
       },
@@ -582,7 +598,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: [],
-      baseData: { state: freshState, plot: [], memory: {} },
+      baseData: { state: freshState, plot: [], memory: {}, ooc: [] },
       baseChronicle: [],
       baseCutoff: 0,
       slotsForTurn: nextSlots,
@@ -599,6 +615,7 @@ export function useGameController(settings: GameSettings) {
       state: structuredClone(state),
       plot: [...plot],
       memory: structuredClone(memory),
+      ooc: [...ooc],
       chronicle: structuredClone(chronicle),
       turns: structuredClone(completedTurns),
       compactCutoff: Math.min(compactCutoff, completedTurns.length),
@@ -613,6 +630,7 @@ export function useGameController(settings: GameSettings) {
     commitState(structuredClone(save.state))
     commitPlot([...(save.plot ?? [])])
     commitMemory(structuredClone(save.memory ?? {}))
+    commitOoc([...(save.ooc ?? [])])
     commitChronicle(save.chronicle ?? [])
     setTurns(save.turns)
     commitCompactCutoff(save.compactCutoff)
@@ -624,6 +642,7 @@ export function useGameController(settings: GameSettings) {
     state,
     plot,
     memory,
+    ooc,
     chronicle,
     turns,
     compactCutoff,
@@ -648,6 +667,7 @@ export function useGameController(settings: GameSettings) {
     // direct edits (StateViewer, SettingsPanel)
     commitState,
     commitPlot,
+    commitOoc,
     commitMemory,
     commitSlots,
     commitChronicle,
