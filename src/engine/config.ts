@@ -53,7 +53,7 @@ export const ADVENTURE_SLOTS: SlotDef[] = [
     label: 'Author style guide',
     header: '# Author style guide',
     framing:
-      'The author voice, genre, and prose register for this adventure. Apply throughout your narration in addition to the general prose rules above.',
+      'The author voice, genre, and emotional register for this adventure — the contract for what kind of story you are telling. Let it govern the register and stakes of every reply, in addition to the general prose rules above.',
     hint: 'Voice, genre, prose register. Optional but powerful — sets the feel of the writing.',
     placeholder: 'e.g. Gritty urban noir; sparse, elliptical dialogue; present tense; no purple prose.',
     defaultValue: DEFAULT_STYLE_GUIDE,

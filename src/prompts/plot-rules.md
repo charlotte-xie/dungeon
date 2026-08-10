@@ -4,6 +4,13 @@ A numbered list of where YOU plan to take the story — future pressures, revela
 
 **Keeping the story moving in interesting and engaging directions is your job.** The plan records useful future pressures and unresolved threads. Add or change entries when the fiction materially changes; do not invent maintenance work merely to call the tool.
 
+## Dramatic, not administrative
+
+The plan is a director's notebook, not a calendar. Every entry must name a tension: who wants what, what it costs, what could break. Scheduling, appointments, and logistics are never entries in their own right — fold timing into the dramatic beat it serves.
+
+BAD: "The contact will text midweek confirming the booking time and pickup arrangements."
+GOOD: "The private booking pulls the player deeper into the patron's orbit — and it cannot stay hidden from the rival who believes the player owes him first loyalty."
+
 ## Future only
 
 Every entry must describe something that has not yet been delivered to the player. The moment a beat plays out, delete it — past events belong in the chronicle, not here. Sweep the plan each turn: if any entry now describes the past, remove it.
