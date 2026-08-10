@@ -32,6 +32,14 @@ Things add:
 - **`significance`** — why it matters to the story.
 - **`location`** — who holds it or where it sits.
 
+The player (slug `player`) adds these instead of the character facets — never `wants`, `bond`, or `relationships`: the player's intent belongs to the player, and NPCs' attitudes live on their own `bond` facets:
+
+- **`background`** — pre-story origin and circumstances established in fiction.
+- **`skills`** — competencies and talents demonstrated or declared.
+- **`assets`** — durable possessions and resources (what is carried or worn right now is live state).
+- **`oaths`** — standing commitments: promises, debts, and deals made in fiction.
+- **`reputation`** — how the player is generally known and regarded.
+
 Maximum {{maxFacets}} facets per entry, {{maxFacetChars}} characters per facet.
 
 ## Example
@@ -58,8 +66,12 @@ Maximum {{maxFacets}} facets per entry, {{maxFacetChars}} characters per facet.
     "location": "locked in constabulary custody"
   },
   "player": {
-    "is": "veteran of the border wars; carries a chipped sabre and a slight limp",
-    "history": "hidden by a woman in Greyford last winter; sworn to repay that debt"
+    "is": "lean, weathered, walks with a slight limp",
+    "background": "veteran of the border wars; drifting since discharge",
+    "skills": "swordwork; reading people; sleeping anywhere",
+    "assets": "a chipped sabre; a dwindling purse",
+    "oaths": "sworn to repay the woman who hid them in Greyford last winter",
+    "reputation": "known on the road as quiet trouble best left alone"
   }
 }
 ```
