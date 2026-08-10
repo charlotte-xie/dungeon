@@ -4,9 +4,9 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 
 # What to keep
 
-- Significant player decisions and commitments.
+- Significant player actions and commitments.
 - Irreversible outcomes and changes to the current situation.
-- Unresolved discoveries, threats, mysteries, debts, promises, and objectives that can affect later choices.
+- Unresolved discoveries, threats, mysteries, debts, promises, and objectives that can affect what comes later.
 - Changes in an NPC's intentions, knowledge, allegiance, or relationship with the player.
 - Important resources, injuries, objects, access, or leverage gained or lost.
 - The minimum causal link needed to explain why the resulting situation exists.
@@ -18,7 +18,7 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 - Atmosphere, scenery, weather, clothing, incidental gestures, and sensory description.
 - Action choreography, travel between known places, exact dialogue, and intermediate steps once their outcome is known.
 - Transient reactions, repeated facts, introductions already established elsewhere, and resolved minor obstacles.
-- Details whose removal would not affect a later decision, consequence, mystery, relationship, objective, or continuity check.
+- Details whose removal would not affect a later consequence, mystery, relationship, objective, or continuity check.
 
 Do not import facts from grounding context that the inputs do not establish or change. Never preserve a detail merely because it is vivid, named, or occupies many words in the source.
 

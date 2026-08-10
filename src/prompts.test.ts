@@ -58,6 +58,6 @@ describe('capability-aware prompts', () => {
   it('treats the summary length as a ceiling rather than a quota', () => {
     const prompt = buildSummarizerPrompt(500)
     expect(prompt).toContain('This is a ceiling, not a target')
-    expect(prompt).toContain('Details whose removal would not affect a later decision')
+    expect(prompt).toContain('Details whose removal would not affect a later consequence')
   })
 })

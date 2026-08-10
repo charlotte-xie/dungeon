@@ -225,4 +225,4 @@ export interface SaveFileV1 {
 }
 
 export const CONTINUE_DIRECTIVE =
-  '(OOC: The player is skipping their turn — they want the narration to continue before they act. Carry the scene forward from exactly where it stopped and progress to the next player decision point. Do not restate or linger on the previous beat; if the scene needs fresh impetus, consider bringing in a development — your future plot plan may suggest one. Stop when the player faces a concrete, meaningful choice.)'
+  '(OOC: The player is skipping their turn — they want the narration to continue before they act. Carry the scene forward from exactly where it stopped. Do not restate or linger on the previous beat; if the scene needs fresh impetus, consider bringing in a development — your future plot plan may suggest one. Stop once the situation presses for the player’s response.)'
