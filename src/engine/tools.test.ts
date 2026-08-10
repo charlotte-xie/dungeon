@@ -81,8 +81,9 @@ describe('tool execution boundaries', () => {
       bond: 'walked the player to the common room',
     })
 
-    // Moving onto an existing slug merges: the target's facets win on
-    // conflict, non-conflicting facets fold in, the source entry is removed.
+    // Moving onto an existing slug merges with mv semantics: the moved
+    // facets replace the target's on conflict, target-only facets survive,
+    // and the source entry is removed.
     const merged = executeTool(
       'update_memory',
       JSON.stringify({ move: { daniel: 'chloe' } }),
@@ -90,11 +91,11 @@ describe('tool execution boundaries', () => {
     )
     expect(Object.keys(merged.data.memory)).toEqual(['chloe'])
     expect(merged.data.memory.chloe).toEqual({
-      is: 'blonde student',
+      is: 'dark-haired sixth-former, easy charm',
       bond: 'walked the player to the common room',
     })
     expect(merged.result).toContain('merged daniel into chloe')
-    expect(merged.result).toContain("kept chloe's existing is")
+    expect(merged.result).toContain("replaced chloe's is")
   })
 
   it('deletes facets and drops an entry when its last facet goes', () => {

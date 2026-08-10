@@ -60,7 +60,7 @@ Before setting a facet, ask: *will this still be true and matter after the scene
 
 Edits are **additive by dotted path — only the paths you name change; nothing else is touched, and omission never deletes.** Paths are `slug` (whole entry) or `slug.facet`. Operations, applied in this order:
 
-1. **`move`** — map of `fromPath` → `toPath`. Rename an entity's slug (`"dark_haired_boy": "daniel"`) once its real name is learned, or relocate a facet. Never duplicate an entity under a new slug — rename it. Moving onto a slug that already exists **merges** the two entries (use this to fold a duplicate into the canonical entry); the target's facets win on conflict — set a facet explicitly afterwards if the moved version was the better one.
+1. **`move`** — map of `fromPath` → `toPath`. Rename an entity's slug (`"dark_haired_boy": "daniel"`) once its real name is learned, or relocate a facet. Never duplicate an entity under a new slug — rename it. Moving onto a target that already exists **merges** the entries with mv semantics: the moved facets replace the target's on conflict, and facets only the target had are kept — so move the entry whose facts should prevail (use this to fold a duplicate into the canonical slug).
 2. **`delete`** — array of paths. Delete a facet that is no longer true, or a whole entry that is genuinely no longer relevant.
 3. **`set`** — map of path → value. `slug.facet` sets one facet string; `slug` with an object replaces the whole entry (use sparingly — facet edits are safer).
 

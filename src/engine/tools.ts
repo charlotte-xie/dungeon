@@ -81,7 +81,7 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         move: {
           type: 'object',
           description:
-            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate a facet (`slug.facet` → `slug.facet`). Moving onto an existing slug merges the two entries (the target\'s facets win on conflict; set explicitly to override).',
+            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate a facet (`slug.facet` → `slug.facet`). Moving onto an existing target merges with mv semantics: the moved facets replace the target\'s on conflict; facets only the target had are kept.',
           additionalProperties: { type: 'string' },
         },
         delete: {
@@ -455,18 +455,14 @@ export function executeTool(
             notes.push(`move ${fromRaw} (no-op; not present)`)
             continue
           }
-          if (next[to.slug]?.[to.facet] !== undefined) {
-            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: target facet already exists. Delete it first or set it directly.`)
-            failed = true
-            continue
-          }
+          const replaced = next[to.slug]?.[to.facet] !== undefined
           const fromEntry = { ...next[from.slug] }
           delete fromEntry[from.facet]
           next = Object.keys(fromEntry).length
             ? { ...next, [from.slug]: fromEntry }
             : dropSlug(next, from.slug)
           next = setFacet(next, to.slug, to.facet, value)
-          notes.push(`moved ${fromRaw} → ${toRaw}`)
+          notes.push(`moved ${fromRaw} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
         } else {
           const entry = next[from.slug]
           if (entry === undefined) {
@@ -480,16 +476,16 @@ export function executeTool(
             notes.push(`renamed ${from.slug} → ${to.slug}`)
             continue
           }
-          // Target exists: merge the two entries. The target's facets win on
-          // conflict — existing canon is never silently overwritten — and the
-          // note lists what was kept so it can be re-set explicitly if the
-          // moved version was the better one.
+          // Target exists: merge the two entries with mv semantics — the
+          // moved facets replace the target's on conflict; facets only the
+          // target had are kept. The note lists what was overwritten.
           const merged: MemoryEntry = { ...target }
-          const conflicts: string[] = []
+          const overwritten: string[] = []
           const overflow: string[] = []
           for (const [facet, value] of Object.entries(entry)) {
             if (merged[facet] !== undefined) {
-              if (merged[facet] !== value) conflicts.push(facet)
+              if (merged[facet] !== value) overwritten.push(facet)
+              merged[facet] = value
               continue
             }
             if (Object.keys(merged).length >= MAX_MEMORY_FACETS) {
@@ -501,9 +497,7 @@ export function executeTool(
           next = dropSlug(next, from.slug)
           next = { ...next, [to.slug]: merged }
           const detail = [
-            conflicts.length
-              ? `kept ${to.slug}'s existing ${conflicts.join(', ')} — set explicitly to override`
-              : '',
+            overwritten.length ? `replaced ${to.slug}'s ${overwritten.join(', ')}` : '',
             overflow.length ? `facet cap reached — dropped ${overflow.join(', ')}` : '',
           ]
             .filter(Boolean)
