@@ -19,95 +19,155 @@ interface ContextViewerProps {
   onClose: () => void
 }
 
-type Tab = 'narrator' | 'reviser'
+type Tab = 'system' | 'story' | 'notes' | 'tools' | 'reviser'
+
+function chars(items: ModelMessage[]): number {
+  return items.reduce((n, m) => n + (m.content?.length ?? 0), 0)
+}
+
+function sizeNote(items: ModelMessage[]): string {
+  return `${chars(items).toLocaleString()} chars across ${items.length} message${items.length === 1 ? '' : 's'}.`
+}
+
+function MessageList({ items }: { items: ModelMessage[] }) {
+  if (!items.length) {
+    return <p className="hint"><em>(no messages in this section)</em></p>
+  }
+  return (
+    <div className="context-list">
+      {items.map((m, i) => (
+        <div key={i} className={`context-item ctx-${m.role}`}>
+          <div className="ctx-head">
+            <span className="ctx-role">{m.role}</span>
+            {m.toolCallId && <span className="ctx-tag">tool_call_id: {m.toolCallId}</span>}
+            {m.toolCalls?.length ? (
+              <span className="ctx-tag">{m.toolCalls.length} tool_call(s)</span>
+            ) : null}
+            <span className="ctx-len">{m.content.length.toLocaleString()} chars</span>
+          </div>
+          {(m.content || !m.toolCalls?.length) && (
+            <pre className="state-json">{m.content || '(empty)'}</pre>
+          )}
+          {m.toolCalls?.length ? (
+            <pre className="state-json">{JSON.stringify(m.toolCalls, null, 2)}</pre>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function ContextViewer({ messages, tools, sampling, reviser, onClose }: ContextViewerProps) {
-  const [tab, setTab] = useState<Tab>('narrator')
-  const active = tab === 'reviser' && reviser ? reviser.messages : messages
-  const totalBytes = active.reduce((n, m) => n + (m.content?.length ?? 0), 0)
+  const [tab, setTab] = useState<Tab>('story')
+
+  // Segment the request into its architectural sections. The seeded
+  // check-notes exchange is identified by its fixed ctx-* call ids; the
+  // chronicle system message by its heading.
+  const injStart = messages.findIndex((m) => m.toolCalls?.some((c) => c.id.startsWith('ctx-')))
+  const tailStart = injStart === -1 ? messages.length : injStart
+  let historyStart = messages.findIndex((m, i) => i < tailStart && m.role !== 'system')
+  if (historyStart === -1 || historyStart > tailStart) historyStart = tailStart
+  const prefix = messages.slice(0, historyStart)
+  const chronicle = prefix.filter((m) => m.content.startsWith('# Story so far'))
+  const system = prefix.filter((m) => !m.content.startsWith('# Story so far'))
+  const story = [...chronicle, ...messages.slice(historyStart, tailStart)]
+  const notes = messages.slice(tailStart)
   const toolsJson = JSON.stringify(tools, null, 2)
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'system', label: `System (${system.length})` },
+    { id: 'story', label: `Story (${story.length})` },
+    { id: 'notes', label: `Notes (${notes.length})` },
+    { id: 'tools', label: `Tools (${tools.length})` },
+    ...(reviser ? [{ id: 'reviser' as Tab, label: 'Reviser' }] : []),
+  ]
+
   return (
     <div className="modal-backdrop">
       <div className="modal modal-wide">
         <div className="modal-header">
-          <h2>{tab === 'narrator' ? 'Context for next DM request' : 'Context for reviser request (preview)'}</h2>
+          <h2>
+            {tab === 'reviser'
+              ? 'Context for reviser request (preview)'
+              : 'Context for next DM request'}
+          </h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
-        {reviser && (
-          <div className="ctx-tabs">
+        <div className="ctx-tabs">
+          {tabs.map((t) => (
             <button
-              className={`ctx-tab ${tab === 'narrator' ? 'active' : ''}`}
-              onClick={() => setTab('narrator')}
+              key={t.id}
+              className={`ctx-tab ${tab === t.id ? 'active' : ''}`}
+              onClick={() => setTab(t.id)}
             >
-              Narrator
+              {t.label}
             </button>
-            <button
-              className={`ctx-tab ${tab === 'reviser' ? 'active' : ''}`}
-              onClick={() => setTab('reviser')}
-            >
-              Reviser
-            </button>
-          </div>
-        )}
-        {tab === 'narrator' ? (
-          <p className="hint">
-            This is the provider-neutral request (messages, tool schema, and sampling params)
-            before the configured adapter serializes it. Total content:{' '}
-            {totalBytes.toLocaleString()} chars across {active.length} messages.
-          </p>
-        ) : reviser?.source === 'no-draft' ? (
-          <p className="hint">
-            No DM reply yet — the reviser preview uses a placeholder draft. Take one
-            turn and reopen this view to see the real reviser request.
-          </p>
-        ) : (
-          <p className="hint">
-            Built from the most recent narrator draft. The reviser receives only what
-            you see here — no chronicle, world state, plot, memory, or prior turns.{' '}
-            {reviser?.note}
-          </p>
-        )}
-        <details className="ctx-section">
-          <summary>Sampling</summary>
-          <pre className="state-json ctx-section-json">{JSON.stringify(
-            {
-              model: tab === 'reviser' ? reviser?.model : '(see Settings)',
-              temperature: sampling.temperature,
-            },
-            null,
-            2,
-          )}</pre>
-        </details>
-        <div className="context-list">
-          {active.map((m, i) => (
-            <div key={i} className={`context-item ctx-${m.role}`}>
-              <div className="ctx-head">
-                <span className="ctx-role">{m.role}</span>
-                {m.toolCallId && <span className="ctx-tag">tool_call_id: {m.toolCallId}</span>}
-                {m.toolCalls?.length ? <span className="ctx-tag">{m.toolCalls.length} tool_call(s)</span> : null}
-                <span className="ctx-len">{m.content.length.toLocaleString()} chars</span>
-              </div>
-              {(m.content || !m.toolCalls?.length) && (
-                <pre className="state-json">{m.content || '(empty)'}</pre>
-              )}
-              {m.toolCalls?.length ? (
-                <pre className="state-json">{JSON.stringify(m.toolCalls, null, 2)}</pre>
-              ) : null}
-            </div>
           ))}
         </div>
-        {tab === 'narrator' && (
-          <details className="ctx-section">
-            <summary>
-              Tools
-              <span className="ctx-len">
-                {tools.length} schema{tools.length === 1 ? '' : 's'} · {toolsJson.length.toLocaleString()} chars
-              </span>
-            </summary>
-            <pre className="state-json ctx-section-json">{toolsJson}</pre>
-          </details>
+        {tab === 'system' && (
+          <>
+            <p className="hint">
+              The stable, cacheable prefix: system prompt, content stance, adventure
+              slots, and the enabled subsystems&apos; rules. Changes only when settings
+              change. {sizeNote(system)}
+            </p>
+            <MessageList items={system} />
+          </>
         )}
-        <div className="modal-actions">
+        {tab === 'story' && (
+          <>
+            <p className="hint">
+              The story as the model sees it: the chronicle&apos;s compressed summary of
+              older turns (when present), then the live transcript of inputs and
+              narration. {sizeNote(story)}
+            </p>
+            <MessageList items={story} />
+          </>
+        )}
+        {tab === 'notes' && (
+          <>
+            <p className="hint">
+              The per-turn tail: the DM &quot;checking its notes&quot; — the seeded
+              check_* tool exchange carrying current memory, plan, state, and OOC
+              instructions — plus the turn reminder. Rebuilt fresh every turn.{' '}
+              {sizeNote(notes)}
+            </p>
+            <MessageList items={notes} />
+          </>
+        )}
+        {tab === 'tools' && (
+          <>
+            <p className="hint">
+              Advertised tool schemas and sampling parameters for the request —{' '}
+              {tools.length} schema{tools.length === 1 ? '' : 's'} ·{' '}
+              {toolsJson.length.toLocaleString()} chars.
+            </p>
+            <pre className="state-json ctx-section-json">{JSON.stringify(
+              { model: '(see Settings)', temperature: sampling.temperature },
+              null,
+              2,
+            )}</pre>
+            <pre className="state-json ctx-section-json">{toolsJson}</pre>
+          </>
+        )}
+        {tab === 'reviser' && reviser && (
+          <>
+            {reviser.source === 'no-draft' ? (
+              <p className="hint">
+                No DM reply yet — the reviser preview uses a placeholder draft. Take one
+                turn and reopen this view to see the real reviser request.
+              </p>
+            ) : (
+              <p className="hint">
+                Built from the most recent narrator draft (model: {reviser.model}). The
+                reviser receives only what you see here — no chronicle, world state,
+                plot, memory, or prior turns. {reviser.note} {sizeNote(reviser.messages)}
+              </p>
+            )}
+            <MessageList items={reviser.messages} />
+          </>
+        )}
+        <div className="modal-actions pinned">
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
         </div>
