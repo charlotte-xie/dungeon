@@ -71,26 +71,26 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things — a JSON object of entries keyed by lowercase underscore slugs. Edits are additive by dotted path at any depth: only the paths you name change; omission never deletes; setting a path to null deletes it. The rules suggest facet names (is / notes / history / secret; characters: wants / facts / knowledge / bond / relationships; places: npcs / layout; things: significance / location; player: background / skills / possessions / oaths / reputation) — the shape beyond that is your discretion: short strings usually, nested maps where content is naturally keyed (e.g. \`player.possessions.money\`). Update only when something durable about an entity is established or changed; \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Keep entries tight — condense and delete as the story moves on.`,
+      `Maintain the fact file about the story's recurring people, places, and things — a JSON object of entries keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators). Edits are additive by dotted path at any depth: only the paths you name change; omission never deletes; setting a path to null deletes it. The rules suggest facet names (is / notes / history / secret; characters: wants / facts / knowledge / bond / relationships; places: npcs / layout; things: significance / location; player: background / skills / possessions / oaths / reputation) — the shape beyond that is your discretion: short strings usually, nested maps where content is naturally keyed (e.g. \`player.possessions.money\`). Update only when something durable about an entity is established or changed; \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Keep entries tight — condense and delete as the story moves on.`,
     parameters: {
       type: 'object',
       properties: {
         move: {
           type: 'object',
           description:
-            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate any value. Moving onto an existing object merges shallowly with mv semantics: moved keys replace the target\'s; keys only the target had are kept. Use it to fold a duplicate into the canonical slug.',
+            'Map of fromPath → toPath. Rename an entity once its real name is learned (e.g. {"dark_haired_boy": "Dan"}) — never create a duplicate entry — or relocate any value. Moving onto an existing object merges shallowly with mv semantics: moved keys replace the target\'s; keys only the target had are kept. Use it to fold a duplicate into the canonical entry.',
           additionalProperties: { type: 'string' },
         },
         delete: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Paths to remove: a facet or item that stopped being true, or a whole slug for an entity genuinely no longer relevant.',
+            'Paths to remove: a facet or item that stopped being true, or a whole entry for an entity genuinely no longer relevant.',
         },
         set: {
           type: 'object',
           description:
-            'Map of dotted path → value. Prefer surgical paths (`slug.facet`, `slug.facet.item`) over whole-entry replacement. String values are complete present-tense phrases; null deletes the path.',
+            'Map of dotted path → value. Prefer surgical paths (`name.facet`, `name.facet.item`) over whole-entry replacement. String values are complete present-tense phrases; null deletes the path.',
           additionalProperties: true,
         },
       },
@@ -441,7 +441,7 @@ export function executeTool(
         if (isPlainObject(existing) && isPlainObject(value)) {
           // Both sides are objects: shallow-merge with mv semantics — the
           // moved keys replace the target's; keys only the target had are
-          // kept. Fold a duplicate by moving it onto the canonical slug.
+          // kept. Fold a duplicate by moving it onto the canonical entry.
           const replaced = Object.keys(value).filter(
             (key) => existing[key] !== undefined && existing[key] !== value[key],
           )

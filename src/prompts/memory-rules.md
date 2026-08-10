@@ -1,6 +1,6 @@
 # Long-Term Memory
 
-Memory is a **fact file about the story's nouns** — the people, places, and things the narration must stay consistent about across scenes. For your eyes only — never read it aloud or list it for the player. Each entry is a small JSON object of short string **facets** about one entity, keyed by a lowercase underscore slug.
+Memory is a **fact file about the story's nouns** — the people, places, and things the narration must stay consistent about across scenes. For your eyes only — never read it aloud or list it for the player. Each entry is a small JSON object of short string **facets** about one entity, keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators).
 
 Memory holds **durable facts about entities**. The chronicle records the story's full past automatically; an entity's `history` facet keeps only the few notable events that still shape the present. What will happen belongs to the plot plan; what is true only of the current scene belongs to live state. Update a facet only when something durable *about that entity* is established or changed — the story reveals Hesta keeps a dog called Benny, the smithy has burned down, a secret comes to light.
 
@@ -35,7 +35,7 @@ Things add:
 - **`significance`** — why it matters to the story.
 - **`location`** — who holds it or where it sits.
 
-The player (slug `player`) adds these instead of the character facets — never `wants`, `bond`, or `relationships`: the player's intent belongs to the player, and NPCs' attitudes live on their own `bond` facets:
+The player (key `player`) adds these instead of the character facets — never `wants`, `bond`, or `relationships`: the player's intent belongs to the player, and NPCs' attitudes live on their own `bond` facets:
 
 - **`background`** — pre-story origin and circumstances established in fiction.
 - **`skills`** — competencies and talents demonstrated or declared.
@@ -47,7 +47,7 @@ The player (slug `player`) adds these instead of the character facets — never 
 
 ```json
 {
-  "the_baker": {
+  "Hesta": {
     "is": "Hesta the baker; stout, flour-dusted apron, grey hair tied back; owns the bakery on Mill Lane",
     "wants": "to be left alone and keep the shop open",
     "knowledge": "saw the player argue with a constable; knows the player is new in town",
@@ -56,7 +56,7 @@ The player (slug `player`) adds these instead of the character facets — never 
     "secret": "hiding Tam upstairs after a robbery gone wrong",
     "history": "her husband drowned in the river flood two winters back"
   },
-  "mill_lane": {
+  "Mill Lane": {
     "is": "narrow cobbled street on the south side of town, two streets back from the river",
     "layout": "bakery, smithy, and a boarded-up tannery; quiet by day, unpatrolled after dusk",
     "npcs": "Hesta's bakery; the smithy brothers work the forge"
@@ -86,7 +86,7 @@ The player (slug `player`) adds these instead of the character facets — never 
 - Recurring characters: who they are, what they want, how they regard the player, what they know.
 - Revisitable or referenced places, and significant objects.
 - Secrets — a facet on the entity that carries them.
-- The player's established facts (slug `player`): background, traits or injuries declared in fiction, oaths sworn.
+- The player's established facts (key `player`): background, traits or injuries declared in fiction, oaths sworn.
 
 ## What does NOT belong here
 
@@ -101,24 +101,24 @@ Before setting a facet, ask: *will this still be true and matter after the scene
 
 ## Tool: `update_memory`
 
-Edits are **additive by dotted path — only the paths you name change; nothing else is touched, and omission never deletes.** Paths are `slug` (whole entry) or `slug.facet`. Operations, applied in this order:
+Edits are **additive by dotted path — only the paths you name change; nothing else is touched, and omission never deletes.** Paths are `name` (whole entry) or `name.facet`. Operations, applied in this order:
 
-1. **`move`** — map of `fromPath` → `toPath`. Rename an entity's slug (`"dark_haired_boy": "daniel"`) once its real name is learned, or relocate a facet. Never duplicate an entity under a new slug — rename it. Moving onto a target that already exists **merges** the entries with mv semantics: the moved facets replace the target's on conflict, and facets only the target had are kept — so move the entry whose facts should prevail (use this to fold a duplicate into the canonical slug).
+1. **`move`** — map of `fromPath` → `toPath`. Rename an entity (`"dark_haired_boy": "Dan"`) once its real name is learned, or relocate a facet. Never duplicate an entity under a new name — rename it. Moving onto a target that already exists **merges** the entries with mv semantics: the moved facets replace the target's on conflict, and facets only the target had are kept — so move the entry whose facts should prevail (use this to fold a duplicate into the canonical entry).
 2. **`delete`** — array of paths. Delete a facet that is no longer true, or a whole entry that is genuinely no longer relevant.
-3. **`set`** — map of path → value. `slug.facet` sets one facet string; `slug` with an object replaces the whole entry (use sparingly — facet edits are safer).
+3. **`set`** — map of path → value. `name.facet` sets one facet; `name` with an object replaces the whole entry (use sparingly — facet edits are safer).
 
 ```json
 {
-  "move": { "dark_haired_boy": "daniel" },
+  "move": { "dark_haired_boy": "Dan" },
   "set": {
-    "daniel.is": "Daniel; dark-haired sixth-former, easy charm, well-connected",
-    "the_baker.bond": "blames the player for the raid and will not help them again"
+    "Dan.is": "Dan; dark-haired sixth-former, easy charm, well-connected",
+    "Hesta.bond": "blames the player for the raid and will not help them again"
   },
-  "delete": ["the_baker.secret", "minor_courier_npc"]
+  "delete": ["Hesta.secret", "minor_courier_npc"]
 }
 ```
 
-Above: the placeholder slug is renamed now the name is known; two facets are updated in place; a secret that came out is deleted along with an entity that stopped mattering. Every other slug and facet survives untouched.
+Above: the placeholder is renamed now the name is known; two facets are updated in place; a secret that came out is deleted along with an entity that stopped mattering. Every other entry and facet survives untouched.
 
 ## When to write, update, delete
 
