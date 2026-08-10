@@ -173,34 +173,8 @@ export function StateViewer({
       setMemoryError('Memory must be a JSON object mapping slugs to facet objects.')
       return
     }
-    const normalized: Memory = {}
-    for (const [slug, entry] of Object.entries(parsed)) {
-      // Accept a legacy string entry and upgrade it to { is: ... } on save.
-      if (typeof entry === 'string') {
-        normalized[slug] = { is: entry }
-        continue
-      }
-      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-        setMemoryError(`Entry "${slug}" must be an object of string facets (e.g. { "is": "..." }).`)
-        return
-      }
-      for (const [facet, value] of Object.entries(entry)) {
-        const itemMapOk =
-          typeof value === 'object' &&
-          value !== null &&
-          !Array.isArray(value) &&
-          Object.values(value).every((item) => typeof item === 'string')
-        if (typeof value !== 'string' && !itemMapOk) {
-          setMemoryError(
-            `Facet "${slug}.${facet}" must be a string (or an item → string map for possessions).`,
-          )
-          return
-        }
-      }
-      normalized[slug] = entry as Memory[string]
-    }
     setMemoryError(null)
-    onSaveMemory(normalized)
+    onSaveMemory(parsed as Memory)
   }
 
   return (

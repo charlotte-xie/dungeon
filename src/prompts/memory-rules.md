@@ -6,7 +6,9 @@ Memory holds **durable facts about entities**. The chronicle records the story's
 
 ## Entry shape
 
-Use these facet names — never invent a synonym for an existing facet. Include a facet only while it is relevant or important to the story, and delete it when it stops mattering.
+Prefer these facet names — avoid inventing a synonym for an existing facet. Include a facet only while it is relevant or important to the story, and delete it when it stops mattering.
+
+Shape beyond the suggested facets is your discretion: values are usually short strings; itemize into a map when content is naturally keyed (`player.possessions.money`, `mark.relationships.phil`); nest deeper only when it genuinely helps. Keep the file tight — condense and delete as the story moves on.
 
 Any entry:
 
@@ -20,11 +22,11 @@ Characters add:
 - **`wants`** — specific goals and intentions.
 - **`facts`** — important established information, including what they know about the player.
 - **`bond`** — current relationship and attitude toward the player.
-- **`relationships`** — ties to other characters, by name.
+- **`relationships`** — ties to other characters; itemize by character name when there are several.
 
 Places add:
 
-- **`npcs`** — regulars and characters connected to the place.
+- **`npcs`** — regulars and characters connected to the place; itemize by character name when there are several.
 - **`layout`** — physical arrangement and notable features.
 
 Things add:
@@ -36,11 +38,9 @@ The player (slug `player`) adds these instead of the character facets — never 
 
 - **`background`** — pre-story origin and circumstances established in fiction.
 - **`skills`** — competencies and talents demonstrated or declared.
-- **`possessions`** — durable belongings and resources, as an itemized map of item → short description; the one facet that nests, so single items are edited by path (`player.possessions.money`). What is carried or worn right now is live state. (Other characters may carry a `possessions` facet too.)
+- **`possessions`** — durable belongings and resources, as an itemized map of item → short description (`"money": "30 pounds"`). What is carried or worn right now is live state. (Other characters may carry a `possessions` facet too.)
 - **`oaths`** — standing commitments: promises, debts, and deals made in fiction.
 - **`reputation`** — how the player is generally known and regarded.
-
-Maximum {{maxFacets}} facets per entry, {{maxFacetChars}} characters per facet.
 
 ## Example
 

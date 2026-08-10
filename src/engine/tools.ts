@@ -4,20 +4,17 @@
 import { buildMemoryRules, buildOocRules, buildPlotRules } from '../prompts'
 import type { ModelToolDefinition } from './model/types'
 import { deleteByPath, getByPath, isSafeStatePath, setByPath } from './state'
-import type { JsonValue, Memory, MemoryEntry, MemoryFacet, StoryData, WorldState } from './types'
+import type { JsonValue, Memory, StoryData, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
 export const MAX_PLOT_ITEM_CHARS = 300
-
-export const MAX_MEMORY_FACET_CHARS = 300
-export const MAX_MEMORY_FACETS = 8
 
 export const MAX_OOC_ITEMS = 10
 export const MAX_OOC_ITEM_CHARS = 300
 
 export const PLOT_RULES = buildPlotRules(MAX_PLOT_ITEMS, MAX_PLOT_ITEM_CHARS)
 
-export const MEMORY_RULES = buildMemoryRules(MAX_MEMORY_FACET_CHARS, MAX_MEMORY_FACETS)
+export const MEMORY_RULES = buildMemoryRules()
 
 export const OOC_RULES = buildOocRules(MAX_OOC_ITEMS, MAX_OOC_ITEM_CHARS)
 
@@ -74,25 +71,26 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things. Entries are objects of short string facets keyed by lowercase underscore slugs: any entry may use is / notes / history / secret; characters add wants / facts / bond / relationships; places add npcs / layout; things add significance / location; the player entry adds background / skills / possessions / oaths / reputation (never wants or bond — intent belongs to the player). \`possessions\` is the one facet that nests: an itemized map of item → short description, edited per item by path (e.g. \`player.possessions.money\`). Edits are additive by dotted path — only the paths you name change; omission never deletes. Update a facet only when something durable about that entity is established or changed. \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Maximum ${MAX_MEMORY_FACETS} facets per entry, ${MAX_MEMORY_FACET_CHARS} characters per facet.`,
+      `Maintain the fact file about the story's recurring people, places, and things — a JSON object of entries keyed by lowercase underscore slugs. Edits are additive by dotted path at any depth: only the paths you name change; omission never deletes; setting a path to null deletes it. The rules suggest facet names (is / notes / history / secret; characters: wants / facts / bond / relationships; places: npcs / layout; things: significance / location; player: background / skills / possessions / oaths / reputation) — the shape beyond that is your discretion: short strings usually, nested maps where content is naturally keyed (e.g. \`player.possessions.money\`). Update only when something durable about an entity is established or changed; \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Keep entries tight — condense and delete as the story moves on.`,
     parameters: {
       type: 'object',
       properties: {
         move: {
           type: 'object',
           description:
-            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate a facet (`slug.facet` → `slug.facet`). Moving onto an existing target merges with mv semantics: the moved facets replace the target\'s on conflict; facets only the target had are kept.',
+            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate any value. Moving onto an existing object merges shallowly with mv semantics: moved keys replace the target\'s; keys only the target had are kept. Use it to fold a duplicate into the canonical slug.',
           additionalProperties: { type: 'string' },
         },
         delete: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Paths to remove: `slug.facet` for a facet that stopped being true, or `slug` for an entity genuinely no longer relevant.',
+            'Paths to remove: a facet or item that stopped being true, or a whole slug for an entity genuinely no longer relevant.',
         },
         set: {
           type: 'object',
-          description: `Map of \`slug.facet\` → string (preferred — surgical), or \`slug\` → full facet object (replaces that entry; use sparingly). Facet values are complete present-tense phrases, <= ${MAX_MEMORY_FACET_CHARS} chars.`,
+          description:
+            'Map of dotted path → value. Prefer surgical paths (`slug.facet`, `slug.facet.item`) over whole-entry replacement. String values are complete present-tense phrases; null deletes the path.',
           additionalProperties: true,
         },
       },
@@ -374,7 +372,7 @@ export function executeTool(
   if (name === 'update_memory') {
     try {
       const args = JSON.parse(rawArgs) as {
-        set?: Record<string, unknown>
+        set?: Record<string, JsonValue>
         delete?: unknown
         move?: Record<string, unknown>
       }
@@ -394,377 +392,93 @@ export function executeTool(
           'error: update_memory requires a non-empty `set`, `delete`, or `move`.',
         )
       }
+      const unsafePaths = [
+        ...moveEntries.flatMap(([from, to]) => (typeof to === 'string' ? [from, to] : [from])),
+        ...deletePaths,
+        ...setEntries.map(([path]) => path),
+      ].filter((path) => !isSafeStatePath(path))
+      if (unsafePaths.length > 0) {
+        return unchanged(
+          `error: unsafe memory path${unsafePaths.length === 1 ? '' : 's'} rejected: ${unsafePaths.join(', ')}. Memory unchanged.`,
+        )
+      }
+
       const notes: string[] = []
       let failed = false
       let next: Memory = memory
-
-      // Paths are `slug`, `slug.facet`, or `slug.possessions.item` — only the
-      // possessions facet nests.
-      const parsePath = (
-        path: string,
-      ): { slug: string; facet?: string; item?: string } | null => {
-        const segments = path.split('.')
-        if (segments.length < 1 || segments.length > 3) return null
-        if (segments.some((s) => !s || !isSafeStatePath(s))) return null
-        if (segments.length === 3 && segments[1] !== 'possessions') return null
-        return { slug: segments[0], facet: segments[1], item: segments[2] }
-      }
-      const dropSlug = (m: Memory, slug: string): Memory => {
-        const copy = { ...m }
-        delete copy[slug]
-        return copy
-      }
-      const setFacet = (m: Memory, slug: string, facet: string, value: MemoryFacet): Memory => ({
-        ...m,
-        [slug]: { ...(m[slug] ?? {}), [facet]: value },
-      })
-      const asItemMap = (v: MemoryFacet | undefined): Record<string, string> | undefined =>
-        v !== undefined && typeof v === 'object' ? v : undefined
-      const validateFacetValue = (path: string, value: unknown): string | null => {
-        if (typeof value !== 'string' || !value.trim()) {
-          notes.push(`REJECTED set ${path}: values must be non-empty strings. Unchanged.`)
-          failed = true
-          return null
-        }
-        if (value.length > MAX_MEMORY_FACET_CHARS) {
-          notes.push(
-            `REJECTED set ${path}: value too long (${value.length} chars, max ${MAX_MEMORY_FACET_CHARS}). Rewrite tighter — state the present truth, not the story. Unchanged.`,
-          )
-          failed = true
-          return null
-        }
-        return value
-      }
-      // The possessions facet is an itemized map of item → short description.
-      const validateItemMap = (path: string, value: unknown): Record<string, string> | null => {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-          notes.push(`REJECTED set ${path}: possessions must be an object of item → string. Unchanged.`)
-          failed = true
-          return null
-        }
-        const items = Object.entries(value)
-        if (!items.length || items.length > MAX_MEMORY_FACETS) {
-          notes.push(
-            `REJECTED set ${path}: possessions need 1-${MAX_MEMORY_FACETS} items (got ${items.length}). Unchanged.`,
-          )
-          failed = true
-          return null
-        }
-        const out: Record<string, string> = {}
-        for (const [item, itemValue] of items) {
-          if (!item || item.includes('.') || !isSafeStatePath(item)) {
-            notes.push(`REJECTED set ${path}: bad item name "${item}". Unchanged.`)
-            failed = true
-            return null
+      const isPlainObject = (v: unknown): v is Record<string, JsonValue> =>
+        typeof v === 'object' && v !== null && !Array.isArray(v)
+      // Remove a path and prune any ancestor objects it leaves empty.
+      const deleteAndPrune = (m: Memory, path: string): Memory => {
+        let out = deleteByPath(m, path)
+        const segments = path.split('.').filter(Boolean)
+        for (let depth = segments.length - 1; depth >= 1; depth--) {
+          const ancestor = segments.slice(0, depth).join('.')
+          const value = getByPath(out, ancestor)
+          if (isPlainObject(value) && Object.keys(value).length === 0) {
+            out = deleteByPath(out, ancestor)
+          } else {
+            break
           }
-          const v = validateFacetValue(`${path}.${item}`, itemValue)
-          if (v === null) return null
-          out[item] = v
         }
         return out
       }
 
-      // Moves first: rename entities or relocate facets.
-      for (const [fromRaw, toRaw] of moveEntries) {
-        if (typeof toRaw !== 'string') {
-          notes.push(`REJECTED move ${fromRaw}: target must be a path string.`)
+      // Moves first: rename entities, relocate values, fold duplicates.
+      for (const [fromPath, toRaw] of moveEntries) {
+        if (typeof toRaw !== 'string' || !toRaw) {
+          notes.push(`REJECTED move ${fromPath}: target must be a path string.`)
           failed = true
           continue
         }
-        const from = parsePath(fromRaw)
-        const to = parsePath(toRaw)
-        if (!from || !to) {
-          notes.push(`REJECTED move ${fromRaw} → ${toRaw}: paths must be \`slug\` or \`slug.facet\`.`)
-          failed = true
+        const value = getByPath(next, fromPath)
+        if (value === undefined) {
+          notes.push(`move ${fromPath} (no-op; not present)`)
           continue
         }
-        if (Boolean(from.facet) !== Boolean(to.facet) || Boolean(from.item) !== Boolean(to.item)) {
-          notes.push(`REJECTED move ${fromRaw} → ${toRaw}: source and target must be the same kind of path.`)
-          failed = true
-          continue
-        }
-        if (from.item && to.item && from.facet && to.facet) {
-          // Rename a possession or transfer it between entities. mv
-          // semantics: an existing target item is replaced.
-          const sourceMap = asItemMap(next[from.slug]?.[from.facet])
-          const value = sourceMap?.[from.item]
-          if (sourceMap === undefined || value === undefined) {
-            notes.push(`move ${fromRaw} (no-op; not present)`)
-            continue
-          }
-          if (from.slug === to.slug) {
-            const map = { ...sourceMap }
-            delete map[from.item]
-            const replaced = map[to.item] !== undefined
-            map[to.item] = value
-            next = setFacet(next, to.slug, to.facet, map)
-            notes.push(`moved ${fromRaw} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
-            continue
-          }
-          const targetFacetValue = next[to.slug]?.[to.facet]
-          if (targetFacetValue !== undefined && asItemMap(targetFacetValue) === undefined) {
-            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: target possessions is a plain string — set it as a map first.`)
-            failed = true
-            continue
-          }
-          const targetMap = { ...(asItemMap(targetFacetValue) ?? {}) }
-          const replaced = targetMap[to.item] !== undefined
-          if (!replaced && Object.keys(targetMap).length >= MAX_MEMORY_FACETS) {
-            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: possessions already has ${MAX_MEMORY_FACETS} items. Drop or combine one first.`)
-            failed = true
-            continue
-          }
-          const targetEntry = next[to.slug]
-          if (
-            targetEntry &&
-            targetFacetValue === undefined &&
-            Object.keys(targetEntry).length >= MAX_MEMORY_FACETS
-          ) {
-            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: entry ${to.slug} already has ${MAX_MEMORY_FACETS} facets.`)
-            failed = true
-            continue
-          }
-          targetMap[to.item] = value
-          const cleanedSource = { ...sourceMap }
-          delete cleanedSource[from.item]
-          if (Object.keys(cleanedSource).length === 0) {
-            const entry = { ...next[from.slug] }
-            delete entry[from.facet]
-            next = Object.keys(entry).length
-              ? { ...next, [from.slug]: entry }
-              : dropSlug(next, from.slug)
-          } else {
-            next = setFacet(next, from.slug, from.facet, cleanedSource)
-          }
-          next = setFacet(next, to.slug, to.facet, targetMap)
-          notes.push(`moved ${fromRaw} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
-          continue
-        }
-        if (from.facet && to.facet) {
-          const value = next[from.slug]?.[from.facet]
-          if (value === undefined) {
-            notes.push(`move ${fromRaw} (no-op; not present)`)
-            continue
-          }
-          const replaced = next[to.slug]?.[to.facet] !== undefined
-          const fromEntry = { ...next[from.slug] }
-          delete fromEntry[from.facet]
-          next = Object.keys(fromEntry).length
-            ? { ...next, [from.slug]: fromEntry }
-            : dropSlug(next, from.slug)
-          next = setFacet(next, to.slug, to.facet, value)
-          notes.push(`moved ${fromRaw} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
+        const existing = getByPath(next, toRaw)
+        next = deleteAndPrune(next, fromPath)
+        if (isPlainObject(existing) && isPlainObject(value)) {
+          // Both sides are objects: shallow-merge with mv semantics — the
+          // moved keys replace the target's; keys only the target had are
+          // kept. Fold a duplicate by moving it onto the canonical slug.
+          const replaced = Object.keys(value).filter(
+            (key) => existing[key] !== undefined && existing[key] !== value[key],
+          )
+          next = setByPath(next, toRaw, { ...existing, ...value })
+          notes.push(
+            `merged ${fromPath} into ${toRaw}${replaced.length ? ` (replaced ${replaced.join(', ')})` : ''}`,
+          )
         } else {
-          const entry = next[from.slug]
-          if (entry === undefined) {
-            notes.push(`move ${fromRaw} (no-op; not present)`)
-            continue
-          }
-          const target = next[to.slug]
-          if (target === undefined) {
-            next = dropSlug(next, from.slug)
-            next = { ...next, [to.slug]: entry }
-            notes.push(`renamed ${from.slug} → ${to.slug}`)
-            continue
-          }
-          // Target exists: merge the two entries with mv semantics — the
-          // moved facets replace the target's on conflict; facets only the
-          // target had are kept. The note lists what was overwritten.
-          const merged: MemoryEntry = { ...target }
-          const overwritten: string[] = []
-          const overflow: string[] = []
-          for (const [facet, value] of Object.entries(entry)) {
-            if (merged[facet] !== undefined) {
-              if (merged[facet] !== value) overwritten.push(facet)
-              merged[facet] = value
-              continue
-            }
-            if (Object.keys(merged).length >= MAX_MEMORY_FACETS) {
-              overflow.push(facet)
-              continue
-            }
-            merged[facet] = value
-          }
-          next = dropSlug(next, from.slug)
-          next = { ...next, [to.slug]: merged }
-          const detail = [
-            overwritten.length ? `replaced ${to.slug}'s ${overwritten.join(', ')}` : '',
-            overflow.length ? `facet cap reached — dropped ${overflow.join(', ')}` : '',
-          ]
-            .filter(Boolean)
-            .join('; ')
-          notes.push(`merged ${from.slug} into ${to.slug}${detail ? ` (${detail})` : ''}`)
+          const replaced = existing !== undefined
+          next = setByPath(next, toRaw, value)
+          notes.push(`moved ${fromPath} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
         }
       }
 
-      // Deletes: facets that stopped being true, or whole entries.
-      for (const raw of deletePaths) {
-        const p = parsePath(raw)
-        if (!p) {
-          notes.push(`REJECTED delete ${raw}: paths must be \`slug\` or \`slug.facet\`.`)
-          failed = true
+      for (const path of deletePaths) {
+        if (getByPath(next, path) === undefined) {
+          notes.push(`deleted ${path} (no-op; not present)`)
           continue
         }
-        if (p.item && p.facet) {
-          const map = asItemMap(next[p.slug]?.[p.facet])
-          if (map === undefined || map[p.item] === undefined) {
-            notes.push(`deleted ${raw} (no-op; not present)`)
-            continue
-          }
-          const cleaned = { ...map }
-          delete cleaned[p.item]
-          if (Object.keys(cleaned).length === 0) {
-            const entry = { ...next[p.slug] }
-            delete entry[p.facet]
-            if (Object.keys(entry).length === 0) {
-              next = dropSlug(next, p.slug)
-              notes.push(`deleted ${raw} (entry now empty — removed)`)
-            } else {
-              next = { ...next, [p.slug]: entry }
-              notes.push(`deleted ${raw} (possessions now empty — removed)`)
-            }
-          } else {
-            next = setFacet(next, p.slug, p.facet, cleaned)
-            notes.push(`deleted ${raw}`)
-          }
-          continue
-        }
-        if (p.facet) {
-          if (next[p.slug]?.[p.facet] === undefined) {
-            notes.push(`deleted ${raw} (no-op; not present)`)
-            continue
-          }
-          const entry = { ...next[p.slug] }
-          delete entry[p.facet]
-          if (Object.keys(entry).length === 0) {
-            next = dropSlug(next, p.slug)
-            notes.push(`deleted ${raw} (entry now empty — removed)`)
-          } else {
-            next = { ...next, [p.slug]: entry }
-            notes.push(`deleted ${raw}`)
-          }
-        } else if (next[p.slug] === undefined) {
-          notes.push(`deleted ${p.slug} (no-op; not present)`)
-        } else {
-          next = dropSlug(next, p.slug)
-          notes.push(`deleted ${p.slug}`)
-        }
+        next = deleteAndPrune(next, path)
+        notes.push(`deleted ${path}`)
       }
 
-      // Sets last: surgical facet writes, or whole-entry replacement.
-      for (const [raw, value] of setEntries) {
-        const p = parsePath(raw)
-        if (!p) {
-          notes.push(`REJECTED set ${raw}: paths must be \`slug\` or \`slug.facet\`.`)
-          failed = true
+      // Sets are additive: only named paths change; everything else survives.
+      // Setting null deletes the path, mirroring live state's convention.
+      for (const [path, value] of setEntries) {
+        if (value === null || value === undefined) {
+          if (getByPath(next, path) === undefined) {
+            notes.push(`deleted ${path} via null (no-op; not present)`)
+          } else {
+            next = deleteAndPrune(next, path)
+            notes.push(`deleted ${path} via null`)
+          }
           continue
         }
-        if (p.item && p.facet) {
-          const validated = validateFacetValue(raw, value)
-          if (validated === null) continue
-          const entry = next[p.slug]
-          const facetValue = entry?.[p.facet]
-          if (facetValue !== undefined && asItemMap(facetValue) === undefined) {
-            notes.push(
-              `REJECTED set ${raw}: possessions is currently a plain string — set ${p.slug}.possessions as a map first.`,
-            )
-            failed = true
-            continue
-          }
-          const map = asItemMap(facetValue)
-          if (map && map[p.item] === undefined && Object.keys(map).length >= MAX_MEMORY_FACETS) {
-            notes.push(
-              `REJECTED set ${raw}: possessions already has ${MAX_MEMORY_FACETS} items. Drop or combine one first.`,
-            )
-            failed = true
-            continue
-          }
-          if (entry && facetValue === undefined && Object.keys(entry).length >= MAX_MEMORY_FACETS) {
-            notes.push(
-              `REJECTED set ${raw}: entry already has ${MAX_MEMORY_FACETS} facets. Delete or condense one first.`,
-            )
-            failed = true
-            continue
-          }
-          next = setFacet(next, p.slug, p.facet, { ...(map ?? {}), [p.item]: validated })
-          notes.push(`set ${raw}`)
-          continue
-        }
-        if (p.facet) {
-          const isPossessionsMap =
-            p.facet === 'possessions' &&
-            value !== null &&
-            typeof value === 'object' &&
-            !Array.isArray(value)
-          const validated: MemoryFacet | null = isPossessionsMap
-            ? validateItemMap(raw, value)
-            : validateFacetValue(raw, value)
-          if (validated === null) continue
-          const entry = next[p.slug]
-          if (
-            entry &&
-            entry[p.facet] === undefined &&
-            Object.keys(entry).length >= MAX_MEMORY_FACETS
-          ) {
-            notes.push(
-              `REJECTED set ${raw}: entry already has ${MAX_MEMORY_FACETS} facets. Delete or condense one first.`,
-            )
-            failed = true
-            continue
-          }
-          next = setFacet(next, p.slug, p.facet, validated)
-          notes.push(`set ${raw}`)
-        } else {
-          // Whole entry: an object of string facets, or a bare string coerced
-          // to { is: value } for convenience.
-          const entryObj =
-            typeof value === 'string'
-              ? { is: value }
-              : value && typeof value === 'object' && !Array.isArray(value)
-                ? (value as Record<string, unknown>)
-                : null
-          if (!entryObj) {
-            notes.push(
-              `REJECTED set ${p.slug}: an entry must be an object of string facets (or a single string for \`is\`). Unchanged.`,
-            )
-            failed = true
-            continue
-          }
-          const facets = Object.entries(entryObj)
-          if (!facets.length || facets.length > MAX_MEMORY_FACETS) {
-            notes.push(
-              `REJECTED set ${p.slug}: entries need 1-${MAX_MEMORY_FACETS} facets (got ${facets.length}). Unchanged.`,
-            )
-            failed = true
-            continue
-          }
-          let ok = true
-          const validated: MemoryEntry = {}
-          for (const [facet, facetValue] of facets) {
-            if (!facet || facet.includes('.') || !isSafeStatePath(facet)) {
-              notes.push(`REJECTED set ${p.slug}: bad facet name "${facet}". Unchanged.`)
-              failed = true
-              ok = false
-              break
-            }
-            const isPossessionsMap =
-              facet === 'possessions' &&
-              facetValue !== null &&
-              typeof facetValue === 'object' &&
-              !Array.isArray(facetValue)
-            const v = isPossessionsMap
-              ? validateItemMap(`${p.slug}.${facet}`, facetValue)
-              : validateFacetValue(`${p.slug}.${facet}`, facetValue)
-            if (v === null) {
-              ok = false
-              break
-            }
-            validated[facet] = v
-          }
-          if (!ok) continue
-          next = { ...next, [p.slug]: validated }
-          notes.push(`set ${p.slug} (${facets.length} facet${facets.length === 1 ? '' : 's'})`)
-        }
+        next = setByPath(next, path, value)
+        notes.push(`set ${path}`)
       }
 
       const result = `${failed ? 'partial' : 'ok'} — memory: ${notes.join('; ')}`

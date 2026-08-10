@@ -47,8 +47,8 @@ export function buildStateRules(): string {
   return stateRulesTemplate.trim()
 }
 
-export function buildMemoryRules(maxFacetChars: number, maxFacets: number): string {
-  return fill(memoryRulesTemplate, { maxFacetChars, maxFacets }).trim()
+export function buildMemoryRules(): string {
+  return memoryRulesTemplate.trim()
 }
 
 export function buildPlotRules(maxPlotItems: number, maxPlotItemChars: number): string {

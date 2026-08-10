@@ -9,7 +9,6 @@ import type {
   ContextConfig,
   JsonValue,
   Memory,
-  MemoryEntry,
   MessageV1,
   ModelCall,
   SamplingParams,
@@ -61,38 +60,10 @@ function isWorldStateLike(value: unknown): value is WorldState {
   return isRecord(value) && Object.values(value).every(isJsonValue)
 }
 
-function isMemoryFacetLike(value: unknown): boolean {
-  return (
-    typeof value === 'string' ||
-    (isRecord(value) && Object.values(value).every((item) => typeof item === 'string'))
-  )
-}
-
-function isMemoryEntryLike(value: unknown): value is MemoryEntry {
-  return isRecord(value) && Object.values(value).every(isMemoryFacetLike)
-}
-
-// Accepts both the current faceted shape and the legacy slug → string shape;
-// normalizeMemoryShape upgrades legacy entries on load.
-function isMemoryLike(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    Object.values(value).every(
-      (entry) => typeof entry === 'string' || isMemoryEntryLike(entry),
-    )
-  )
-}
-
-// Upgrade legacy string entries to the faceted shape ({ is: <old text> }) so
-// nothing is lost and the plotter can refactor entries as it touches them.
-export function normalizeMemoryShape(value: unknown): Memory {
-  if (!isRecord(value)) return {}
-  const out: Memory = {}
-  for (const [slug, entry] of Object.entries(value)) {
-    if (typeof entry === 'string') out[slug] = { is: entry }
-    else if (isMemoryEntryLike(entry)) out[slug] = entry
-  }
-  return out
+// Memory entries are free JSON — legacy string entries and the faceted
+// object shape are both valid as-is.
+function isMemoryLike(value: unknown): value is Memory {
+  return isRecord(value) && Object.values(value).every(isJsonValue)
 }
 
 function isTraceLike(value: unknown): boolean {
@@ -269,7 +240,7 @@ export function loadStoredMemory(): Memory {
     if (!isMemoryLike(parsed)) {
       return structuredClone(DEFAULT_MEMORY)
     }
-    return normalizeMemoryShape(parsed)
+    return parsed
   } catch {
     return structuredClone(DEFAULT_MEMORY)
   }
@@ -617,7 +588,7 @@ export function normalizeSavedGame(
   } else {
     chronicle = []
   }
-  const memory: Memory = normalizeMemoryShape(legacy.memory)
+  const memory: Memory = isMemoryLike(legacy.memory) ? legacy.memory : {}
   return {
     id: legacy.id,
     name: legacy.name,

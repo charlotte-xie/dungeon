@@ -77,14 +77,23 @@ export function buildStatePayload(
   return `\`\`\`json\n${stateJson}\n\`\`\`\n\n${auditPrompt}\n\n${cleanupStatus}`
 }
 
+// Above this size the memory payload starts nagging the plotter to trim —
+// the only size pressure on memory; there are no structural caps.
+const MEMORY_SIZE_HINT_CHARS = 8_000
+
 export function buildMemoryPayload(currentMemory: Memory): string {
   const entries = Object.keys(currentMemory)
+  const memoryJson = JSON.stringify(currentMemory, null, 2)
+  const sizeHint =
+    memoryJson.length > MEMORY_SIZE_HINT_CHARS
+      ? `\n\nSTATUS: memory is ${memoryJson.length.toLocaleString()} chars — getting long. Trim it: condense wordy values, delete facets and entries that stopped mattering, and fold duplicates together.`
+      : ''
   const body = entries.length
-    ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
+    ? `\`\`\`json\n${memoryJson}\n\`\`\``
     : '(no memory yet — the Plotter pass adds entries via `update_memory` when the story establishes something that should persist across scenes)'
   const reminder =
     'If this turn established or changed a durable fact about a recurring person, place, or thing, the Plotter pass records it via `update_memory` — facts about the entity only; `history` takes only notable events that still shape the present (the chronicle records everything else). Never store current-scene data (positions, present company, moods, held items). If nothing notable changed, no call is needed.'
-  return `${body}\n\n${reminder}`
+  return `${body}\n\n${reminder}${sizeHint}`
 }
 
 export function buildPlotPayload(currentPlot: string[]): string {

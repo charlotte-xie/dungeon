@@ -76,7 +76,7 @@ describe('tool execution boundaries', () => {
       data,
     )
     expect(Object.keys(renamed.data.memory).sort()).toEqual(['chloe', 'daniel'])
-    expect(renamed.data.memory.daniel).toEqual({
+    expect(renamed.data.memory['daniel']).toEqual({
       is: 'dark-haired sixth-former, easy charm',
       bond: 'walked the player to the common room',
     })
@@ -90,12 +90,12 @@ describe('tool execution boundaries', () => {
       renamed.data,
     )
     expect(Object.keys(merged.data.memory)).toEqual(['chloe'])
-    expect(merged.data.memory.chloe).toEqual({
+    expect(merged.data.memory['chloe']).toEqual({
       is: 'dark-haired sixth-former, easy charm',
       bond: 'walked the player to the common room',
     })
     expect(merged.result).toContain('merged daniel into chloe')
-    expect(merged.result).toContain("replaced chloe's is")
+    expect(merged.result).toContain('replaced is')
   })
 
   it('deletes facets and drops an entry when its last facet goes', () => {
@@ -110,8 +110,9 @@ describe('tool execution boundaries', () => {
       JSON.stringify({ delete: ['the_baker.secret', 'stub.is'] }),
       data,
     )
+    // Emptied parents are pruned: stub loses its last value and disappears.
     expect(result.data.memory).toEqual({ the_baker: { is: 'Hesta' } })
-    expect(result.result).toContain('entry now empty — removed')
+    expect(result.result).toContain('deleted stub.is')
   })
 
   it('edits single possessions by item path', () => {
@@ -128,9 +129,9 @@ describe('tool execution boundaries', () => {
       JSON.stringify({ set: { 'player.possessions.money': '12 pounds' } }),
       data,
     )
-    expect(spent.data.memory.player.possessions).toEqual({
-      money: '12 pounds',
-      sabre: 'chipped',
+    expect(spent.data.memory.player).toEqual({
+      is: 'a drifter',
+      possessions: { money: '12 pounds', sabre: 'chipped' },
     })
 
     const dropped = executeTool(
@@ -138,7 +139,10 @@ describe('tool execution boundaries', () => {
       JSON.stringify({ delete: ['player.possessions.sabre'] }),
       spent.data,
     )
-    expect(dropped.data.memory.player.possessions).toEqual({ money: '12 pounds' })
+    expect(dropped.data.memory.player).toEqual({
+      is: 'a drifter',
+      possessions: { money: '12 pounds' },
+    })
   })
 
   it('transfers a possession between entities with move', () => {
@@ -156,46 +160,49 @@ describe('tool execution boundaries', () => {
       JSON.stringify({ move: { 'player.possessions.ring': 'hesta.possessions.ring' } }),
       data,
     )
-    expect(result.data.memory.player).toEqual({ is: 'a drifter' })
-    expect(result.data.memory.hesta.possessions).toEqual({ ring: "mother's silver ring" })
+    expect(result.data.memory).toEqual({
+      player: { is: 'a drifter' },
+      hesta: { is: 'the baker', possessions: { ring: "mother's silver ring" } },
+    })
     expect(result.result).toContain('moved player.possessions.ring → hesta.possessions.ring')
   })
 
-  it('only the possessions facet may nest', () => {
+  it('nests to any depth at the model’s discretion, and null deletes', () => {
     const data = { state: {}, plot: [], memory: {}, ooc: [] }
-    const badPath = executeTool(
+    const deep = executeTool(
       'update_memory',
-      JSON.stringify({ set: { 'npc.facts.rumor': 'three levels deep' } }),
+      JSON.stringify({
+        set: {
+          'mark.relationships.phil': 'foreman he quietly funds',
+          'mark.relationships.len.standing': 'wary courtesy',
+        },
+      }),
       data,
     )
-    expect(badPath.data.memory).toEqual({})
-    expect(badPath.result).toContain('REJECTED')
+    expect(deep.data.memory['mark']).toEqual({
+      relationships: { phil: 'foreman he quietly funds', len: { standing: 'wary courtesy' } },
+    })
 
-    const badValue = executeTool(
+    const nulled = executeTool(
       'update_memory',
-      JSON.stringify({ set: { 'npc.facts': { nested: 'object' } } }),
-      data,
+      JSON.stringify({ set: { 'mark.relationships.len.standing': null } }),
+      deep.data,
     )
-    expect(badValue.data.memory).toEqual({})
-    expect(badValue.result).toContain('REJECTED')
+    // Null deletes the path; emptied ancestors are pruned.
+    expect(nulled.data.memory['mark']).toEqual({
+      relationships: { phil: 'foreman he quietly funds' },
+    })
   })
 
-  it('rejects oversized facets and unsafe paths without partial writes', () => {
+  it('rejects unsafe memory paths without partial writes', () => {
     const data = { state: {}, plot: [], memory: {}, ooc: [] }
-    const tooLong = executeTool(
-      'update_memory',
-      JSON.stringify({ set: { 'npc.is': 'x'.repeat(400) } }),
-      data,
-    )
-    expect(tooLong.data.memory).toEqual({})
-    expect(tooLong.result).toContain('value too long')
-
     const unsafe = executeTool(
       'update_memory',
       JSON.stringify({ set: { '__proto__.polluted': 'yes' } }),
       data,
     )
-    expect(unsafe.result).toContain('REJECTED')
+    expect(unsafe.data).toBe(data)
+    expect(unsafe.result).toMatch(/unsafe memory path/)
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
   })
 

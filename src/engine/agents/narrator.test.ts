@@ -147,8 +147,7 @@ describe('runNarrator two-phase flow', () => {
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
-    // A bare string set on a slug path is coerced to the `is` facet.
-    expect(result.data.memory).toEqual({ the_mill: { is: 'An old mill.' } })
+    expect(result.data.memory).toEqual({ the_mill: 'An old mill.' })
     expect(mockedModel).toHaveBeenCalledTimes(3)
     expect(
       result.plotterTrace?.some((e) => e.kind === 'thought' && e.text.includes('rejected')),
