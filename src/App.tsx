@@ -191,6 +191,14 @@ function App() {
           </button>
           <button
             className="ghost"
+            onClick={game.redo}
+            disabled={thinking || !game.canRedo}
+            title="Invert the undo — restore the turn you just rolled back"
+          >
+            Redo
+          </button>
+          <button
+            className="ghost"
             onClick={() => void game.retry()}
             disabled={thinking || !game.canRetry}
             title="Discard the DM's last reply and re-roll with the same action"

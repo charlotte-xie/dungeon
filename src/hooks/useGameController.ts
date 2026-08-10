@@ -492,9 +492,18 @@ export function useGameController(settings: GameSettings) {
 
   function undo() {
     if (operations.busy || !recovery.undo) return
+    // Snapshot the world as it stands so the undo can be inverted by redo.
+    const current = checkpoint()
     restoreCheckpoint(recovery.undo.checkpoint)
     setInput(recovery.undo.restoreInput)
-    dispatchRecovery({ type: 'undo' })
+    dispatchRecovery({ type: 'undo', current })
+  }
+
+  function redo() {
+    if (operations.busy || !recovery.redo) return
+    restoreCheckpoint(recovery.redo.checkpoint)
+    setInput('')
+    dispatchRecovery({ type: 'redo' })
   }
 
   async function retry() {
@@ -528,6 +537,13 @@ export function useGameController(settings: GameSettings) {
     }
     if (!chronicleNeedsCompaction(turns, compactCutoff, chronicle, settings)) {
       alert('Nothing to compact: chronicle is up to date.')
+      return
+    }
+    if (
+      !confirm(
+        'Compact the chronicle now? The oldest live turns are condensed into summary entries — the full text stays visible in your log, but the model will only see the summaries from then on. This is lossy, cannot be undone, and runs summarizer model calls immediately.',
+      )
+    ) {
       return
     }
     setStatusText('Compacting chronicle…')
@@ -651,6 +667,7 @@ export function useGameController(settings: GameSettings) {
     turns,
     compactCutoff,
     canUndo: recovery.undo !== null,
+    canRedo: recovery.redo !== null,
     canRetry: recovery.retry !== null,
     // engine status
     input,
@@ -663,6 +680,7 @@ export function useGameController(settings: GameSettings) {
     continueStory,
     retry,
     undo,
+    redo,
     compactNow,
     cancelOperation,
     newAdventure,
