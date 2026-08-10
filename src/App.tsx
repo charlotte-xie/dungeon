@@ -246,6 +246,7 @@ function App() {
           onSavePlot={game.commitPlot}
           onSaveMemory={game.commitMemory}
           onSaveOoc={game.commitOoc}
+          onSaveChronicle={game.commitChronicle}
           onClearPlot={() => game.commitPlot([])}
           onClearMemory={() => game.commitMemory({})}
           onClearOoc={() => game.commitOoc([])}

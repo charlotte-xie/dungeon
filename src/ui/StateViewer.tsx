@@ -21,6 +21,7 @@ interface StateViewerProps {
   onSavePlot: (next: string[]) => void
   onSaveMemory: (next: Memory) => void
   onSaveOoc: (next: string[]) => void
+  onSaveChronicle: (next: Chronicle) => void
   onClearPlot: () => void
   onClearMemory: () => void
   onClearOoc: () => void
@@ -59,6 +60,7 @@ export function StateViewer({
   onSavePlot,
   onSaveMemory,
   onSaveOoc,
+  onSaveChronicle,
   onClearPlot,
   onClearMemory,
   onClearOoc,
@@ -72,6 +74,9 @@ export function StateViewer({
   const [oocError, setOocError] = useState<string | null>(null)
   const [memoryDraft, setMemoryDraft] = useState(() => JSON.stringify(memory, null, 2))
   const [memoryError, setMemoryError] = useState<string | null>(null)
+  // Chronicle entry edits, keyed by entry id; an entry not in the map is
+  // unedited. Clearing an entry's text deletes it on save.
+  const [chronicleDraft, setChronicleDraft] = useState<Record<string, string>>({})
 
   // Reset local drafts when the parent's prop changes (e.g. after a turn that
   // mutated state/plot/memory). Adjusting state during render — a documented
@@ -100,6 +105,11 @@ export function StateViewer({
     setOocDraft(plotToDraft(ooc))
     setOocError(null)
   }
+  const [prevChronicle, setPrevChronicle] = useState(chronicle)
+  if (prevChronicle !== chronicle) {
+    setPrevChronicle(chronicle)
+    setChronicleDraft({})
+  }
 
   const currentJson = JSON.stringify(state, null, 2)
   const currentMemoryJson = JSON.stringify(memory, null, 2)
@@ -107,6 +117,10 @@ export function StateViewer({
   const plotDirty = plotDraft !== plotToDraft(plot)
   const oocDirty = oocDraft !== plotToDraft(ooc)
   const memoryDirty = memoryDraft !== currentMemoryJson
+  const entryText = (id: string, original: string) => chronicleDraft[id] ?? original
+  const chronicleDirty = chronicle.some((level) =>
+    level.some((e) => entryText(e.id, e.text) !== e.text),
+  )
   const memoryEntries = Object.keys(memory).length
 
   const totalEntries = chronicle.reduce((n, level) => n + level.length, 0)
@@ -180,11 +194,21 @@ export function StateViewer({
     return parsed as Memory
   }
 
+  // Rebuild the chronicle with edited texts; entries cleared to empty are
+  // dropped. Metadata (id, turnsCovered, createdAt) is preserved.
+  function buildEditedChronicle(): Chronicle {
+    return chronicle.map((level) =>
+      level
+        .map((e) => ({ ...e, text: entryText(e.id, e.text).trim() }))
+        .filter((e) => e.text.length > 0),
+    )
+  }
+
   const wantState = context.includeWorldState && stateDirty
   const wantPlot = context.includePlotOutline && plotDirty
   const wantOoc = context.includeOoc && oocDirty
   const wantMemory = context.includeMemory && memoryDirty
-  const anyDirty = wantState || wantPlot || wantOoc || wantMemory
+  const anyDirty = wantState || wantPlot || wantOoc || wantMemory || chronicleDirty
 
   function handleSaveChanges() {
     const nextState = wantState ? validateState() : undefined
@@ -203,6 +227,7 @@ export function StateViewer({
     if (nextPlot !== undefined && nextPlot !== null) onSavePlot(nextPlot)
     if (nextOoc !== undefined && nextOoc !== null) onSaveOoc(nextOoc)
     if (nextMemory !== undefined && nextMemory !== null) onSaveMemory(nextMemory)
+    if (chronicleDirty) onSaveChronicle(buildEditedChronicle())
   }
 
   return (
@@ -322,7 +347,8 @@ export function StateViewer({
           folded into one chronicle entry of roughly 1/{context.compactionBatch} the
           combined input length. When a level reaches {context.compactionThreshold}{' '}
           entries, the oldest {context.compactionBatch} are promoted into one entry at
-          the next level up, recursively. Entries shown oldest-first; newest at the bottom.
+          the next level up, recursively. Entries shown oldest-first; newest at the
+          bottom. Entries are editable — clear an entry&apos;s text to delete it on save.
           {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
           {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
         </p>
@@ -350,9 +376,18 @@ export function StateViewer({
                       <div key={e.id} className="chronicle-entry">
                         <div className="chronicle-entry-meta">
                           covers {e.turnsCovered} turn{e.turnsCovered === 1 ? '' : 's'} ·{' '}
-                          {e.text.length.toLocaleString()} chars
+                          {entryText(e.id, e.text).length.toLocaleString()} chars
+                          {entryText(e.id, e.text) !== e.text && ' · edited'}
                         </div>
-                        <p className="chronicle-entry-text">{e.text}</p>
+                        <textarea
+                          className="state-json state-json-editor chronicle-entry-edit"
+                          spellCheck={false}
+                          value={entryText(e.id, e.text)}
+                          onChange={(ev) =>
+                            setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
+                          }
+                          readOnly={busy}
+                        />
                       </div>
                     ))}
                   </div>

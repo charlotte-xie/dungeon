@@ -65,6 +65,11 @@ header h1 {
   position: relative;
 }
 
+.chronicle-entry-edit {
+  width: 100%;
+  min-height: 3.2rem;
+}
+
 /* Barely-there edit affordance: invisible until the message is hovered
    (faintly visible on touch devices, where hover doesn't exist). */
 .msg-edit-btn {
