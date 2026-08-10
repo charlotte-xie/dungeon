@@ -95,7 +95,9 @@ export function buildPlotterInstruction(
   if (includeMemory) {
     reads.push('check_memory')
     updates.push('`update_memory`')
-    distinctions.push('`update_memory` holds only durable, scene-independent canon')
+    distinctions.push(
+      '`update_memory` holds only durable facts about people, places, and things — never events',
+    )
   }
   if (includePlotOutline) {
     reads.push('check_plot_plan')

@@ -76,7 +76,7 @@ export function buildMemoryPayload(currentMemory: Memory): string {
     ? `\`\`\`json\n${JSON.stringify(currentMemory, null, 2)}\n\`\`\``
     : '(no memory yet — the Plotter pass adds entries via `update_memory` when the story establishes something that should persist across scenes)'
   const reminder =
-    'If this turn introduces a recurring NPC, location, or thread, or meaningfully changes an existing entry, the Plotter pass records it via `update_memory`. Durable, scene-independent facts only — current positions, present company, momentary moods, and held items are current-scene data, never memory. Rewrite entries as present-tense truth; never append a running history of what just happened. If nothing notable changed, no call is needed.'
+    'If this turn established or changed a durable fact about a recurring person, place, or thing, the Plotter pass records it via `update_memory` — facts about the entity only. Never log events (the chronicle records what happened) and never store current-scene data (positions, present company, moods, held items). If nothing notable changed, no call is needed.'
   return `${body}\n\n${reminder}`
 }
 

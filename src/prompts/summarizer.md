@@ -13,6 +13,7 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 
 # What to omit
 
+- Standing descriptions of people, places, and things (what someone looks like, what a place is) — the memory fact file's job. Record what happened, not what things are like.
 - Atmosphere, scenery, weather, clothing, incidental gestures, and sensory description.
 - Action choreography, travel between known places, exact dialogue, and intermediate steps once their outcome is known.
 - Transient reactions, repeated facts, introductions already established elsewhere, and resolved minor obstacles.
