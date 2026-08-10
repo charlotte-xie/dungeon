@@ -92,10 +92,37 @@ describe('legacy data tolerance', () => {
     expect(normalized.turns).toHaveLength(1)
   })
 
+  it('upgrades the pre-watermark default compaction threshold', () => {
+    const stored: Record<string, string> = {
+      'dm.context': JSON.stringify({ compactionThreshold: 8, compactionBatch: 4 }),
+    }
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored[key] ?? null,
+      setItem: () => {},
+      removeItem: () => {},
+    })
+    const ctx = loadStoredContext()
+    // Old default 8 with no stored floor = legacy config → new defaults.
+    expect(ctx.compactionThreshold).toBe(DEFAULT_CONTEXT.compactionThreshold)
+    expect(ctx.compactionFloor).toBe(DEFAULT_CONTEXT.compactionFloor)
+  })
+
+  it('keeps a deliberately customized compaction threshold', () => {
+    const stored: Record<string, string> = {
+      'dm.context': JSON.stringify({ compactionThreshold: 12, compactionBatch: 4 }),
+    }
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored[key] ?? null,
+      setItem: () => {},
+      removeItem: () => {},
+    })
+    expect(loadStoredContext().compactionThreshold).toBe(12)
+  })
+
   it('rebuilds an old context config with defaults for new fields', () => {
     const stored: Record<string, string> = {
       'dm.context': JSON.stringify({
-        compactionThreshold: 8,
+        compactionThreshold: 24,
         compactionBatch: 4,
         includeWorldState: true,
         includeToolCallHistory: true,
@@ -107,7 +134,7 @@ describe('legacy data tolerance', () => {
       removeItem: () => {},
     })
     const ctx = loadStoredContext()
-    expect(ctx.compactionThreshold).toBe(8)
+    expect(ctx.compactionThreshold).toBe(24)
     expect(ctx.includeWorldState).toBe(true)
     // New fields fall back to defaults…
     expect(ctx.includeOoc).toBe(DEFAULT_CONTEXT.includeOoc)

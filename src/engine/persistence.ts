@@ -325,6 +325,14 @@ export function loadStoredContext(): ContextConfig {
     const raw = localStorage.getItem(LS_CONTEXT)
     if (!raw) return { ...DEFAULT_CONTEXT }
     const parsed = JSON.parse(raw) as Partial<ContextConfig>
+    // Migration: configs saved before the watermark redesign carry no
+    // compactionFloor, and their stored threshold of 8 is the old shipped
+    // default (fold every 4 turns), not a deliberate choice. Upgrade those
+    // to the current rare-compaction defaults; any other stored threshold
+    // is treated as intentional and kept.
+    if (typeof parsed.compactionFloor !== 'number' && parsed.compactionThreshold === 8) {
+      parsed.compactionThreshold = DEFAULT_CONTEXT.compactionThreshold
+    }
     return {
       compactionThreshold:
         typeof parsed.compactionThreshold === 'number'
