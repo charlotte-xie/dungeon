@@ -10,17 +10,26 @@ export function EditableMessage({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(text)
 
+  const startEditing = () => {
+    setDraft(text)
+    setEditing(true)
+  }
+
   if (!editing) {
     return (
-      <p
-        title="Double-click to edit"
-        onDoubleClick={() => {
-          setDraft(text)
-          setEditing(true)
-        }}
-      >
-        {text}
-      </p>
+      <div className="msg-editable">
+        <p title="Double-click to edit" onDoubleClick={startEditing}>
+          {text}
+        </p>
+        <button
+          className="msg-edit-btn"
+          aria-label="Edit message"
+          title="Edit"
+          onClick={startEditing}
+        >
+          ✎
+        </button>
+      </div>
     )
   }
 

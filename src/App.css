@@ -61,6 +61,42 @@ header h1 {
   white-space: pre-wrap;
 }
 
+.msg-editable {
+  position: relative;
+}
+
+/* Barely-there edit affordance: invisible until the message is hovered
+   (faintly visible on touch devices, where hover doesn't exist). */
+.msg-edit-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 0.3rem;
+  background: transparent;
+  border: 0;
+  color: #c9a959;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.msg-editable:hover .msg-edit-btn,
+.msg-edit-btn:focus-visible {
+  opacity: 0.45;
+}
+
+.msg-edit-btn:hover {
+  opacity: 0.9;
+}
+
+@media (hover: none) {
+  .msg-edit-btn {
+    opacity: 0.25;
+  }
+}
+
 .msg-edit {
   display: block;
   width: 100%;
