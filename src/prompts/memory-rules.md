@@ -20,7 +20,8 @@ Any entry:
 Characters add:
 
 - **`wants`** — specific goals and intentions.
-- **`facts`** — important established information, including what they know about the player and anything notable they have witnessed or been told.
+- **`facts`** — important established facts about them.
+- **`knowledge`** — what they know: things they have witnessed or been told, including about the player.
 - **`bond`** — current relationship and attitude toward the player.
 - **`relationships`** — ties to other characters; itemize by character name when there are several.
 
@@ -49,7 +50,7 @@ The player (slug `player`) adds these instead of the character facets — never 
   "the_baker": {
     "is": "Hesta the baker; stout, flour-dusted apron, grey hair tied back; owns the bakery on Mill Lane",
     "wants": "to be left alone and keep the shop open",
-    "facts": "saw the player argue with a constable; knows the player is new in town",
+    "knowledge": "saw the player argue with a constable; knows the player is new in town",
     "bond": "wary of the player; will help only if it costs nothing",
     "relationships": "mother of Tam; pays protection to the smithy brothers",
     "secret": "hiding Tam upstairs after a robbery gone wrong",
