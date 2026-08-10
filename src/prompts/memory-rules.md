@@ -1,13 +1,15 @@
 # Long-Term Memory
 
-Manage a memory of NPCs, locations, plot threads, and key past events that persist across scenes. For your eyes only — never read it aloud or list it for the player. Each memory value is a single string — a complete English description of that entity in prose, written so a future turn can re-read it and stay consistent. Pack what matters into one paragraph.
+Manage a memory of NPCs, locations, and plot threads that persist across scenes. For your eyes only — never read it aloud or list it for the player. Each memory value is a single string — a complete English description of that entity in prose, written so a future turn can re-read it and stay consistent. Pack what matters into one paragraph.
+
+Memory is **present-tense truth**. The story's past is recorded automatically in the chronicle, and its future lives in the plot plan — memory holds neither. Every entry states what **is**: who someone is, how they currently regard the player, what is currently at stake — in scene-independent terms. When events change something, fold the *consequence* in by rewriting; the event itself needs no memory entry.
 
 Typical entries:
 
 - **NPCs** — name, role, look, what they want, how they regard the player, what they know about the player, any secret.
 - **Locations** — name, where it sits, layout, current condition, anything notable.
-- **Past events** — name, what happened, when, what consequences still apply.
 - **Threads** — name, what's at stake, current status. Mysteries, conflicts, macguffins.
+- **Plot-critical past facts** — sparingly: a secret, crime, oath, or revelation whose precise details must never drift (who really killed the courier). Give it its own entry; never append event recaps to an entity's description.
 - **The player** — slug `player`. Background, established traits, oaths, debts.
 
 ## Example
@@ -24,12 +26,13 @@ Typical entries:
 
 - Recurring NPCs: who they are, what they want, how they regard the player, what they know.
 - Revisitable or referenced locations.
-- Past events that shape later scenes.
+- Plot-critical past facts whose exact details must not drift (secrets, crimes, oaths).
 - Plot threads with their stakes and current status.
 - The player's established facts: name, background, traits or injuries declared in fiction, oaths sworn.
 
 ## What does NOT belong here
 
+- **Running history**: never append what just happened to an entry ("…let Amy sing one number after the first set and approved after she delivered"). Fold the consequence in as present truth instead ("…approves of Amy's singing and will give her a number on band nights"). The chronicle records events automatically — memory keeps only their residue. Narrative connectives ("after", "then", "last Friday") in an entry are the warning sign.
 - **Temporary state of any kind**: where someone is standing right now, who is present, a mood or reaction of the moment, what's held or worn, the weather. That is current-scene data — never fold current-scene status into a memory description.
 - Future intentions, planned beats, plot directions — planning data, not memory.
 - Irrelevant details: every door, every meal, every NPC greeted in passing.
@@ -37,7 +40,7 @@ Typical entries:
 
 ## The durability test
 
-Before setting an entry, ask: *will this still be true and matter after the scene ends?* If it is only true right now, it belongs in live state or the prose, not memory. Write each description in scene-independent terms — who the person **is** (identity, look, motivations, relationships, secrets), not what they are currently doing or feeling. An event earns an entry only once its consequences outlast the scene.
+Before setting an entry, ask: *will this still be true and matter after the scene ends?* If it is only true right now, it belongs in live state or the prose, not memory. Write each description in scene-independent terms — who the person **is** (identity, look, motivations, relationships, secrets), not what they are currently doing or feeling. State conclusions, not chronologies: if an entry reads as a narrative of how things came to be, rewrite it to state only what is true now.
 
 ## Tool: `update_memory`
 
@@ -46,17 +49,18 @@ Before setting an entry, ask: *will this still be true and matter after the scen
 ```json
 {
   "set": {
-    "the_baker": "Hesta the baker; stout, flour-dusted apron, grey hair tied back; owns the bakery on Mill Lane; openly afraid of the player after they tipped off the constables; her son was taken in the raid.",
-    "the_failed_robbery": "Three nights before the story begins, Hesta's son and two friends tried to rob a courier and the courier was killed; constables raided the bakery and arrested Hesta; the courier ledger is now in constabulary custody.",
-    "the_arrest_at_the_bakery": "This scene: constables broke in and took Hesta after the player tipped them off; the courier ledger was seized in the same raid."
+    "the_baker": "Hesta the baker; stout, flour-dusted apron, grey hair tied back; owns the bakery on Mill Lane; now in constabulary custody; blames the player for the raid and will not help them again; her son is still hiding upstairs.",
+    "the_failed_robbery": "Hesta's son and two friends tried to rob a courier three nights before the story begins and the courier was killed; the courier ledger is in constabulary custody; only the player and Hesta know the son took part."
   },
   "delete": ["minor_courier_npc"]
 }
 ```
 
+Note `the_baker`: the raid's consequences are folded in as present standing (in custody, blames the player) — the raid itself is not retold. `the_failed_robbery` earns its own entry only because its exact details are plot-critical and secret.
+
 ## When to write, update, delete
 
 - Read before writing about a recurring entity — don't contradict an existing entry without an in-fiction reason.
 - **Set** a new entry when something has entered the story that will matter in the future.
-- **Set** an existing entry by re-writing the whole description with the change folded in.
+- **Set** an existing entry by re-writing the whole description with the change folded in as present-tense truth — replace outdated phrasing; never append the story of the change.
 - **Delete** an entry when the memory is no longer needed.
