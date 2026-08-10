@@ -71,7 +71,7 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things — a JSON object of entries keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators). Edits are additive by dotted path at any depth: only the paths you name change; omission never deletes; setting a path to null deletes it. The rules suggest facet names (is / notes / history / secret; characters: wants / facts / knowledge / bond / relationships; places: npcs / layout; things: significance / location; player: background / skills / possessions / oaths / reputation) — the shape beyond that is your discretion: short strings usually, nested maps where content is naturally keyed (e.g. \`player.possessions.money\`). Update only when something durable about an entity is established or changed; \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Keep entries tight — condense and delete as the story moves on.`,
+      `Maintain the fact file about the story's recurring people, places, and things — a JSON object of entries keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators). Edits are additive by dotted path at any depth: only the paths you name change; omission never deletes; setting a path to null deletes it. The rules suggest facet names (is / notes / history / secret; characters: wants / facts / knowledge / bond / relationships; places: npcs / layout; things: significance / location; player: background / skills / possessions / oaths / reputation) — the shape beyond that is your discretion: values are one or two complete standalone sentences (readable alone, long after the scene — never telegraphic fragments), with nested maps where content is naturally keyed (e.g. \`player.possessions.money\`). Update only when something durable about an entity is established or changed; \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Keep entries tight — condense and delete as the story moves on.`,
     parameters: {
       type: 'object',
       properties: {
@@ -90,7 +90,7 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         set: {
           type: 'object',
           description:
-            'Map of dotted path → value. Prefer surgical paths (`name.facet`, `name.facet.item`) over whole-entry replacement. String values are complete present-tense phrases; null deletes the path.',
+            'Map of dotted path → value. Prefer surgical paths (`name.facet`, `name.facet.item`) over whole-entry replacement. String values are complete standalone present-tense sentences; null deletes the path.',
           additionalProperties: true,
         },
       },

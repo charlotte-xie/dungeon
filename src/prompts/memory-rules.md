@@ -1,6 +1,8 @@
 # Long-Term Memory
 
-Memory is a **fact file about the story's nouns** — the people, places, and things the narration must stay consistent about across scenes. For your eyes only — never read it aloud or list it for the player. Each entry is a small JSON object of short string **facets** about one entity, keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators).
+Memory is a **fact file about the story's nouns** — the people, places, and things the narration must stay consistent about across scenes. For your eyes only — never read it aloud or list it for the player. Each entry is a small JSON object of **facets** about one entity, keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators).
+
+Every value must make sense **read on its own, long after this scene** — complete standalone sentences, not telegraphic fragments. A facet is short by holding fewer facts, not by stripping grammar: "wary; helps if cheap; son upstairs" decays into noise, while "She is wary of the player and will help only if it costs her nothing" stays readable forever.
 
 Memory holds **durable facts about entities**. The chronicle records the story's full past automatically; an entity's `history` facet keeps only the few notable events that still shape the present. What will happen belongs to the plot plan; what is true only of the current scene belongs to live state. Update a facet only when something durable *about that entity* is established or changed — the story reveals Hesta keeps a dog called Benny, the smithy has burned down, a secret comes to light.
 
@@ -8,7 +10,7 @@ Memory holds **durable facts about entities**. The chronicle records the story's
 
 Prefer these facet names — avoid inventing a synonym for an existing facet. Include a facet only while it is relevant or important to the story, and delete it when it stops mattering.
 
-Shape beyond the suggested facets is your discretion: values are usually short strings; itemize into a map when content is naturally keyed (`player.possessions.money`, `mark.relationships.phil`); nest deeper only when it genuinely helps. Keep the file tight — condense and delete as the story moves on.
+Shape beyond the suggested facets is your discretion: values are one or two complete sentences; itemize into a map when content is naturally keyed (`player.possessions.money`, `mark.relationships.phil`); nest deeper only when it genuinely helps. Keep the file tight by deleting what stopped mattering — never by clipping sentences into fragments.
 
 Any entry:
 
@@ -48,35 +50,35 @@ The player (key `player`) adds these instead of the character facets — never `
 ```json
 {
   "Hesta": {
-    "is": "Hesta the baker; stout, flour-dusted apron, grey hair tied back; owns the bakery on Mill Lane",
-    "wants": "to be left alone and keep the shop open",
-    "knowledge": "saw the player argue with a constable; knows the player is new in town",
-    "bond": "wary of the player; will help only if it costs nothing",
-    "relationships": "mother of Tam; pays protection to the smithy brothers",
-    "secret": "hiding Tam upstairs after a robbery gone wrong",
-    "history": "her husband drowned in the river flood two winters back"
+    "is": "Hesta is the town baker, a stout woman with a flour-dusted apron and grey hair tied back; she owns the bakery on Mill Lane.",
+    "wants": "She wants to be left alone and to keep the shop open.",
+    "knowledge": "She saw the player argue with a constable, and knows the player is new in town.",
+    "bond": "She is wary of the player and will help only if it costs her nothing.",
+    "relationships": "She is Tam's mother, and pays protection money to the smithy brothers.",
+    "secret": "She is hiding Tam upstairs after a robbery gone wrong; only she and Tam know.",
+    "history": "Her husband drowned in the river flood two winters back."
   },
   "Mill Lane": {
-    "is": "narrow cobbled street on the south side of town, two streets back from the river",
-    "layout": "bakery, smithy, and a boarded-up tannery; quiet by day, unpatrolled after dusk",
-    "npcs": "Hesta's bakery; the smithy brothers work the forge"
+    "is": "Mill Lane is a narrow cobbled street on the south side of town, two streets back from the river.",
+    "layout": "It holds the bakery, a smithy, and a boarded-up tannery; it is quiet by day and unpatrolled after dusk.",
+    "npcs": "Hesta runs the bakery, and the smithy brothers work the forge."
   },
   "courier_ledger": {
-    "is": "a slim leather ledger of smuggling accounts",
-    "significance": "names half the town's gentry; whoever holds it holds leverage",
-    "location": "locked in constabulary custody"
+    "is": "A slim leather ledger recording smuggling accounts.",
+    "significance": "It names half the town's gentry — whoever holds it holds leverage over them.",
+    "location": "It is locked in constabulary custody."
   },
   "player": {
-    "is": "lean, weathered, walks with a slight limp",
-    "background": "veteran of the border wars; drifting since discharge",
-    "skills": "swordwork; reading people; sleeping anywhere",
+    "is": "The player is lean and weathered and walks with a slight limp.",
+    "background": "A veteran of the border wars, drifting since discharge.",
+    "skills": "Skilled with a sword and at reading people; can sleep anywhere.",
     "possessions": {
       "money": "30 pounds",
-      "sabre": "chipped but serviceable",
-      "lodging": "rented room above the tannery, paid to month's end"
+      "sabre": "A chipped but serviceable sabre.",
+      "lodging": "A rented room above the tannery, paid up to the month's end."
     },
-    "oaths": "sworn to repay the woman who hid them in Greyford last winter",
-    "reputation": "known on the road as quiet trouble best left alone"
+    "oaths": "Sworn to repay the woman who hid them in Greyford last winter.",
+    "reputation": "Known on the road as quiet trouble best left alone."
   }
 }
 ```

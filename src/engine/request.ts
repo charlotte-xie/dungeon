@@ -86,7 +86,7 @@ export function buildMemoryPayload(currentMemory: Memory): string {
   const memoryJson = JSON.stringify(currentMemory, null, 2)
   const sizeHint =
     memoryJson.length > MEMORY_SIZE_HINT_CHARS
-      ? `\n\nSTATUS: memory is ${memoryJson.length.toLocaleString()} chars — getting long. Trim it: condense wordy values, delete facets and entries that stopped mattering, and fold duplicates together.`
+      ? `\n\nSTATUS: memory is ${memoryJson.length.toLocaleString()} chars — getting long. Trim it by deleting facets and entries that stopped mattering and folding duplicates together — keep values as complete standalone sentences, never clipped fragments.`
       : ''
   const body = entries.length
     ? `\`\`\`json\n${memoryJson}\n\`\`\``
