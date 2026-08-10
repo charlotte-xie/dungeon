@@ -21,7 +21,7 @@ import {
 } from '../request'
 import { executeEnabledTool } from '../tools'
 import { completeModel } from '../model/client'
-import type { ModelToolCall, ModelToolDefinition } from '../model/types'
+import type { ApiProtocol, ModelToolCall, ModelToolDefinition } from '../model/types'
 import type {
   AdventureSlots,
   Chronicle,
@@ -36,6 +36,7 @@ export interface NarratorContext {
   model: string
   apiKey: string
   baseUrl: string
+  protocol: ApiProtocol
   slots: AdventureSlots
   chronicle: Chronicle
   history: Turn[]
@@ -225,7 +226,7 @@ export async function runNarrator(
         temperature: ctx.sampling.temperature,
         label: `narrator:${iter}`,
       },
-      { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey },
+      { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
       signal,
     )
     for (const reasoning of completion.reasoning) {
@@ -298,7 +299,7 @@ export async function runNarrator(
             temperature: ctx.sampling.temperature,
             label: `plotter:${iter}`,
           },
-          { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey },
+          { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
           signal,
         )
         for (const reasoning of completion.reasoning) {

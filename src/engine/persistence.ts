@@ -372,6 +372,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.reviserModel === 'string' && parsed.reviserModel.trim()
           ? parsed.reviserModel
           : DEFAULT_CONTEXT.reviserModel,
+      apiProtocol:
+        parsed.apiProtocol === 'responses' || parsed.apiProtocol === 'chat-completions'
+          ? parsed.apiProtocol
+          : DEFAULT_CONTEXT.apiProtocol,
       nsfw:
         typeof parsed.nsfw === 'boolean'
           ? parsed.nsfw

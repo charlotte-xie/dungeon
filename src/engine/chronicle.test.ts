@@ -11,7 +11,13 @@ vi.mock('./agents/summarizer', () => ({
 
 const mockedSummarizer = vi.mocked(runSummarizer)
 
-const AGENT = { model: 'test', apiKey: 'k', baseUrl: 'http://x', memory: {} }
+const AGENT = {
+  model: 'test',
+  apiKey: 'k',
+  baseUrl: 'http://x',
+  protocol: 'chat-completions' as const,
+  memory: {},
+}
 
 function completedTurn(i: number): Turn {
   return {

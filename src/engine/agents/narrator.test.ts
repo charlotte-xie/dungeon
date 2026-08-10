@@ -28,6 +28,7 @@ const CTX: NarratorContext = {
   model: 'test-model',
   apiKey: 'k',
   baseUrl: 'http://x',
+  protocol: 'chat-completions',
   slots: { scenario: 'A haunted mill.', styleGuide: '' },
   chronicle: [],
   history: [

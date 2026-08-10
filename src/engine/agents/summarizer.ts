@@ -8,13 +8,14 @@
 
 import { buildSummarizerPrompt } from '../../prompts'
 import { completeModel } from '../model/client'
-import type { ModelMessage } from '../model/types'
+import type { ApiProtocol, ModelMessage } from '../model/types'
 import type { Memory } from '../types'
 
 export interface SummarizerInput {
   model: string
   apiKey: string
   baseUrl: string
+  protocol: ApiProtocol
   // Long-term memory at the time of the fold, passed as grounding canon so
   // summaries keep entity names and established facts consistent across folds
   // (without it, adjacent entries can drift — "the priest" vs. his name).
@@ -95,7 +96,7 @@ export async function runSummarizer(
       messages,
       label: 'summarizer',
     },
-    { baseUrl: input.baseUrl, apiKey: input.apiKey },
+    { baseUrl: input.baseUrl, apiKey: input.apiKey, protocol: input.protocol },
     signal,
   )
   const content = completion.text

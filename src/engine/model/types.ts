@@ -20,9 +20,18 @@ export interface ModelToolDefinition {
   parameters: Record<string, unknown>
 }
 
+// Which OpenAI-compatible wire protocol to speak. 'chat-completions' is the
+// universal legacy endpoint every provider supports; 'responses' is the newer
+// format recommended by xAI/OpenAI and supported statelessly by Ollama and
+// vLLM. Both are used statelessly here — the app always sends the full
+// conversation, so the client-side prefix-cache architecture applies equally.
+export type ApiProtocol = 'chat-completions' | 'responses'
+
 export interface ModelConnection {
   baseUrl: string
   apiKey: string
+  // Defaults to 'chat-completions' when omitted.
+  protocol?: ApiProtocol
 }
 
 export interface ModelCompletionRequest {

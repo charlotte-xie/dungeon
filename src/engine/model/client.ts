@@ -4,6 +4,7 @@
 
 import {
   completeOpenAICompatibleChat,
+  completeOpenAICompatibleResponses,
   listOpenAICompatibleModels,
 } from './openaiCompatible'
 import type {
@@ -17,6 +18,9 @@ export async function completeModel(
   connection: ModelConnection,
   signal: AbortSignal,
 ): Promise<ModelCompletion> {
+  if (connection.protocol === 'responses') {
+    return completeOpenAICompatibleResponses(request, connection, signal)
+  }
   return completeOpenAICompatibleChat(request, connection, signal)
 }
 

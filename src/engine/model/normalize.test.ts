@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOpenAIChatCompletion } from './normalize'
+import { normalizeOpenAIChatCompletion, normalizeResponsesApiResponse } from './normalize'
 
 const allowed = new Set(['future_plot_plan', 'update_memory'])
 
@@ -113,5 +113,96 @@ describe('OpenAI-compatible response normalization', () => {
 
     expect(result.toolCalls).toHaveLength(1)
     expect(result.anomalies.map((entry) => entry.kind)).toContain('duplicate_tool_call')
+  })
+})
+
+describe('Responses API normalization', () => {
+  it('normalizes typed output items into text, reasoning, and tool calls', () => {
+    const result = normalizeResponsesApiResponse(
+      {
+        status: 'completed',
+        output: [
+          {
+            type: 'reasoning',
+            summary: [{ type: 'summary_text', text: 'Consider the bell.' }],
+          },
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'The bell tolls once.' }],
+          },
+          {
+            type: 'function_call',
+            call_id: 'call-9',
+            name: 'update_memory',
+            arguments: '{"set":{"bell":"An old bronze bell."}}',
+          },
+        ],
+        usage: { output_tokens_details: { reasoning_tokens: 7 } },
+      },
+      allowed,
+    )
+
+    expect(result.text).toBe('The bell tolls once.')
+    expect(result.reasoning).toEqual(['Consider the bell.'])
+    expect(result.toolCalls).toEqual([
+      {
+        id: 'call-9',
+        name: 'update_memory',
+        arguments: '{"set":{"bell":"An old bronze bell."}}',
+      },
+    ])
+    expect(result.finishReason).toBe('completed')
+    expect(result.reasoningTokens).toBe(7)
+  })
+
+  it('quarantines unadvertised structured calls', () => {
+    const result = normalizeResponsesApiResponse(
+      {
+        status: 'completed',
+        output: [
+          { type: 'function_call', call_id: 'x', name: 'erase_everything', arguments: '{}' },
+        ],
+      },
+      allowed,
+    )
+    expect(result.toolCalls).toEqual([])
+    expect(result.anomalies.every((entry) => entry.kind === 'unadvertised_tool_call')).toBe(true)
+  })
+
+  it('recovers text-form calls leaked into message text', () => {
+    const result = normalizeResponsesApiResponse(
+      {
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Narrative.\n```json\n{"name":"update_memory","parameters":{"set":{"a":"b"}}}\n```',
+              },
+            ],
+          },
+        ],
+      },
+      allowed,
+    )
+    expect(result.text).toBe('Narrative.')
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls[0].name).toBe('update_memory')
+  })
+
+  it('surfaces the incomplete reason as the finish reason', () => {
+    const result = normalizeResponsesApiResponse(
+      {
+        status: 'incomplete',
+        incomplete_details: { reason: 'max_output_tokens' },
+        output: [],
+      },
+      allowed,
+    )
+    expect(result.finishReason).toBe('max_output_tokens')
   })
 })

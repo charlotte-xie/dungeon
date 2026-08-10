@@ -26,7 +26,7 @@
 // just marks the boundary the model sees as "summarized".
 
 import { runSummarizer } from './agents/summarizer'
-import type { ModelMessage } from './model/types'
+import type { ApiProtocol, ModelMessage } from './model/types'
 import type { Chronicle, ChronicleEntry, Memory, Turn } from './types'
 
 export interface ChronicleSettings {
@@ -50,6 +50,7 @@ export interface ChronicleAgentArgs {
   model: string
   apiKey: string
   baseUrl: string
+  protocol: ApiProtocol
   // Long-term memory at fold time — passed to the summarizer as grounding
   // canon so entity names and facts stay consistent across chronicle entries.
   memory: Memory
@@ -115,6 +116,7 @@ export async function compactCascade(
               model: agent.model,
               apiKey: agent.apiKey,
               baseUrl: agent.baseUrl,
+              protocol: agent.protocol,
               memory: agent.memory,
               inputs,
               targetChars: targetForInputs(inputs, batch.length),
@@ -148,6 +150,7 @@ export async function compactCascade(
           model: agent.model,
           apiKey: agent.apiKey,
           baseUrl: agent.baseUrl,
+          protocol: agent.protocol,
           memory: agent.memory,
           inputs,
           targetChars: targetForInputs(inputs, M),

@@ -209,6 +209,20 @@ export function SettingsPanel({
             </p>
           )}
         </label>
+        <label
+          title={`Which OpenAI-compatible wire protocol to use for all model calls. Chat Completions (/chat/completions) works on every provider, including LM Studio and llama.cpp. Responses (/responses) is the newer format xAI and OpenAI recommend (xAI has deprecated Chat Completions) and is also supported by Ollama and vLLM; used statelessly, so behavior is otherwise identical. Default ${DEFAULT_CONTEXT.apiProtocol === 'responses' ? 'Responses' : 'Chat Completions'}.`}
+        >
+          <span>API protocol</span>
+          <select
+            value={draftContext.apiProtocol}
+            onChange={(e) =>
+              setContextField('apiProtocol', e.target.value as ContextConfig['apiProtocol'])
+            }
+          >
+            <option value="chat-completions">Chat Completions (universal)</option>
+            <option value="responses">Responses (xAI, OpenAI, Ollama, vLLM)</option>
+          </select>
+        </label>
         <label title="Stored in this browser's localStorage and sent directly to the configured endpoint. Leave blank when the endpoint does not require authentication.">
           <span>API key (optional if endpoint permits)</span>
           <input

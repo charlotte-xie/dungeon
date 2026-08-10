@@ -1,6 +1,7 @@
-// Pure normalization for OpenAI-compatible Chat Completions responses.
-// Provider quirks are quarantined here so game orchestration never parses
-// wire payloads or model-specific text protocols.
+// Pure normalization for OpenAI-compatible responses — both the legacy Chat
+// Completions shape and the newer Responses API shape. Provider quirks are
+// quarantined here so game orchestration never parses wire payloads or
+// model-specific text protocols.
 
 import type {
   ModelCompletion,
@@ -243,6 +244,83 @@ function recoverTextToolCalls(
   return {
     cleaned: cleaned.replace(/\n{3,}/g, '\n\n').trim(),
     calls,
+  }
+}
+
+// Normalize a Responses API payload: typed `output` items instead of a
+// single choice message. Reasoning items surface readable summaries only
+// (encrypted reasoning content is ignored); the same text-form recovery and
+// quarantine rules as the chat path apply to the message text.
+export function normalizeResponsesApiResponse(
+  raw: unknown,
+  allowedToolNames: ReadonlySet<string>,
+): ModelCompletion {
+  if (!isRecord(raw) || !Array.isArray(raw.output)) {
+    throw new Error('Empty response from model (no output)')
+  }
+  const anomalies: ProtocolAnomaly[] = []
+  const reasoning: string[] = []
+  const toolCalls: ModelToolCall[] = []
+  const textParts: string[] = []
+  for (const item of raw.output) {
+    if (!isRecord(item)) continue
+    if (item.type === 'message') {
+      const text = contentToText(item.content)
+      if (text) textParts.push(text)
+      continue
+    }
+    if (item.type === 'reasoning') {
+      const summary = contentToText(item.summary).trim()
+      if (summary) reasoning.push(summary)
+      continue
+    }
+    if (item.type === 'function_call') {
+      const name = item.name
+      const args = argumentsToString(item.arguments)
+      if (typeof name !== 'string' || args === null) continue
+      if (!allowedToolNames.has(name)) {
+        anomalies.push({
+          kind: 'unadvertised_tool_call',
+          detail: `Quarantined structured call to unadvertised tool ${name}.`,
+        })
+        continue
+      }
+      toolCalls.push({
+        id:
+          typeof item.call_id === 'string' && item.call_id
+            ? item.call_id
+            : makeRecoveredCallId(),
+        name,
+        arguments: args,
+      })
+    }
+  }
+  let content = stripReasoningMarkers(textParts.join('\n'), reasoning, anomalies)
+  const fingerprints = new Set(toolCalls.map(callFingerprint))
+  const recovered = recoverTextToolCalls(content, allowedToolNames, fingerprints, anomalies)
+  content = recovered.cleaned
+  toolCalls.push(...recovered.calls)
+
+  const usage = isRecord(raw.usage) ? raw.usage : undefined
+  const details = usage && isRecord(usage.output_tokens_details)
+    ? usage.output_tokens_details
+    : undefined
+  const reasoningTokens = details?.reasoning_tokens
+  const incompleteReason =
+    isRecord(raw.incomplete_details) && typeof raw.incomplete_details.reason === 'string'
+      ? raw.incomplete_details.reason
+      : undefined
+
+  return {
+    text: content,
+    reasoning,
+    toolCalls,
+    finishReason:
+      incompleteReason ?? (typeof raw.status === 'string' ? raw.status : undefined),
+    reasoningTokens:
+      typeof reasoningTokens === 'number' && reasoningTokens > 0 ? reasoningTokens : undefined,
+    anomalies,
+    raw,
   }
 }
 

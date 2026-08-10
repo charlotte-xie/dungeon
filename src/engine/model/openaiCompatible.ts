@@ -1,9 +1,13 @@
-// Adapter for OpenAI-compatible Chat Completions endpoints. This is the
-// lowest-common-denominator protocol used by xAI, OpenAI, LM Studio, Ollama,
-// llama.cpp, vLLM, and many gateways. Provider-specific wire details stop here.
+// Adapters for OpenAI-compatible endpoints. Chat Completions is the
+// lowest-common-denominator protocol every provider supports (xAI, OpenAI,
+// LM Studio, Ollama, llama.cpp, vLLM, gateways); the Responses API is the
+// newer format xAI/OpenAI recommend, used here STATELESSLY (full conversation
+// sent each request, store:false) so it behaves identically on providers
+// without server-side state and the app's client-side prefix caching stays
+// authoritative. Provider-specific wire details stop here.
 
 import { XAI_BASE_URL } from '../config'
-import { normalizeOpenAIChatCompletion } from './normalize'
+import { normalizeOpenAIChatCompletion, normalizeResponsesApiResponse } from './normalize'
 import type {
   ModelCompletion,
   ModelCompletionRequest,
@@ -183,6 +187,118 @@ async function completeOpenAICompatibleChatWithinTimeout(
   const raw = (await response.json()) as unknown
   console.debug(`[model:${label}] response`, { raw })
   return normalizeOpenAIChatCompletion(
+    raw,
+    new Set((request.tools ?? []).map((tool) => tool.name)),
+  )
+}
+
+// --- Responses API (stateless) ---
+
+// Map the provider-neutral conversation onto Responses `input` items. Message
+// history keeps the same role structure; tool activity becomes typed
+// function_call / function_call_output items keyed by call_id.
+export function toResponsesInput(messages: ModelMessage[]): Record<string, unknown>[] {
+  const items: Record<string, unknown>[] = []
+  for (const message of messages) {
+    if (message.role === 'tool') {
+      items.push({
+        type: 'function_call_output',
+        call_id: message.toolCallId ?? '',
+        output: message.content,
+      })
+      continue
+    }
+    if (message.role === 'assistant') {
+      if (message.content) {
+        items.push({
+          role: 'assistant',
+          content: [{ type: 'output_text', text: message.content }],
+        })
+      }
+      for (const call of message.toolCalls ?? []) {
+        items.push({
+          type: 'function_call',
+          call_id: call.id,
+          name: call.name,
+          arguments: call.arguments,
+        })
+      }
+      continue
+    }
+    items.push({
+      role: message.role,
+      content: [{ type: 'input_text', text: message.content }],
+    })
+  }
+  return items
+}
+
+// Responses tools are flat (name at top level), unlike Chat Completions'
+// nested `function` wrapper.
+function toResponsesTool(tool: ModelToolDefinition): Record<string, unknown> {
+  return {
+    type: 'function',
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+  }
+}
+
+export async function completeOpenAICompatibleResponses(
+  request: ModelCompletionRequest,
+  connection: ModelConnection,
+  signal: AbortSignal,
+): Promise<ModelCompletion> {
+  return withTimeout(signal, MODEL_REQUEST_TIMEOUT_MS, 'Model request', (requestSignal) =>
+    completeResponsesWithinTimeout(request, connection, requestSignal),
+  )
+}
+
+async function completeResponsesWithinTimeout(
+  request: ModelCompletionRequest,
+  connection: ModelConnection,
+  signal: AbortSignal,
+): Promise<ModelCompletion> {
+  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  if (!connection.apiKey && isXaiHost(baseUrl)) {
+    throw new Error(
+      'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
+    )
+  }
+  const body: Record<string, unknown> = {
+    model: request.model,
+    input: toResponsesInput(request.messages),
+    stream: false,
+    // Stateless by design: never rely on (or pay for) server-side storage.
+    store: false,
+  }
+  if (request.tools?.length) body.tools = request.tools.map(toResponsesTool)
+  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
+    body.temperature = request.temperature
+  }
+  const label = request.label ?? 'model'
+  console.debug(`[model:${label}] request`, { baseUrl, body })
+  const url = `${baseUrl}/responses`
+  let response = await postCompletion(url, connection.apiKey, body, signal)
+  if (!response.ok) {
+    let errorBody = await response.text().catch(() => '')
+    if (Object.hasOwn(body, 'temperature') && rejectsTemperature(response.status, errorBody)) {
+      temperatureUnsupported.add(capabilityKey)
+      delete body.temperature
+      console.debug(`[model:${label}] retrying without unsupported temperature`)
+      response = await postCompletion(url, connection.apiKey, body, signal)
+      if (!response.ok) errorBody = await response.text().catch(() => '')
+    }
+    if (!response.ok) {
+      throw new Error(
+        `${label} API ${response.status}: ${errorBody.slice(0, 200) || response.statusText}`,
+      )
+    }
+  }
+  const raw = (await response.json()) as unknown
+  console.debug(`[model:${label}] response`, { raw })
+  return normalizeResponsesApiResponse(
     raw,
     new Set((request.tools ?? []).map((tool) => tool.name)),
   )

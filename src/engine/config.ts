@@ -94,6 +94,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includeOoc: true,
   useReviser: false,
   reviserModel: DEFAULT_REVISER_MODEL,
+  apiProtocol: 'chat-completions',
   nsfw: true,
 }
 

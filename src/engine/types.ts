@@ -1,5 +1,7 @@
 // Shared data types for the DM engine. Plain TypeScript — no React, no IO.
 
+import type { ApiProtocol } from './model/types'
+
 export type Role = 'dm' | 'player'
 
 export type TraceEvent =
@@ -115,6 +117,10 @@ export interface ContextConfig {
   // Model id for the reviser pass. A lightweight instruction-following model
   // is generally sufficient for this prose-cleanup task.
   reviserModel: string
+  // Which OpenAI-compatible wire protocol to use for all model calls.
+  // 'chat-completions' works everywhere; 'responses' is the newer format
+  // recommended by xAI/OpenAI (also supported by Ollama and vLLM).
+  apiProtocol: ApiProtocol
   nsfw: boolean
 }
 

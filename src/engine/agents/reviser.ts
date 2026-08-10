@@ -7,7 +7,7 @@
 
 import { REVISER_SYSTEM_PROMPT } from '../../prompts'
 import { completeModel } from '../model/client'
-import type { ModelMessage } from '../model/types'
+import type { ApiProtocol, ModelMessage } from '../model/types'
 import type {
   AdventureSlots,
   ModelCall,
@@ -19,6 +19,7 @@ export interface ReviserContext {
   model: string
   apiKey: string
   baseUrl: string
+  protocol: ApiProtocol
   slots: AdventureSlots
   draft: string
   sampling: SamplingParams
@@ -70,7 +71,7 @@ export async function runReviser(
       temperature: ctx.sampling.temperature,
       label: 'reviser',
     },
-    { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey },
+    { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
     signal,
   )
   for (const reasoning of completion.reasoning) {
