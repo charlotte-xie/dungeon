@@ -47,8 +47,11 @@ export function relevantMemoryForInputs(memory: Memory, inputs: string[]): Memor
   for (const [slug, entry] of Object.entries(memory)) {
     const slugPhrase = normalizeWords(slug.replace(/[_-]+/g, ' '))
     const slugMentioned = slugPhrase !== 'player' && source.includes(` ${slugPhrase} `)
-    // Identity phrase: the `is` facet when present, else the first facet.
-    const identitySource = entry.is ?? Object.values(entry)[0] ?? ''
+    // Identity phrase: the `is` facet when present, else the first string facet.
+    const identitySource =
+      typeof entry.is === 'string'
+        ? entry.is
+        : (Object.values(entry).find((v): v is string => typeof v === 'string') ?? '')
     const identity = identitySource.split(/[;.!?]/, 1)[0] ?? ''
     const names = identity.match(/\b[A-Z][\p{L}'’-]{2,}\b/gu) ?? []
     const nameMentioned = names

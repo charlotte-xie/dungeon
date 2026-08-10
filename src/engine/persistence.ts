@@ -9,6 +9,7 @@ import type {
   ContextConfig,
   JsonValue,
   Memory,
+  MemoryEntry,
   MessageV1,
   ModelCall,
   SamplingParams,
@@ -60,8 +61,15 @@ function isWorldStateLike(value: unknown): value is WorldState {
   return isRecord(value) && Object.values(value).every(isJsonValue)
 }
 
-function isMemoryEntryLike(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every((facet) => typeof facet === 'string')
+function isMemoryFacetLike(value: unknown): boolean {
+  return (
+    typeof value === 'string' ||
+    (isRecord(value) && Object.values(value).every((item) => typeof item === 'string'))
+  )
+}
+
+function isMemoryEntryLike(value: unknown): value is MemoryEntry {
+  return isRecord(value) && Object.values(value).every(isMemoryFacetLike)
 }
 
 // Accepts both the current faceted shape and the legacy slug → string shape;

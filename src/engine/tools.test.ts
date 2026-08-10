@@ -114,6 +114,72 @@ describe('tool execution boundaries', () => {
     expect(result.result).toContain('entry now empty — removed')
   })
 
+  it('edits single possessions by item path', () => {
+    const data = {
+      state: {},
+      plot: [],
+      memory: {
+        player: { is: 'a drifter', possessions: { money: '30 pounds', sabre: 'chipped' } },
+      },
+      ooc: [],
+    }
+    const spent = executeTool(
+      'update_memory',
+      JSON.stringify({ set: { 'player.possessions.money': '12 pounds' } }),
+      data,
+    )
+    expect(spent.data.memory.player.possessions).toEqual({
+      money: '12 pounds',
+      sabre: 'chipped',
+    })
+
+    const dropped = executeTool(
+      'update_memory',
+      JSON.stringify({ delete: ['player.possessions.sabre'] }),
+      spent.data,
+    )
+    expect(dropped.data.memory.player.possessions).toEqual({ money: '12 pounds' })
+  })
+
+  it('transfers a possession between entities with move', () => {
+    const data = {
+      state: {},
+      plot: [],
+      memory: {
+        player: { is: 'a drifter', possessions: { ring: "mother's silver ring" } },
+        hesta: { is: 'the baker' },
+      },
+      ooc: [],
+    }
+    const result = executeTool(
+      'update_memory',
+      JSON.stringify({ move: { 'player.possessions.ring': 'hesta.possessions.ring' } }),
+      data,
+    )
+    expect(result.data.memory.player).toEqual({ is: 'a drifter' })
+    expect(result.data.memory.hesta.possessions).toEqual({ ring: "mother's silver ring" })
+    expect(result.result).toContain('moved player.possessions.ring → hesta.possessions.ring')
+  })
+
+  it('only the possessions facet may nest', () => {
+    const data = { state: {}, plot: [], memory: {}, ooc: [] }
+    const badPath = executeTool(
+      'update_memory',
+      JSON.stringify({ set: { 'npc.facts.rumor': 'three levels deep' } }),
+      data,
+    )
+    expect(badPath.data.memory).toEqual({})
+    expect(badPath.result).toContain('REJECTED')
+
+    const badValue = executeTool(
+      'update_memory',
+      JSON.stringify({ set: { 'npc.facts': { nested: 'object' } } }),
+      data,
+    )
+    expect(badValue.data.memory).toEqual({})
+    expect(badValue.result).toContain('REJECTED')
+  })
+
   it('rejects oversized facets and unsafe paths without partial writes', () => {
     const data = { state: {}, plot: [], memory: {}, ooc: [] }
     const tooLong = executeTool(
@@ -122,7 +188,7 @@ describe('tool execution boundaries', () => {
       data,
     )
     expect(tooLong.data.memory).toEqual({})
-    expect(tooLong.result).toContain('facet too long')
+    expect(tooLong.result).toContain('value too long')
 
     const unsafe = executeTool(
       'update_memory',

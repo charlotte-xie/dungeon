@@ -53,10 +53,16 @@ export type JsonValue =
 
 export type WorldState = { [key: string]: JsonValue }
 
-// One long-term memory entry: a flat object of short string facets about a
-// single entity (e.g. is / wants / knows / bond / secret). Two levels only —
-// slug.facet — so facts stay findable and edits stay surgical.
-export type MemoryEntry = { [facet: string]: string }
+// A memory facet is a short string — except `possessions`, the one facet
+// allowed to nest as an itemized map of item → short description, so single
+// items (money, a ring) can be edited by path without rewriting the list.
+export type MemoryFacet = string | { [item: string]: string }
+
+// One long-term memory entry: a flat object of short facets about a single
+// entity (is / notes / history / secret plus kind-specific facets). Kept
+// shallow — slug.facet, plus slug.possessions.item — so facts stay findable
+// and edits stay surgical.
+export type MemoryEntry = { [facet: string]: MemoryFacet }
 
 // Long-term memory: slug → facet object for each canonical entity (people,
 // places, things) that persists across scenes. Edited additively by dotted

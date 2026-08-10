@@ -185,8 +185,15 @@ export function StateViewer({
         return
       }
       for (const [facet, value] of Object.entries(entry)) {
-        if (typeof value !== 'string') {
-          setMemoryError(`Facet "${slug}.${facet}" must be a string.`)
+        const itemMapOk =
+          typeof value === 'object' &&
+          value !== null &&
+          !Array.isArray(value) &&
+          Object.values(value).every((item) => typeof item === 'string')
+        if (typeof value !== 'string' && !itemMapOk) {
+          setMemoryError(
+            `Facet "${slug}.${facet}" must be a string (or an item → string map for possessions).`,
+          )
           return
         }
       }

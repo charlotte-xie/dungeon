@@ -36,7 +36,7 @@ The player (slug `player`) adds these instead of the character facets — never 
 
 - **`background`** — pre-story origin and circumstances established in fiction.
 - **`skills`** — competencies and talents demonstrated or declared.
-- **`assets`** — durable possessions and resources (what is carried or worn right now is live state).
+- **`possessions`** — durable belongings and resources, as an itemized map of item → short description; the one facet that nests, so single items are edited by path (`player.possessions.money`). What is carried or worn right now is live state. (Other characters may carry a `possessions` facet too.)
 - **`oaths`** — standing commitments: promises, debts, and deals made in fiction.
 - **`reputation`** — how the player is generally known and regarded.
 
@@ -69,7 +69,11 @@ Maximum {{maxFacets}} facets per entry, {{maxFacetChars}} characters per facet.
     "is": "lean, weathered, walks with a slight limp",
     "background": "veteran of the border wars; drifting since discharge",
     "skills": "swordwork; reading people; sleeping anywhere",
-    "assets": "a chipped sabre; a dwindling purse",
+    "possessions": {
+      "money": "30 pounds",
+      "sabre": "chipped but serviceable",
+      "lodging": "rented room above the tannery, paid to month's end"
+    },
     "oaths": "sworn to repay the woman who hid them in Greyford last winter",
     "reputation": "known on the road as quiet trouble best left alone"
   }

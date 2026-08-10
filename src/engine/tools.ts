@@ -4,7 +4,7 @@
 import { buildMemoryRules, buildOocRules, buildPlotRules } from '../prompts'
 import type { ModelToolDefinition } from './model/types'
 import { deleteByPath, getByPath, isSafeStatePath, setByPath } from './state'
-import type { JsonValue, Memory, MemoryEntry, StoryData, WorldState } from './types'
+import type { JsonValue, Memory, MemoryEntry, MemoryFacet, StoryData, WorldState } from './types'
 
 export const MAX_PLOT_ITEMS = 10
 export const MAX_PLOT_ITEM_CHARS = 300
@@ -74,7 +74,7 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things. Entries are objects of short string facets keyed by lowercase underscore slugs: any entry may use is / notes / history / secret; characters add wants / facts / bond / relationships; places add npcs / layout; things add significance / location; the player entry adds background / skills / assets / oaths / reputation (never wants or bond — intent belongs to the player). Edits are additive by dotted path — only the paths you name change; omission never deletes. Update a facet only when something durable about that entity is established or changed. \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Maximum ${MAX_MEMORY_FACETS} facets per entry, ${MAX_MEMORY_FACET_CHARS} characters per facet.`,
+      `Maintain the fact file about the story's recurring people, places, and things. Entries are objects of short string facets keyed by lowercase underscore slugs: any entry may use is / notes / history / secret; characters add wants / facts / bond / relationships; places add npcs / layout; things add significance / location; the player entry adds background / skills / possessions / oaths / reputation (never wants or bond — intent belongs to the player). \`possessions\` is the one facet that nests: an itemized map of item → short description, edited per item by path (e.g. \`player.possessions.money\`). Edits are additive by dotted path — only the paths you name change; omission never deletes. Update a facet only when something durable about that entity is established or changed. \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Maximum ${MAX_MEMORY_FACETS} facets per entry, ${MAX_MEMORY_FACET_CHARS} characters per facet.`,
     parameters: {
       type: 'object',
       properties: {
@@ -398,36 +398,70 @@ export function executeTool(
       let failed = false
       let next: Memory = memory
 
-      // Paths are `slug` or `slug.facet` — two levels, nothing deeper.
-      const parsePath = (path: string): { slug: string; facet?: string } | null => {
+      // Paths are `slug`, `slug.facet`, or `slug.possessions.item` — only the
+      // possessions facet nests.
+      const parsePath = (
+        path: string,
+      ): { slug: string; facet?: string; item?: string } | null => {
         const segments = path.split('.')
-        if (segments.length < 1 || segments.length > 2) return null
+        if (segments.length < 1 || segments.length > 3) return null
         if (segments.some((s) => !s || !isSafeStatePath(s))) return null
-        return { slug: segments[0], facet: segments[1] }
+        if (segments.length === 3 && segments[1] !== 'possessions') return null
+        return { slug: segments[0], facet: segments[1], item: segments[2] }
       }
       const dropSlug = (m: Memory, slug: string): Memory => {
         const copy = { ...m }
         delete copy[slug]
         return copy
       }
-      const setFacet = (m: Memory, slug: string, facet: string, value: string): Memory => ({
+      const setFacet = (m: Memory, slug: string, facet: string, value: MemoryFacet): Memory => ({
         ...m,
         [slug]: { ...(m[slug] ?? {}), [facet]: value },
       })
+      const asItemMap = (v: MemoryFacet | undefined): Record<string, string> | undefined =>
+        v !== undefined && typeof v === 'object' ? v : undefined
       const validateFacetValue = (path: string, value: unknown): string | null => {
         if (typeof value !== 'string' || !value.trim()) {
-          notes.push(`REJECTED set ${path}: facet values must be non-empty strings. Unchanged.`)
+          notes.push(`REJECTED set ${path}: values must be non-empty strings. Unchanged.`)
           failed = true
           return null
         }
         if (value.length > MAX_MEMORY_FACET_CHARS) {
           notes.push(
-            `REJECTED set ${path}: facet too long (${value.length} chars, max ${MAX_MEMORY_FACET_CHARS}). Rewrite tighter — state the present truth, not the story. Unchanged.`,
+            `REJECTED set ${path}: value too long (${value.length} chars, max ${MAX_MEMORY_FACET_CHARS}). Rewrite tighter — state the present truth, not the story. Unchanged.`,
           )
           failed = true
           return null
         }
         return value
+      }
+      // The possessions facet is an itemized map of item → short description.
+      const validateItemMap = (path: string, value: unknown): Record<string, string> | null => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+          notes.push(`REJECTED set ${path}: possessions must be an object of item → string. Unchanged.`)
+          failed = true
+          return null
+        }
+        const items = Object.entries(value)
+        if (!items.length || items.length > MAX_MEMORY_FACETS) {
+          notes.push(
+            `REJECTED set ${path}: possessions need 1-${MAX_MEMORY_FACETS} items (got ${items.length}). Unchanged.`,
+          )
+          failed = true
+          return null
+        }
+        const out: Record<string, string> = {}
+        for (const [item, itemValue] of items) {
+          if (!item || item.includes('.') || !isSafeStatePath(item)) {
+            notes.push(`REJECTED set ${path}: bad item name "${item}". Unchanged.`)
+            failed = true
+            return null
+          }
+          const v = validateFacetValue(`${path}.${item}`, itemValue)
+          if (v === null) return null
+          out[item] = v
+        }
+        return out
       }
 
       // Moves first: rename entities or relocate facets.
@@ -444,9 +478,66 @@ export function executeTool(
           failed = true
           continue
         }
-        if (Boolean(from.facet) !== Boolean(to.facet)) {
-          notes.push(`REJECTED move ${fromRaw} → ${toRaw}: cannot move between a whole entry and a facet.`)
+        if (Boolean(from.facet) !== Boolean(to.facet) || Boolean(from.item) !== Boolean(to.item)) {
+          notes.push(`REJECTED move ${fromRaw} → ${toRaw}: source and target must be the same kind of path.`)
           failed = true
+          continue
+        }
+        if (from.item && to.item && from.facet && to.facet) {
+          // Rename a possession or transfer it between entities. mv
+          // semantics: an existing target item is replaced.
+          const sourceMap = asItemMap(next[from.slug]?.[from.facet])
+          const value = sourceMap?.[from.item]
+          if (sourceMap === undefined || value === undefined) {
+            notes.push(`move ${fromRaw} (no-op; not present)`)
+            continue
+          }
+          if (from.slug === to.slug) {
+            const map = { ...sourceMap }
+            delete map[from.item]
+            const replaced = map[to.item] !== undefined
+            map[to.item] = value
+            next = setFacet(next, to.slug, to.facet, map)
+            notes.push(`moved ${fromRaw} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
+            continue
+          }
+          const targetFacetValue = next[to.slug]?.[to.facet]
+          if (targetFacetValue !== undefined && asItemMap(targetFacetValue) === undefined) {
+            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: target possessions is a plain string — set it as a map first.`)
+            failed = true
+            continue
+          }
+          const targetMap = { ...(asItemMap(targetFacetValue) ?? {}) }
+          const replaced = targetMap[to.item] !== undefined
+          if (!replaced && Object.keys(targetMap).length >= MAX_MEMORY_FACETS) {
+            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: possessions already has ${MAX_MEMORY_FACETS} items. Drop or combine one first.`)
+            failed = true
+            continue
+          }
+          const targetEntry = next[to.slug]
+          if (
+            targetEntry &&
+            targetFacetValue === undefined &&
+            Object.keys(targetEntry).length >= MAX_MEMORY_FACETS
+          ) {
+            notes.push(`REJECTED move ${fromRaw} → ${toRaw}: entry ${to.slug} already has ${MAX_MEMORY_FACETS} facets.`)
+            failed = true
+            continue
+          }
+          targetMap[to.item] = value
+          const cleanedSource = { ...sourceMap }
+          delete cleanedSource[from.item]
+          if (Object.keys(cleanedSource).length === 0) {
+            const entry = { ...next[from.slug] }
+            delete entry[from.facet]
+            next = Object.keys(entry).length
+              ? { ...next, [from.slug]: entry }
+              : dropSlug(next, from.slug)
+          } else {
+            next = setFacet(next, from.slug, from.facet, cleanedSource)
+          }
+          next = setFacet(next, to.slug, to.facet, targetMap)
+          notes.push(`moved ${fromRaw} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
           continue
         }
         if (from.facet && to.facet) {
@@ -514,6 +605,30 @@ export function executeTool(
           failed = true
           continue
         }
+        if (p.item && p.facet) {
+          const map = asItemMap(next[p.slug]?.[p.facet])
+          if (map === undefined || map[p.item] === undefined) {
+            notes.push(`deleted ${raw} (no-op; not present)`)
+            continue
+          }
+          const cleaned = { ...map }
+          delete cleaned[p.item]
+          if (Object.keys(cleaned).length === 0) {
+            const entry = { ...next[p.slug] }
+            delete entry[p.facet]
+            if (Object.keys(entry).length === 0) {
+              next = dropSlug(next, p.slug)
+              notes.push(`deleted ${raw} (entry now empty — removed)`)
+            } else {
+              next = { ...next, [p.slug]: entry }
+              notes.push(`deleted ${raw} (possessions now empty — removed)`)
+            }
+          } else {
+            next = setFacet(next, p.slug, p.facet, cleaned)
+            notes.push(`deleted ${raw}`)
+          }
+          continue
+        }
         if (p.facet) {
           if (next[p.slug]?.[p.facet] === undefined) {
             notes.push(`deleted ${raw} (no-op; not present)`)
@@ -544,8 +659,46 @@ export function executeTool(
           failed = true
           continue
         }
-        if (p.facet) {
+        if (p.item && p.facet) {
           const validated = validateFacetValue(raw, value)
+          if (validated === null) continue
+          const entry = next[p.slug]
+          const facetValue = entry?.[p.facet]
+          if (facetValue !== undefined && asItemMap(facetValue) === undefined) {
+            notes.push(
+              `REJECTED set ${raw}: possessions is currently a plain string — set ${p.slug}.possessions as a map first.`,
+            )
+            failed = true
+            continue
+          }
+          const map = asItemMap(facetValue)
+          if (map && map[p.item] === undefined && Object.keys(map).length >= MAX_MEMORY_FACETS) {
+            notes.push(
+              `REJECTED set ${raw}: possessions already has ${MAX_MEMORY_FACETS} items. Drop or combine one first.`,
+            )
+            failed = true
+            continue
+          }
+          if (entry && facetValue === undefined && Object.keys(entry).length >= MAX_MEMORY_FACETS) {
+            notes.push(
+              `REJECTED set ${raw}: entry already has ${MAX_MEMORY_FACETS} facets. Delete or condense one first.`,
+            )
+            failed = true
+            continue
+          }
+          next = setFacet(next, p.slug, p.facet, { ...(map ?? {}), [p.item]: validated })
+          notes.push(`set ${raw}`)
+          continue
+        }
+        if (p.facet) {
+          const isPossessionsMap =
+            p.facet === 'possessions' &&
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+          const validated: MemoryFacet | null = isPossessionsMap
+            ? validateItemMap(raw, value)
+            : validateFacetValue(raw, value)
           if (validated === null) continue
           const entry = next[p.slug]
           if (
@@ -594,7 +747,14 @@ export function executeTool(
               ok = false
               break
             }
-            const v = validateFacetValue(`${p.slug}.${facet}`, facetValue)
+            const isPossessionsMap =
+              facet === 'possessions' &&
+              facetValue !== null &&
+              typeof facetValue === 'object' &&
+              !Array.isArray(facetValue)
+            const v = isPossessionsMap
+              ? validateItemMap(`${p.slug}.${facet}`, facetValue)
+              : validateFacetValue(`${p.slug}.${facet}`, facetValue)
             if (v === null) {
               ok = false
               break
