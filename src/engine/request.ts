@@ -45,6 +45,7 @@ import type {
   Chronicle,
   Memory,
   SlotDef,
+  StoryData,
   Turn,
   WorldState,
 } from './types'
@@ -122,9 +123,7 @@ export function buildContextRulesMessages(
 // fixed: the injection appears exactly once per request and is never persisted
 // or replayed, and stable bytes maximize provider prefix-cache hits.
 export function buildContextInjectionMessages(
-  currentState: WorldState,
-  currentPlot: string[],
-  currentMemory: Memory,
+  data: StoryData,
   stateCleanupThreshold: number,
   includeWorldState: boolean,
   includePlotOutline: boolean,
@@ -137,10 +136,10 @@ export function buildContextInjectionMessages(
     calls.push({ id, name, arguments: '{}' })
     results.push({ role: 'tool', toolCallId: id, content })
   }
-  if (includeMemory) seed(CHECK_MEMORY_TOOL.name, buildMemoryPayload(currentMemory))
-  if (includePlotOutline) seed(CHECK_PLOT_PLAN_TOOL.name, buildPlotPayload(currentPlot))
+  if (includeMemory) seed(CHECK_MEMORY_TOOL.name, buildMemoryPayload(data.memory))
+  if (includePlotOutline) seed(CHECK_PLOT_PLAN_TOOL.name, buildPlotPayload(data.plot))
   if (includeWorldState) {
-    seed(CHECK_STATE_TOOL.name, buildStatePayload(currentState, stateCleanupThreshold))
+    seed(CHECK_STATE_TOOL.name, buildStatePayload(data.state, stateCleanupThreshold))
   }
   if (!calls.length) return []
   return [{ role: 'assistant', content: '', toolCalls: calls }, ...results]
@@ -151,9 +150,7 @@ export function buildModelMessages(
   slots: AdventureSlots,
   chronicle: Chronicle,
   history: Turn[],
-  currentState: WorldState,
-  currentPlot: string[],
-  currentMemory: Memory,
+  data: StoryData,
   stateCleanupThreshold: number,
   includePriorPlayerTurns: boolean,
   includeWorldState: boolean,
@@ -205,9 +202,7 @@ export function buildModelMessages(
     }
   }
   for (const m of buildContextInjectionMessages(
-    currentState,
-    currentPlot,
-    currentMemory,
+    data,
     stateCleanupThreshold,
     includeWorldState,
     includePlotOutline,

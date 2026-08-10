@@ -38,9 +38,7 @@ const CTX: NarratorContext = {
       reply: { id: 't1-reply', model: 'test-model', text: '' },
     },
   ],
-  initialState: {},
-  initialPlot: [],
-  initialMemory: {},
+  initialData: { state: {}, plot: [], memory: {} },
   sampling: { temperature: 0.7 },
   stateCleanupThreshold: 4000,
   includePriorPlayerTurns: true,
@@ -73,7 +71,7 @@ describe('runNarrator two-phase flow', () => {
     const result = await runNarrator(CTX, new AbortController().signal)
 
     expect(result.text).toBe('The door creaks open.')
-    expect(result.state).toEqual({ scene: { location: 'the mill' } })
+    expect(result.data.state).toEqual({ scene: { location: 'the mill' } })
     // A clean batch of updates ends the phase — no confirmation round-trip.
     expect(mockedModel).toHaveBeenCalledTimes(2)
     // The phases record to separate traces for the UI.
@@ -103,7 +101,7 @@ describe('runNarrator two-phase flow', () => {
     const result = await runNarrator(CTX, new AbortController().signal)
 
     expect(result.text).toBe('Prose.')
-    expect(result.state).toEqual({})
+    expect(result.data.state).toEqual({})
     expect(mockedModel).toHaveBeenCalledTimes(2)
     // The bare DONE acknowledgement is not worth a trace entry.
     expect(result.plotterTrace).toBeUndefined()
@@ -124,7 +122,7 @@ describe('runNarrator two-phase flow', () => {
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
-    expect(result.state).toEqual({ scene: { mood: 'tense' } })
+    expect(result.data.state).toEqual({ scene: { mood: 'tense' } })
     expect(mockedModel).toHaveBeenCalledTimes(3)
   })
 
@@ -145,7 +143,7 @@ describe('runNarrator two-phase flow', () => {
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
-    expect(result.memory).toEqual({ the_mill: 'An old mill.' })
+    expect(result.data.memory).toEqual({ the_mill: 'An old mill.' })
     expect(mockedModel).toHaveBeenCalledTimes(3)
     expect(
       result.plotterTrace?.some((e) => e.kind === 'thought' && e.text.includes('rejected')),
@@ -159,7 +157,7 @@ describe('runNarrator two-phase flow', () => {
     const result = await runNarrator(CTX, new AbortController().signal)
 
     expect(result.text).toBe('Prose.')
-    expect(result.state).toEqual({})
+    expect(result.data.state).toEqual({})
     expect(
       result.plotterTrace?.some((e) => e.kind === 'thought' && e.text.includes('plotter failed')),
     ).toBe(true)
@@ -176,7 +174,7 @@ describe('runNarrator two-phase flow', () => {
     const result = await runNarrator(CTX, new AbortController().signal)
 
     expect(result.text).toBe('Prose.')
-    expect(result.memory).toEqual({})
+    expect(result.data.memory).toEqual({})
     expect(mockedModel).toHaveBeenCalledTimes(1 + MAX_PLOTTER_ITERATIONS)
   })
 

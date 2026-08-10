@@ -35,11 +35,10 @@ import type { ModelToolCall, ModelToolDefinition } from '../model/types'
 import type {
   AdventureSlots,
   Chronicle,
-  Memory,
   SamplingParams,
+  StoryData,
   TraceEvent,
   Turn,
-  WorldState,
 } from '../types'
 
 export interface NarratorContext {
@@ -50,9 +49,7 @@ export interface NarratorContext {
   slots: AdventureSlots
   chronicle: Chronicle
   history: Turn[]
-  initialState: WorldState
-  initialPlot: string[]
-  initialMemory: Memory
+  initialData: StoryData
   sampling: SamplingParams
   stateCleanupThreshold: number
   includePriorPlayerTurns: boolean
@@ -65,9 +62,7 @@ export interface NarratorContext {
 
 export interface NarratorResult {
   text: string
-  state: WorldState
-  plot: string[]
-  memory: Memory
+  data: StoryData
   // Narrate-phase events only; the plotter phase records separately so the
   // trace UI can present the two phases as distinct sections.
   trace: TraceEvent[]
@@ -147,9 +142,7 @@ export async function runNarrator(
   ctx: NarratorContext,
   signal: AbortSignal,
 ): Promise<NarratorResult> {
-  let currentState = ctx.initialState
-  let currentPlot = ctx.initialPlot
-  let currentMemory = ctx.initialMemory
+  let data = ctx.initialData
   // The context (memory/plot/state) is injected as a seeded tool exchange at
   // the tail of these messages. From here on the conversation is append-only —
   // never rewritten mid-turn — so every loop iteration extends the provider's
@@ -159,9 +152,7 @@ export async function runNarrator(
     ctx.slots,
     ctx.chronicle,
     ctx.history,
-    currentState,
-    currentPlot,
-    currentMemory,
+    data,
     ctx.stateCleanupThreshold,
     ctx.includePriorPlayerTurns,
     ctx.includeWorldState,
@@ -236,24 +227,15 @@ export async function runNarrator(
         sawRead = true
         const payload =
           call.name === CHECK_MEMORY_TOOL.name
-            ? buildMemoryPayload(currentMemory)
+            ? buildMemoryPayload(data.memory)
             : call.name === CHECK_PLOT_PLAN_TOOL.name
-              ? buildPlotPayload(currentPlot)
-              : buildStatePayload(currentState, ctx.stateCleanupThreshold)
+              ? buildPlotPayload(data.plot)
+              : buildStatePayload(data.state, ctx.stateCleanupThreshold)
         pushToolResult(call, payload)
         continue
       }
-      const exec = executeEnabledTool(
-        enabledToolNames,
-        call.name,
-        call.arguments,
-        currentState,
-        currentPlot,
-        currentMemory,
-      )
-      currentState = exec.state
-      currentPlot = exec.plot
-      currentMemory = exec.memory
+      const exec = executeEnabledTool(enabledToolNames, call.name, call.arguments, data)
+      data = exec.data
       if (/^(error|partial)\b/i.test(exec.result)) sawError = true
       pushToolResult(call, exec.result)
     }
@@ -282,10 +264,7 @@ export async function runNarrator(
     }
     if (iter === 0) {
       console.debug('[dm] narrator iter 0 — memory/plot/state slices injected as tool results', {
-        initialMemory: ctx.initialMemory,
-        initialMemoryKeys: Object.keys(ctx.initialMemory),
-        initialPlot: ctx.initialPlot,
-        initialState: ctx.initialState,
+        initialData: ctx.initialData,
       })
     }
     const completion = await completeModel(
@@ -414,9 +393,7 @@ export async function runNarrator(
 
   return {
     text: proseText,
-    state: currentState,
-    plot: currentPlot,
-    memory: currentMemory,
+    data,
     trace: narratorTrace,
     plotterTrace: plotterTrace.length ? plotterTrace : undefined,
     reasoningTokens: totalReasoningTokens || undefined,

@@ -36,6 +36,7 @@ import {
   type RetryAction,
   type SamplingParams,
   type SavedGame,
+  type StoryData,
   type TraceEvent,
   type Turn,
   type TurnKind,
@@ -216,9 +217,7 @@ export function useGameController(settings: GameSettings) {
     // abort closures rely on.)
     action: RetryAction
     baseTurns: Turn[]
-    baseState: WorldState
-    basePlot: string[]
-    baseMemory: Memory
+    baseData: StoryData
     baseChronicle: Chronicle
     baseCutoff: number
     // Slots to narrate with — defaults to current slots; newAdventure passes
@@ -227,8 +226,7 @@ export function useGameController(settings: GameSettings) {
     replaceExisting?: boolean
     onAbortRestore: () => void
   }) {
-    const { pendingTurn, baseTurns, baseState, basePlot, baseMemory, baseChronicle, baseCutoff } =
-      args
+    const { pendingTurn, baseTurns, baseData, baseChronicle, baseCutoff } = args
     const turnSlots = args.slotsForTurn ?? slots
     const operation = beginOperation(args.replaceExisting)
     if (!operation) {
@@ -258,7 +256,7 @@ export function useGameController(settings: GameSettings) {
             model,
             apiKey,
             baseUrl,
-            memory: memoryForCompaction(baseMemory, context.includeMemory),
+            memory: memoryForCompaction(baseData.memory, context.includeMemory),
           },
           controller.signal,
           (label) => {
@@ -276,9 +274,9 @@ export function useGameController(settings: GameSettings) {
         // in-flight turn but never the fold.
         args.action.checkpoint = {
           turns: stripTracesBefore(baseTurns, workingCutoff),
-          state: baseState,
-          plot: basePlot,
-          memory: baseMemory,
+          state: baseData.state,
+          plot: baseData.plot,
+          memory: baseData.memory,
           chronicle: workingChronicle,
           compactCutoff: workingCutoff,
         }
@@ -294,9 +292,7 @@ export function useGameController(settings: GameSettings) {
           slots: turnSlots,
           chronicle: workingChronicle,
           history: allTurns.slice(workingCutoff),
-          initialState: baseState,
-          initialPlot: basePlot,
-          initialMemory: baseMemory,
+          initialData: baseData,
           sampling,
           stateCleanupThreshold: context.stateCleanupChars,
           includePriorPlayerTurns: context.includePriorPlayerTurns,
@@ -393,9 +389,9 @@ export function useGameController(settings: GameSettings) {
         )
       }
       if (!operationCanCommit(operation)) return
-      commitState(result.state)
-      commitPlot(result.plot)
-      commitMemory(result.memory)
+      commitState(result.data.state)
+      commitPlot(result.data.plot)
+      commitMemory(result.data.memory)
     } catch (err) {
       if (controller.signal.aborted || !isCurrentOperation(operation)) {
         if (isCurrentOperation(operation)) args.onAbortRestore()
@@ -447,9 +443,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: turns,
-      baseState: state,
-      basePlot: plot,
-      baseMemory: memory,
+      baseData: { state, plot, memory },
       baseChronicle: chronicle,
       baseCutoff: compactCutoff,
       onAbortRestore: () => restoreAbortedAction(action),
@@ -472,9 +466,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: turns,
-      baseState: state,
-      basePlot: plot,
-      baseMemory: memory,
+      baseData: { state, plot, memory },
       baseChronicle: chronicle,
       baseCutoff: compactCutoff,
       onAbortRestore: () => restoreAbortedAction(action),
@@ -502,9 +494,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: base.turns,
-      baseState: base.state,
-      basePlot: base.plot,
-      baseMemory: base.memory,
+      baseData: { state: base.state, plot: base.plot, memory: base.memory },
       baseChronicle: base.chronicle,
       baseCutoff: base.compactCutoff,
       slotsForTurn: action.slots,
@@ -592,9 +582,7 @@ export function useGameController(settings: GameSettings) {
       pendingTurn,
       action,
       baseTurns: [],
-      baseState: freshState,
-      basePlot: [],
-      baseMemory: {},
+      baseData: { state: freshState, plot: [], memory: {} },
       baseChronicle: [],
       baseCutoff: 0,
       slotsForTurn: nextSlots,

@@ -56,6 +56,16 @@ export type WorldState = { [key: string]: JsonValue }
 // value is a single complete English description for that entity.
 export type Memory = { [key: string]: string }
 
+// The working data a turn threads through the narrator, plotter, and tool
+// executor as one unit: current-scene state, future plot plan, and the
+// long-term memory fact file. Persisted shapes (SavedGame, TurnCheckpoint)
+// keep these as separate fields; StoryData is the in-engine carrier.
+export interface StoryData {
+  state: WorldState
+  plot: string[]
+  memory: Memory
+}
+
 export type SlotKey = 'scenario' | 'styleGuide'
 export type AdventureSlots = Record<SlotKey, string>
 

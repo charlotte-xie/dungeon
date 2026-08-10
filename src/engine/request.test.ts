@@ -37,9 +37,11 @@ function build(
     SLOTS,
     [],
     history,
-    { scene: { location: 'the mill' } },
-    ['The miller returns at dusk'],
-    { player: 'A drifter with a debt.' },
+    {
+      state: { scene: { location: 'the mill' } },
+      plot: ['The miller returns at dusk'],
+      memory: { player: 'A drifter with a debt.' },
+    },
     4000,
     true,
     flags.includeWorldState,
@@ -159,8 +161,8 @@ describe('buildModelMessages layout', () => {
 
 describe('buildContextInjectionMessages', () => {
   it('uses stable ids so identical data produces identical bytes', () => {
-    const a = buildContextInjectionMessages({}, [], {}, 4000, true, true, true)
-    const b = buildContextInjectionMessages({}, [], {}, 4000, true, true, true)
+    const a = buildContextInjectionMessages({ state: {}, plot: [], memory: {} }, 4000, true, true, true)
+    const b = buildContextInjectionMessages({ state: {}, plot: [], memory: {} }, 4000, true, true, true)
     expect(a).toEqual(b)
     expect(a[0].toolCalls?.map((c) => c.id)).toEqual([
       'ctx-check-memory',
