@@ -81,7 +81,7 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         move: {
           type: 'object',
           description:
-            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate a facet (`slug.facet` → `slug.facet`).',
+            'Map of fromPath → toPath. Rename an entity\'s slug once its real name is learned (e.g. {"dark_haired_boy": "daniel"}) — never create a duplicate entry — or relocate a facet (`slug.facet` → `slug.facet`). Moving onto an existing slug merges the two entries (the target\'s facets win on conflict; set explicitly to override).',
           additionalProperties: { type: 'string' },
         },
         delete: {
@@ -473,14 +473,42 @@ export function executeTool(
             notes.push(`move ${fromRaw} (no-op; not present)`)
             continue
           }
-          if (next[to.slug] !== undefined) {
-            notes.push(`REJECTED move ${from.slug} → ${to.slug}: slug ${to.slug} already exists — merge or delete it explicitly first.`)
-            failed = true
+          const target = next[to.slug]
+          if (target === undefined) {
+            next = dropSlug(next, from.slug)
+            next = { ...next, [to.slug]: entry }
+            notes.push(`renamed ${from.slug} → ${to.slug}`)
             continue
           }
+          // Target exists: merge the two entries. The target's facets win on
+          // conflict — existing canon is never silently overwritten — and the
+          // note lists what was kept so it can be re-set explicitly if the
+          // moved version was the better one.
+          const merged: MemoryEntry = { ...target }
+          const conflicts: string[] = []
+          const overflow: string[] = []
+          for (const [facet, value] of Object.entries(entry)) {
+            if (merged[facet] !== undefined) {
+              if (merged[facet] !== value) conflicts.push(facet)
+              continue
+            }
+            if (Object.keys(merged).length >= MAX_MEMORY_FACETS) {
+              overflow.push(facet)
+              continue
+            }
+            merged[facet] = value
+          }
           next = dropSlug(next, from.slug)
-          next = { ...next, [to.slug]: entry }
-          notes.push(`renamed ${from.slug} → ${to.slug}`)
+          next = { ...next, [to.slug]: merged }
+          const detail = [
+            conflicts.length
+              ? `kept ${to.slug}'s existing ${conflicts.join(', ')} — set explicitly to override`
+              : '',
+            overflow.length ? `facet cap reached — dropped ${overflow.join(', ')}` : '',
+          ]
+            .filter(Boolean)
+            .join('; ')
+          notes.push(`merged ${from.slug} into ${to.slug}${detail ? ` (${detail})` : ''}`)
         }
       }
 

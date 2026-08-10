@@ -57,7 +57,7 @@ describe('tool execution boundaries', () => {
     expect(result.result).toBe('ok — memory: set the_baker.bond')
   })
 
-  it('renames an entity with move and refuses to clobber an existing slug', () => {
+  it('renames an entity with move and merges when the target already exists', () => {
     const data = {
       state: {},
       plot: [],
@@ -81,13 +81,20 @@ describe('tool execution boundaries', () => {
       bond: 'walked the player to the common room',
     })
 
-    const clobber = executeTool(
+    // Moving onto an existing slug merges: the target's facets win on
+    // conflict, non-conflicting facets fold in, the source entry is removed.
+    const merged = executeTool(
       'update_memory',
       JSON.stringify({ move: { daniel: 'chloe' } }),
       renamed.data,
     )
-    expect(clobber.result).toContain('already exists')
-    expect(clobber.data.memory.chloe).toEqual({ is: 'blonde student' })
+    expect(Object.keys(merged.data.memory)).toEqual(['chloe'])
+    expect(merged.data.memory.chloe).toEqual({
+      is: 'blonde student',
+      bond: 'walked the player to the common room',
+    })
+    expect(merged.result).toContain('merged daniel into chloe')
+    expect(merged.result).toContain("kept chloe's existing is")
   })
 
   it('deletes facets and drops an entry when its last facet goes', () => {
