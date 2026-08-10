@@ -74,7 +74,7 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things. Entries are objects of short string facets (is / wants / knows / bond / secret, plus free facets) keyed by lowercase underscore slugs. Edits are additive by dotted path — only the paths you name change; omission never deletes. Update a facet only when a durable fact about that entity is established or changed — never to log events (what happened belongs to the chronicle) and never for temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Maximum ${MAX_MEMORY_FACETS} facets per entry, ${MAX_MEMORY_FACET_CHARS} characters per facet.`,
+      `Maintain the fact file about the story's recurring people, places, and things. Entries are objects of short string facets keyed by lowercase underscore slugs: any entry may use is / notes / history / secret; characters add wants / facts / bond / relationships; places add npcs / layout; things add significance / location. Edits are additive by dotted path — only the paths you name change; omission never deletes. Update a facet only when something durable about that entity is established or changed. \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Maximum ${MAX_MEMORY_FACETS} facets per entry, ${MAX_MEMORY_FACET_CHARS} characters per facet.`,
     parameters: {
       type: 'object',
       properties: {
