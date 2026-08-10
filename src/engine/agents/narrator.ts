@@ -13,23 +13,8 @@
 // rather than what the model intended to write. Provider transport and
 // response-format quirks live under ../model.
 
-import {
-  applyTurnReminder,
-  buildMemoryPayload,
-  buildModelMessages,
-  buildPlotPayload,
-  buildStatePayload,
-} from '../request'
-import {
-  CHECK_MEMORY_TOOL,
-  CHECK_PLOT_PLAN_TOOL,
-  CHECK_STATE_TOOL,
-  FUTURE_PLOT_PLAN_TOOL,
-  UPDATE_MEMORY_TOOL,
-  UPDATE_STATE_TOOL,
-  executeEnabledTool,
-  isContextReadTool,
-} from '../tools'
+import { CONTEXT_SUBSYSTEMS, applyTurnReminder, buildModelMessages } from '../request'
+import { executeEnabledTool } from '../tools'
 import { completeModel } from '../model/client'
 import type { ModelToolCall, ModelToolDefinition } from '../model/types'
 import type {
@@ -84,28 +69,11 @@ export function buildPlotterInstruction(
   includePlotOutline: boolean,
   includeMemory: boolean,
 ): string {
-  const reads: string[] = []
-  const updates: string[] = []
-  const distinctions: string[] = []
-  if (includeMemory) {
-    reads.push('check_memory')
-    updates.push('`update_memory`')
-    distinctions.push(
-      '`update_memory` holds only durable facts about people, places, and things — never events',
-    )
-  }
-  if (includePlotOutline) {
-    reads.push('check_plot_plan')
-    updates.push('`future_plot_plan`')
-    distinctions.push('`future_plot_plan` holds only future directions')
-  }
-  if (includeWorldState) {
-    reads.push('check_state')
-    updates.push('`update_state`')
-    distinctions.push(
-      '`update_state` holds the current scene (positions, presence, held items, active tension)',
-    )
-  }
+  const flags = { includeWorldState, includePlotOutline, includeMemory }
+  const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
+  const reads = enabled.map((s) => s.checkTool.name)
+  const updates = enabled.map((s) => `\`${s.updateTool.name}\``)
+  const distinctions = enabled.map((s) => s.pivotDistinction)
   const distinctLine =
     distinctions.length > 1 ? ` Keep the subsystems distinct: ${distinctions.join('; ')}.` : ''
   return (
@@ -160,23 +128,18 @@ export async function runNarrator(
     ctx.includeMemory,
     ctx.nsfw,
   )
+  const flags = {
+    includeWorldState: ctx.includeWorldState,
+    includePlotOutline: ctx.includePlotOutline,
+    includeMemory: ctx.includeMemory,
+  }
   const tools: ModelToolDefinition[] = []
   const enabledToolNames = new Set<string>()
-  const advertise = (tool: ModelToolDefinition) => {
-    tools.push(tool)
-    enabledToolNames.add(tool.name)
-  }
-  if (ctx.includeMemory) {
-    advertise(UPDATE_MEMORY_TOOL)
-    advertise(CHECK_MEMORY_TOOL)
-  }
-  if (ctx.includeWorldState) {
-    advertise(UPDATE_STATE_TOOL)
-    advertise(CHECK_STATE_TOOL)
-  }
-  if (ctx.includePlotOutline) {
-    advertise(FUTURE_PLOT_PLAN_TOOL)
-    advertise(CHECK_PLOT_PLAN_TOOL)
+  for (const s of CONTEXT_SUBSYSTEMS) {
+    if (!s.enabled(flags)) continue
+    tools.push(s.updateTool, s.checkTool)
+    enabledToolNames.add(s.updateTool.name)
+    enabledToolNames.add(s.checkTool.name)
   }
 
   const narratorTrace: TraceEvent[] = []
@@ -223,15 +186,10 @@ export async function runNarrator(
     let sawError = false
     let sawRead = false
     for (const call of completion.toolCalls) {
-      if (enabledToolNames.has(call.name) && isContextReadTool(call.name)) {
+      const readSubsystem = CONTEXT_SUBSYSTEMS.find((s) => s.checkTool.name === call.name)
+      if (readSubsystem && enabledToolNames.has(call.name)) {
         sawRead = true
-        const payload =
-          call.name === CHECK_MEMORY_TOOL.name
-            ? buildMemoryPayload(data.memory)
-            : call.name === CHECK_PLOT_PLAN_TOOL.name
-              ? buildPlotPayload(data.plot)
-              : buildStatePayload(data.state, ctx.stateCleanupThreshold)
-        pushToolResult(call, payload)
+        pushToolResult(call, readSubsystem.buildPayload(data, ctx.stateCleanupThreshold))
         continue
       }
       const exec = executeEnabledTool(enabledToolNames, call.name, call.arguments, data)

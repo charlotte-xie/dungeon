@@ -5,14 +5,7 @@ import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { applyTurnReminder, buildModelMessages } from './engine/request'
-import {
-  CHECK_MEMORY_TOOL,
-  CHECK_PLOT_PLAN_TOOL,
-  CHECK_STATE_TOOL,
-  FUTURE_PLOT_PLAN_TOOL,
-  UPDATE_MEMORY_TOOL,
-  UPDATE_STATE_TOOL,
-} from './engine/tools'
+import { CONTEXT_SUBSYSTEMS } from './engine/request'
 import { useGameController } from './hooks/useGameController'
 import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
@@ -288,13 +281,10 @@ function App() {
                 memory: context.includeMemory,
               },
             )}
-            tools={[
-              ...(context.includeMemory ? [UPDATE_MEMORY_TOOL, CHECK_MEMORY_TOOL] : []),
-              ...(context.includeWorldState ? [UPDATE_STATE_TOOL, CHECK_STATE_TOOL] : []),
-              ...(context.includePlotOutline
-                ? [FUTURE_PLOT_PLAN_TOOL, CHECK_PLOT_PLAN_TOOL]
-                : []),
-            ]}
+            tools={CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(context)).flatMap((s) => [
+              s.updateTool,
+              s.checkTool,
+            ])}
             sampling={sampling}
             reviser={reviserPreview}
             onClose={() => setShowContext(false)}

@@ -117,16 +117,6 @@ export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
     parameters: { type: 'object', properties: {} },
 }
 
-export const CONTEXT_READ_TOOL_NAMES: ReadonlySet<string> = new Set([
-  CHECK_STATE_TOOL.name,
-  CHECK_MEMORY_TOOL.name,
-  CHECK_PLOT_PLAN_TOOL.name,
-])
-
-export function isContextReadTool(name: string): boolean {
-  return CONTEXT_READ_TOOL_NAMES.has(name)
-}
-
 export interface ToolExecResult {
   data: StoryData
   result: string
