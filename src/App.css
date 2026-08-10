@@ -360,10 +360,34 @@ header h1 {
 }
 
 .context-item .state-json {
-  max-height: 30vh;
+  /* Content flows in the modal's single scroll — no per-message scrollbars. */
+  max-height: none;
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+/* Header + tabs stick together above the scrolling content, spanning the
+   modal's full width over its padding. */
+.ctx-head-block {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #161616;
+  margin: 0 -1.25rem;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.ctx-head-block .modal-header {
+  position: static;
+  padding: 1rem 0 0.5rem;
+}
+
+.ctx-head-block .ctx-tabs {
+  margin-bottom: 0;
+  border-bottom: 0;
+  padding-bottom: 0.6rem;
 }
 
 .ctx-section {

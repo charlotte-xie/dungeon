@@ -19,7 +19,7 @@ interface ContextViewerProps {
   onClose: () => void
 }
 
-type Tab = 'system' | 'story' | 'notes' | 'tools' | 'reviser'
+type Tab = 'system' | 'chronicle' | 'history' | 'notes' | 'tools' | 'reviser'
 
 function chars(items: ModelMessage[]): number {
   return items.reduce((n, m) => n + (m.content?.length ?? 0), 0)
@@ -58,7 +58,7 @@ function MessageList({ items }: { items: ModelMessage[] }) {
 }
 
 export function ContextViewer({ messages, tools, sampling, reviser, onClose }: ContextViewerProps) {
-  const [tab, setTab] = useState<Tab>('story')
+  const [tab, setTab] = useState<Tab>('history')
 
   // Segment the request into its architectural sections. The seeded
   // check-notes exchange is identified by its fixed ctx-* call ids; the
@@ -70,13 +70,14 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose }: C
   const prefix = messages.slice(0, historyStart)
   const chronicle = prefix.filter((m) => m.content.startsWith('# Story so far'))
   const system = prefix.filter((m) => !m.content.startsWith('# Story so far'))
-  const story = [...chronicle, ...messages.slice(historyStart, tailStart)]
+  const history = messages.slice(historyStart, tailStart)
   const notes = messages.slice(tailStart)
   const toolsJson = JSON.stringify(tools, null, 2)
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'system', label: `System (${system.length})` },
-    { id: 'story', label: `Story (${story.length})` },
+    { id: 'chronicle', label: `Chronicle (${chronicle.length})` },
+    { id: 'history', label: `History (${history.length})` },
     { id: 'notes', label: `Notes (${notes.length})` },
     { id: 'tools', label: `Tools (${tools.length})` },
     ...(reviser ? [{ id: 'reviser' as Tab, label: 'Reviser' }] : []),
@@ -85,24 +86,26 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose }: C
   return (
     <div className="modal-backdrop">
       <div className="modal modal-wide">
-        <div className="modal-header">
-          <h2>
-            {tab === 'reviser'
-              ? 'Context for reviser request (preview)'
-              : 'Context for next DM request'}
-          </h2>
-          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
-        </div>
-        <div className="ctx-tabs">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              className={`ctx-tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="ctx-head-block">
+          <div className="modal-header">
+            <h2>
+              {tab === 'reviser'
+                ? 'Context for reviser request (preview)'
+                : 'Context for next DM request'}
+            </h2>
+            <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+          </div>
+          <div className="ctx-tabs">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                className={`ctx-tab ${tab === t.id ? 'active' : ''}`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
         {tab === 'system' && (
           <>
@@ -114,14 +117,23 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose }: C
             <MessageList items={system} />
           </>
         )}
-        {tab === 'story' && (
+        {tab === 'chronicle' && (
           <>
             <p className="hint">
-              The story as the model sees it: the chronicle&apos;s compressed summary of
-              older turns (when present), then the live transcript of inputs and
-              narration. {sizeNote(story)}
+              The chronicle: older turns compressed into the &quot;story so far&quot;
+              summary the model reads in place of their full text. Empty until the
+              first compaction. {sizeNote(chronicle)}
             </p>
-            <MessageList items={story} />
+            <MessageList items={chronicle} />
+          </>
+        )}
+        {tab === 'history' && (
+          <>
+            <p className="hint">
+              The recent live transcript: player inputs and DM narration replayed
+              verbatim, up to the compaction cutoff. {sizeNote(history)}
+            </p>
+            <MessageList items={history} />
           </>
         )}
         {tab === 'notes' && (
