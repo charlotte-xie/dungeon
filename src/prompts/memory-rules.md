@@ -14,7 +14,7 @@ Shape beyond the suggested facets is your discretion: values are one or two comp
 
 Any entry:
 
-- **`is`** — definition and description in one dense phrase. Every entry has this.
+- **`is`** — definition and description
 - **`notes`** — miscellaneous info worth keeping that fits no other facet.
 - **`history`** — notable past events involving this entity that still shape the present. Curated highlights, not a log — the chronicle records everything else.
 - **`secret`** — what is true but not yet revealed in the narrative, and who knows.
@@ -51,12 +51,12 @@ The player (key `player`) adds these instead of the character facets — never `
 {
   "Hesta": {
     "is": "Hesta is the town baker, a stout woman with a flour-dusted apron and grey hair tied back; she owns the bakery on Mill Lane.",
-    "wants": "She wants to be left alone and to keep the shop open.",
-    "knowledge": "She saw the player argue with a constable, and knows the player is new in town.",
-    "bond": "She is wary of the player and will help only if it costs her nothing.",
-    "relationships": "She is Tam's mother, and pays protection money to the smithy brothers.",
-    "secret": "She is hiding Tam upstairs after a robbery gone wrong; only she and Tam know.",
-    "history": "Her husband drowned in the river flood two winters back."
+    "wants": "Hesta wants to be left alone and to keep the shop open.",
+    "knowledge": "Hesta saw the player argue with a constable, and knows the player is new in town.",
+    "bond": "Hesta is wary of the player and will help only if it costs her nothing.",
+    "relationships": {"Tam":"Hesta is Tam's mother"},
+    "secret": "Hesta is hiding Tam upstairs after a robbery gone wrong; only she and Tam know.",
+    "history": "Hesta's husband drowned in the river flood two winters back."
   },
   "Mill Lane": {
     "is": "Mill Lane is a narrow cobbled street on the south side of town, two streets back from the river.",
@@ -129,3 +129,5 @@ Above: the placeholder is renamed now the name is known; two facets are updated 
 - **Set** an existing facet by rewriting that facet's whole value as present-tense truth — never append the story of the change.
 - **Move** to rename when an entity's real name is learned; never create a duplicate entry.
 - **Delete** facets that stopped being true, and entries that are genuinely no longer relevant.
+
+Recent fiction outranks memory; when they conflict, the memory is stale and should be repaired, not obeyed
