@@ -2,7 +2,7 @@
 
 Memory is a **fact file about the story's nouns** — the people, places, and things the narration must stay consistent about across scenes. For your eyes only — never read it aloud or list it for the player. Each entry is a small JSON object of **facets** about one entity, keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators).
 
-Every value must make sense **read on its own, long after this scene** — complete standalone sentences, not telegraphic fragments. A facet is short by holding fewer facts, not by stripping grammar: "wary; helps if cheap; son upstairs" decays into noise, while "She is wary of the player and will help only if it costs her nothing" stays readable forever.
+Every value must make sense **read on its own, long after this scene** — complete standalone sentences, not telegraphic fragments. A facet is short by holding fewer facts, not by stripping grammar: "wary; helps if cheap; son upstairs" decays into noise, while "She is wary of the player and will help only if it costs her nothing" stays readable forever. Write each value for a reader who has seen none of the story: never allude to an event, place, or coined term the sentence does not itself explain — "She knows about the arrangement" is noise unless the facet spells out what the arrangement is, or the term has its own entry that does.
 
 Memory holds **durable facts about entities**. The chronicle records the story's full past automatically; an entity's `history` facet keeps only the few notable events that still shape the present. What will happen belongs to the plot plan; what is true only of the current scene belongs to live state. Update a facet only when something durable *about that entity* is established or changed — the story reveals Hesta keeps a dog called Benny, the smithy has burned down, a secret comes to light.
 
@@ -16,14 +16,14 @@ Any entry:
 
 - **`is`** — definition and description in one dense phrase. Every entry has this.
 - **`notes`** — miscellaneous info worth keeping that fits no other facet.
-- **`history`** — notable past story events involving this entity that still shape the present. Curated highlights, not a log — the chronicle records everything else.
+- **`history`** — notable past events involving this entity that still shape the present. Curated highlights, not a log — the chronicle records everything else.
 - **`secret`** — what is true but not yet revealed in the narrative, and who knows.
 
 Characters add:
 
-- **`wants`** — specific goals and intentions.
-- **`facts`** — important established facts about them.
-- **`knowledge`** — what they know: things they have witnessed or been told, including about the player.
+- **`wants`** — specific goals and intentions of the character.
+- **`facts`** — important established facts about the character.
+- **`knowledge`** — what the character knows: things they have witnessed or been told, including about the player.
 - **`bond`** — current relationship and attitude toward the player.
 - **`relationships`** — ties to other characters; itemize by character name when there are several.
 
@@ -92,14 +92,14 @@ The player (key `player`) adds these instead of the character facets — never `
 
 ## What does NOT belong here
 
-- **A running log**: `history` keeps only the few notable events that still shape the present — curated, never appended to every scene; the chronicle records everything else. Other facets never carry narrative ("…let Amy sing one number after the first set and approved after she delivered") — keep the standing fact (`bond: "approves of Amy's singing; will give her a number on band nights"`) and reserve events for `history`. Narrative connectives ("after", "then", "last Friday") outside `history` are the warning sign.
+- **A running log**: `history` keeps only the few notable events that still shape the present — curated, never appended to every scene; the chronicle records everything else. Other facets never carry narrative ("…let Amy sing one number after the first set and approved after she delivered") — keep the standing fact (`bond: "He approves of Amy's singing and will give her a number on band nights."`) and reserve events for `history`. Narrative connectives ("after", "then", "last Friday") outside `history` are the warning sign.
 - **Temporary state of any kind**: where someone is standing right now, who is present, a mood of the moment, what's held or worn, the weather. That is current-scene data.
-- Future intentions, planned beats, plot directions — planning data, not memory.
+- Planned beats, plot directions — planning data, not memory.
 - Irrelevant details and re-derivable flavor: every door, every meal, a cloak's colour, a tavern's name when it won't recur.
 
 ## The durability test
 
-Before setting a facet, ask: *will this still be true and matter after the scene ends?* If it is only true right now, it belongs in live state or the prose. State facts, not chronologies: if any facet other than `history` reads as a narrative of how things came to be, rewrite it to state only what is true now.
+Before setting a facet, ask: *will this still be true and matter after the scene ends?* If it is only true right now, it belongs in live state or the prose. State facts, not chronologies.
 
 ## Tool: `update_memory`
 
@@ -113,8 +113,8 @@ Edits are **additive by dotted path — only the paths you name change; nothing 
 {
   "move": { "dark_haired_boy": "Dan" },
   "set": {
-    "Dan.is": "Dan; dark-haired sixth-former, easy charm, well-connected",
-    "Hesta.bond": "blames the player for the raid and will not help them again"
+    "Dan.is": "Dan is a dark-haired sixth-former with easy charm and connections across the school.",
+    "Hesta.bond": "She blames the player for the constabulary raid on her bakery and will not help them again."
   },
   "delete": ["Hesta.secret", "minor_courier_npc"]
 }

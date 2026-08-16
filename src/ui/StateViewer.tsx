@@ -28,6 +28,8 @@ interface StateViewerProps {
   onClearChronicle: () => void
 }
 
+type Tab = 'memory' | 'state' | 'plot' | 'ooc' | 'chronicle'
+
 function plotToDraft(plot: string[]): string {
   return plot.map((p, i) => `${i + 1}. ${p}`).join('\n')
 }
@@ -66,6 +68,17 @@ export function StateViewer({
   onClearOoc,
   onClearChronicle,
 }: StateViewerProps) {
+  const [tab, setTab] = useState<Tab>(() =>
+    context.includeMemory
+      ? 'memory'
+      : context.includeWorldState
+        ? 'state'
+        : context.includePlotOutline
+          ? 'plot'
+          : context.includeOoc
+            ? 'ooc'
+            : 'chronicle',
+  )
   const [draft, setDraft] = useState(() => JSON.stringify(state, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
   const [plotDraft, setPlotDraft] = useState(() => plotToDraft(plot))
@@ -215,12 +228,20 @@ export function StateViewer({
     const nextPlot = wantPlot ? validatePlot() : undefined
     const nextOoc = wantOoc ? validateOoc() : undefined
     const nextMemory = wantMemory ? validateMemory() : undefined
-    if (
-      (wantState && nextState === null) ||
-      (wantPlot && nextPlot === null) ||
-      (wantOoc && nextOoc === null) ||
-      (wantMemory && nextMemory === null)
-    ) {
+    // On validation failure, jump to the first failing tab so the inline
+    // error is visible even if the user edited it on another tab.
+    const firstInvalid: Tab | null =
+      wantMemory && nextMemory === null
+        ? 'memory'
+        : wantState && nextState === null
+          ? 'state'
+          : wantPlot && nextPlot === null
+            ? 'plot'
+            : wantOoc && nextOoc === null
+              ? 'ooc'
+              : null
+    if (firstInvalid) {
+      setTab(firstInvalid)
       return
     }
     if (nextState !== undefined && nextState !== null) onSaveState(nextState)
@@ -230,12 +251,42 @@ export function StateViewer({
     if (chronicleDirty) onSaveChronicle(buildEditedChronicle())
   }
 
+  const tabs: { id: Tab; label: string; dirty: boolean }[] = [
+    ...(context.includeMemory
+      ? [{ id: 'memory' as Tab, label: `Memory (${memoryEntries})`, dirty: memoryDirty }]
+      : []),
+    ...(context.includeWorldState
+      ? [{ id: 'state' as Tab, label: 'Live state', dirty: stateDirty }]
+      : []),
+    ...(context.includePlotOutline
+      ? [{ id: 'plot' as Tab, label: `Plot (${plot.length})`, dirty: plotDirty }]
+      : []),
+    ...(context.includeOoc
+      ? [{ id: 'ooc' as Tab, label: `OOC (${ooc.length})`, dirty: oocDirty }]
+      : []),
+    { id: 'chronicle' as Tab, label: `Chronicle (${totalEntries})`, dirty: chronicleDirty },
+  ]
+
   return (
     <div className="modal-backdrop">
-      <div className="modal">
-        <div className="modal-header">
-          <h2>Engine state</h2>
-          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+      <div className="modal modal-wide">
+        <div className="ctx-head-block">
+          <div className="modal-header">
+            <h2>Engine state</h2>
+            <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+          </div>
+          <div className="ctx-tabs">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                className={`ctx-tab ${tab === t.id ? 'active' : ''}`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+                {t.dirty ? ' •' : ''}
+              </button>
+            ))}
+          </div>
         </div>
 
         {busy && (
@@ -244,9 +295,8 @@ export function StateViewer({
           </p>
         )}
 
-        {context.includeMemory && (
+        {tab === 'memory' && context.includeMemory && (
           <>
-            <h2>Long-term memory</h2>
             <p className="hint">
               The DM maintains this JSON via the <code>update_memory</code> tool — the
               fact file of <strong>people, places, and things</strong> that persist across
@@ -257,7 +307,7 @@ export function StateViewer({
               {memoryEntries === 1 ? 'y' : 'ies'}.
             </p>
             <textarea
-              className="state-json state-json-editor"
+              className="state-json state-json-editor tab-editor"
               spellCheck={false}
               value={memoryDraft}
               onChange={(e) => setMemoryDraft(e.target.value)}
@@ -268,9 +318,8 @@ export function StateViewer({
           </>
         )}
 
-        {context.includeWorldState && (
+        {tab === 'state' && context.includeWorldState && (
           <>
-            <h2>Live state (current scene)</h2>
             <p className="hint">
               The DM maintains this JSON via the <code>update_state</code> tool — the{' '}
               <strong>current scene only</strong>. Player's immediate position, what NPCs
@@ -278,7 +327,7 @@ export function StateViewer({
               deleted.
             </p>
             <textarea
-              className="state-json state-json-editor"
+              className="state-json state-json-editor tab-editor"
               spellCheck={false}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -288,9 +337,8 @@ export function StateViewer({
           </>
         )}
 
-        {context.includePlotOutline && (
+        {tab === 'plot' && context.includePlotOutline && (
           <>
-            <h2>Future plot plan</h2>
             <p className="hint">
               The DM maintains this numbered list via the <code>future_plot_plan</code> tool
               (append/insert/update/delete by 1-indexed position) — a short private notebook
@@ -303,7 +351,7 @@ export function StateViewer({
               {plot.length === 1 ? 'y' : 'ies'}.
             </p>
             <textarea
-              className="state-json state-json-editor"
+              className="state-json state-json-editor tab-editor"
               spellCheck={false}
               value={plotDraft}
               onChange={(e) => setPlotDraft(e.target.value)}
@@ -314,9 +362,8 @@ export function StateViewer({
           </>
         )}
 
-        {context.includeOoc && (
+        {tab === 'ooc' && context.includeOoc && (
           <>
-            <h2>OOC instructions</h2>
             <p className="hint">
               The DM maintains this numbered list via the <code>update_ooc</code> tool
               (append/insert/update/delete by 1-indexed position) — the player's{' '}
@@ -329,7 +376,7 @@ export function StateViewer({
               {ooc.length === 1 ? 'y' : 'ies'}.
             </p>
             <textarea
-              className="state-json state-json-editor"
+              className="state-json state-json-editor tab-editor"
               spellCheck={false}
               value={oocDraft}
               onChange={(e) => setOocDraft(e.target.value)}
@@ -340,64 +387,67 @@ export function StateViewer({
           </>
         )}
 
-        <h2>Chronicle</h2>
-        <p className="hint">
-          Auto-generated levels of compaction. When the live tail reaches{' '}
-          {context.compactionThreshold} turns, the oldest {context.compactionBatch} are
-          folded into one chronicle entry of roughly 1/{context.compactionBatch} the
-          combined input length. When a level reaches {context.compactionThreshold}{' '}
-          entries, the oldest {context.compactionBatch} are promoted into one entry at
-          the next level up, recursively. Entries shown oldest-first; newest at the
-          bottom. Entries are editable — clear an entry&apos;s text to delete it on save.
-          {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
-          {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
-        </p>
-        {totalEntries === 0 ? (
-          <p className="hint"><em>(empty — no compaction has happened yet)</em></p>
-        ) : (
-          <div className="chronicle-levels">
-            {[...chronicle]
-              .map((entries, level) => ({ entries, level }))
-              .reverse()
-              .map(({ entries, level }) => {
-                if (entries.length === 0) return null
-                const isTop = level === chronicle.length - 1
-                return (
-                  <div key={level} className="chronicle-level">
-                    <h3 className="chronicle-level-head">
-                      {isTop ? 'Top level' : 'More recent'}
-                      <span className="chronicle-level-meta">
-                        {' '}
-                        — level {level}, {entries.length} entr
-                        {entries.length === 1 ? 'y' : 'ies'}
-                      </span>
-                    </h3>
-                    {entries.map((e) => (
-                      <div key={e.id} className="chronicle-entry">
-                        <div className="chronicle-entry-meta">
-                          covers {e.turnsCovered} turn{e.turnsCovered === 1 ? '' : 's'} ·{' '}
-                          {entryText(e.id, e.text).length.toLocaleString()} chars
-                          {entryText(e.id, e.text) !== e.text && ' · edited'}
-                        </div>
-                        <textarea
-                          className="state-json state-json-editor chronicle-entry-edit"
-                          spellCheck={false}
-                          value={entryText(e.id, e.text)}
-                          onChange={(ev) =>
-                            setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
-                          }
-                          readOnly={busy}
-                        />
+        {tab === 'chronicle' && (
+          <>
+            <p className="hint">
+              Auto-generated levels of compaction. When the live tail reaches{' '}
+              {context.compactionThreshold} turns, the oldest {context.compactionBatch} are
+              folded into one chronicle entry of roughly 1/{context.compactionBatch} the
+              combined input length. When a level reaches {context.compactionThreshold}{' '}
+              entries, the oldest {context.compactionBatch} are promoted into one entry at
+              the next level up, recursively. Entries shown oldest-first; newest at the
+              bottom. Entries are editable — clear an entry&apos;s text to delete it on save.
+              {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
+              {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
+            </p>
+            {totalEntries === 0 ? (
+              <p className="hint"><em>(empty — no compaction has happened yet)</em></p>
+            ) : (
+              <div className="chronicle-levels">
+                {[...chronicle]
+                  .map((entries, level) => ({ entries, level }))
+                  .reverse()
+                  .map(({ entries, level }) => {
+                    if (entries.length === 0) return null
+                    const isTop = level === chronicle.length - 1
+                    return (
+                      <div key={level} className="chronicle-level">
+                        <h3 className="chronicle-level-head">
+                          {isTop ? 'Top level' : 'More recent'}
+                          <span className="chronicle-level-meta">
+                            {' '}
+                            — level {level}, {entries.length} entr
+                            {entries.length === 1 ? 'y' : 'ies'}
+                          </span>
+                        </h3>
+                        {entries.map((e) => (
+                          <div key={e.id} className="chronicle-entry">
+                            <div className="chronicle-entry-meta">
+                              covers {e.turnsCovered} turn{e.turnsCovered === 1 ? '' : 's'} ·{' '}
+                              {entryText(e.id, e.text).length.toLocaleString()} chars
+                              {entryText(e.id, e.text) !== e.text && ' · edited'}
+                            </div>
+                            <textarea
+                              className="state-json state-json-editor chronicle-entry-edit"
+                              spellCheck={false}
+                              value={entryText(e.id, e.text)}
+                              onChange={(ev) =>
+                                setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
+                              }
+                              readOnly={busy}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )
-              })}
-          </div>
+                    )
+                  })}
+              </div>
+            )}
+          </>
         )}
 
         <div className="modal-actions pinned">
-          {context.includeMemory && (
+          {tab === 'memory' && (
             <button
               className="ghost"
               onClick={() => {
@@ -408,7 +458,7 @@ export function StateViewer({
               Clear memory
             </button>
           )}
-          {context.includeWorldState && (
+          {tab === 'state' && (
             <button
               className="ghost"
               onClick={() => {
@@ -419,7 +469,7 @@ export function StateViewer({
               Reset state
             </button>
           )}
-          {context.includePlotOutline && (
+          {tab === 'plot' && (
             <button
               className="ghost"
               onClick={() => {
@@ -430,7 +480,7 @@ export function StateViewer({
               Clear plan
             </button>
           )}
-          {context.includeOoc && (
+          {tab === 'ooc' && (
             <button
               className="ghost"
               onClick={() => {
@@ -441,15 +491,17 @@ export function StateViewer({
               Clear OOC
             </button>
           )}
-          <button
-            className="ghost"
-            onClick={() => {
-              if (totalEntries > 0 && confirm('Clear the chronicle and reset compaction cutoff?')) onClearChronicle()
-            }}
-            disabled={busy || totalEntries === 0}
-          >
-            Clear chronicle
-          </button>
+          {tab === 'chronicle' && (
+            <button
+              className="ghost"
+              onClick={() => {
+                if (totalEntries > 0 && confirm('Clear the chronicle and reset compaction cutoff?')) onClearChronicle()
+              }}
+              disabled={busy || totalEntries === 0}
+            >
+              Clear chronicle
+            </button>
+          )}
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
           <button onClick={handleSaveChanges} disabled={busy || !anyDirty}>

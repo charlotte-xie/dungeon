@@ -8,6 +8,7 @@ import summarizerTemplate from './prompts/summarizer.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
 import newAdventureBootstrapTemplate from './prompts/new-adventure-bootstrap.md?raw'
 import reviserSystem from './prompts/reviser.md?raw'
+import continueDirective from './prompts/continue-directive.md?raw'
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
@@ -19,6 +20,8 @@ function fill(template: string, vars: Record<string, string | number>): string {
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
 export const DEFAULT_SCENARIO = defaultScenario.trim()
 export const REVISER_SYSTEM_PROMPT = reviserSystem.trim()
+// Synthetic user input sent when the player presses Continue (skips their turn).
+export const CONTINUE_DIRECTIVE = continueDirective.trim()
 
 export interface TurnReminderCapabilities {
   worldState: boolean

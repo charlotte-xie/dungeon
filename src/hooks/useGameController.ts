@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from 'react'
-import { buildNewAdventureBootstrap } from '../prompts'
+import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
 import { EmptyNarrativeError, runNarrator } from '../engine/agents/narrator'
 import { runReviser } from '../engine/agents/reviser'
 import {
@@ -29,7 +29,6 @@ import {
   persistState,
 } from '../engine/persistence'
 import {
-  CONTINUE_DIRECTIVE,
   type AdventureSlots,
   type Chronicle,
   type ContextConfig,

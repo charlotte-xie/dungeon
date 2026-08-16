@@ -575,6 +575,13 @@ textarea.state-json-editor {
   resize: vertical;
 }
 
+/* Tabbed engine-state dialog: the editor is the tab's sole content, so it
+   can use most of the modal's height. */
+textarea.state-json-editor.tab-editor {
+  min-height: 50vh;
+  max-height: 65vh;
+}
+
 .error-text {
   margin: 0.35rem 0 0;
   color: #d87070;

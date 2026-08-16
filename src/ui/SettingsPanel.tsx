@@ -7,6 +7,7 @@ import {
   DEFAULT_REVISER_MODEL,
   DEFAULT_SAMPLING,
   LMSTUDIO_BASE_URL,
+  MISTRAL_BASE_URL,
   MODEL_OPTIONS,
   XAI_BASE_URL,
 } from '../engine/config'
@@ -150,7 +151,7 @@ export function SettingsPanel({
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
         <label
-          title={`OpenAI-compatible chat completions endpoint. Default: ${DEFAULT_BASE_URL} (xAI). For LM Studio, click the LM Studio button — make sure the local server is running on the same port. Any other server that exposes /chat/completions in OpenAI shape works too.`}
+          title={`OpenAI-compatible chat completions endpoint. Default: ${DEFAULT_BASE_URL} (xAI). Mistral's La Plateforme works via the Mistral button (needs a Mistral API key; use the Chat Completions protocol). For LM Studio, click the LM Studio button — make sure the local server is running on the same port. Any other server that exposes /chat/completions in OpenAI shape works too.`}
         >
           <span>API base URL</span>
           <div className="model-picker">
@@ -175,6 +176,17 @@ export function SettingsPanel({
               title="Use the default xAI API endpoint"
             >
               xAI
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                resetDetection()
+                setDraftBaseUrl(MISTRAL_BASE_URL)
+              }}
+              title="Use Mistral's La Plateforme API endpoint (requires a Mistral API key; Chat Completions protocol)"
+            >
+              Mistral
             </button>
             <button
               type="button"
@@ -210,7 +222,7 @@ export function SettingsPanel({
           )}
         </label>
         <label
-          title={`Which OpenAI-compatible wire protocol to use for all model calls. Chat Completions (/chat/completions) works on every provider, including LM Studio and llama.cpp. Responses (/responses) is the newer format xAI and OpenAI recommend (xAI has deprecated Chat Completions) and is also supported by Ollama and vLLM; used statelessly, so behavior is otherwise identical. Default ${DEFAULT_CONTEXT.apiProtocol === 'responses' ? 'Responses' : 'Chat Completions'}.`}
+          title={`Which OpenAI-compatible wire protocol to use for all model calls. Chat Completions (/chat/completions) works on every provider, including Mistral, LM Studio, and llama.cpp — Mistral supports only this one. Responses (/responses) is the newer format xAI and OpenAI recommend (xAI has deprecated Chat Completions) and is also supported by Ollama and vLLM; used statelessly, so behavior is otherwise identical. Default ${DEFAULT_CONTEXT.apiProtocol === 'responses' ? 'Responses' : 'Chat Completions'}.`}
         >
           <span>API protocol</span>
           <select

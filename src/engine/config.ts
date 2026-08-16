@@ -12,6 +12,8 @@ import type {
 } from './types'
 
 export const XAI_BASE_URL = 'https://api.x.ai/v1'
+// Mistral's La Plateforme API is OpenAI-compatible (chat completions only).
+export const MISTRAL_BASE_URL = 'https://api.mistral.ai/v1'
 // LM Studio's OpenAI-compatible server defaults to localhost:1234. Same shape
 // works for other local OpenAI-compat servers — change the port to match.
 export const LMSTUDIO_BASE_URL = 'http://localhost:1234/v1'
@@ -31,6 +33,13 @@ export const MODEL_OPTIONS = [
   'grok-4-fast',
   'grok-4-fast-reasoning',
   'grok-code-fast',
+  'mistral-large-latest',
+  'mistral-medium-latest',
+  'mistral-small-latest',
+  'magistral-medium-latest',
+  'magistral-small-latest',
+  'open-mistral-nemo',
+  'ministral-8b-latest',
 ] as const
 
 export const DEFAULT_STYLE_GUIDE = ''
