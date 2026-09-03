@@ -95,3 +95,47 @@ describe('compactCascade drain events', () => {
     expect(mockedSummarizer).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('failed turns', () => {
+  const failedTurn = (i: number): Turn => ({
+    id: `f${i}`,
+    kind: 'player',
+    input: `p${i}`,
+    reply: {
+      id: `f${i}-reply`,
+      model: 'test',
+      text: '(The dungeon master falters: boom)',
+      error: 'boom',
+    },
+  })
+  // Threshold 8, batch 4: the floor clamps to 4, so one event folds turns 0-3.
+  const SETTINGS = { compactionThreshold: 8, compactionFloor: 4, compactionBatch: 4 }
+
+  it('folds only the turns that produced narration', async () => {
+    mockedSummarizer.mockClear()
+    const turns = [
+      completedTurn(0),
+      failedTurn(1),
+      completedTurn(2),
+      completedTurn(3),
+      ...Array.from({ length: 4 }, (_, i) => completedTurn(4 + i)),
+    ]
+    const result = await compactCascade(turns, 0, [], SETTINGS, AGENT, new AbortController().signal)
+    expect(result.cutoff).toBe(4)
+    expect(result.chronicle[0]).toHaveLength(1)
+    expect(result.chronicle[0][0].text).not.toContain('falters')
+    expect(result.chronicle[0][0].text).toContain('PLAYER: p2')
+  })
+
+  it('makes no entry — and no summarizer call — for a sub-batch of nothing but failures', async () => {
+    mockedSummarizer.mockClear()
+    const turns = [
+      ...Array.from({ length: 4 }, (_, i) => failedTurn(i)),
+      ...Array.from({ length: 4 }, (_, i) => completedTurn(4 + i)),
+    ]
+    const result = await compactCascade(turns, 0, [], SETTINGS, AGENT, new AbortController().signal)
+    expect(result.cutoff).toBe(4)
+    expect(result.chronicle).toEqual([])
+    expect(mockedSummarizer).not.toHaveBeenCalled()
+  })
+})

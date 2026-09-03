@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildContextInjectionMessages,
+  buildMemoryPayload,
   buildModelMessages,
+  buildPlotterGuidance,
+  buildStateGuidance,
   buildStatePayload,
   type ContextFlags,
 } from './request'
@@ -9,6 +12,13 @@ import type { ModelMessage } from './model/types'
 import type { AdventureSlots, Turn } from './types'
 
 const SLOTS: AdventureSlots = { scenario: 'A haunted mill.', styleGuide: '' }
+
+const ALL_FLAGS: ContextFlags = {
+  includeWorldState: true,
+  includePlotOutline: true,
+  includeMemory: true,
+  includeOoc: true,
+}
 
 function playerTurn(id: string, input: string, reply?: string): Turn {
   return {
@@ -31,17 +41,18 @@ function build(history: Turn[], overrides?: Partial<ContextFlags>): ModelMessage
       memory: { player: { is: 'A drifter with a debt.' } },
       ooc: ['Keep replies short.'],
     },
-    stateCleanupThreshold: 4000,
     includePriorPlayerTurns: true,
-    flags: {
-      includeWorldState: true,
-      includePlotOutline: true,
-      includeMemory: true,
-      includeOoc: true,
-      ...overrides,
-    },
+    flags: { ...ALL_FLAGS, ...overrides },
     nsfw: false,
   })
+}
+
+// The conversational spine: user inputs and narration prose, ignoring the
+// system prefix and the seeded tool exchange.
+function storyRoles(messages: ModelMessage[]): string[] {
+  return messages
+    .filter((m) => m.role === 'user' || (m.role === 'assistant' && !m.toolCalls?.length))
+    .map((m) => m.role)
 }
 
 describe('buildModelMessages layout', () => {
@@ -150,6 +161,52 @@ describe('buildModelMessages layout', () => {
     expect(second.slice(0, shared.length)).toEqual(shared)
   })
 
+  it('keeps bootstrap and Continue directives once their turn completes', () => {
+    const bootstrap: Turn = {
+      id: 'b',
+      kind: 'bootstrap',
+      input: '(OOC: Begin a new adventure.)',
+      reply: { id: 'b-reply', model: 'test', text: 'You arrive at the mill.' },
+    }
+    const cont: Turn = {
+      id: 'c',
+      kind: 'continue',
+      input: '(OOC: The player is skipping their turn.)',
+      reply: { id: 'c-reply', model: 'test', text: 'The wind picks up.' },
+    }
+    const opening = build([bootstrap])
+    const later = build([bootstrap, cont, playerTurn('t3', 'I look around.')])
+    // Roles alternate — no narration ever follows narration directly.
+    expect(storyRoles(later)).toEqual(['user', 'assistant', 'user', 'assistant', 'user'])
+    expect(later.some((m) => m.content === '(OOC: Begin a new adventure.)')).toBe(true)
+    // And the opening request's bytes are still a prefix of the later one:
+    // nothing that was sent is later removed.
+    const shared = opening.slice(0, -5)
+    expect(later.slice(0, shared.length)).toEqual(shared)
+  })
+
+  it('skips failed turns entirely — neither the unanswered input nor the notice', () => {
+    const failed: Turn = {
+      id: 'f',
+      kind: 'player',
+      input: 'I shout.',
+      reply: {
+        id: 'f-reply',
+        model: 'test',
+        text: '(The dungeon master falters: boom)',
+        error: 'boom',
+      },
+    }
+    const messages = build([
+      playerTurn('t1', 'I knock.', 'No answer.'),
+      failed,
+      playerTurn('t3', 'I wait.'),
+    ])
+    expect(messages.some((m) => m.content.includes('falters'))).toBe(false)
+    expect(messages.some((m) => m.content === 'I shout.')).toBe(false)
+    expect(storyRoles(messages)).toEqual(['user', 'assistant', 'user'])
+  })
+
   it('produces no injection when all subsystems are disabled', () => {
     const messages = build([playerTurn('t1', 'Hello?')], {
       includeWorldState: false,
@@ -164,15 +221,9 @@ describe('buildModelMessages layout', () => {
 
 describe('buildContextInjectionMessages', () => {
   it('uses stable ids so identical data produces identical bytes', () => {
-    const allFlags = {
-      includeWorldState: true,
-      includePlotOutline: true,
-      includeMemory: true,
-      includeOoc: true,
-    }
     const emptyData = { state: {}, plot: [], memory: {}, ooc: [] }
-    const a = buildContextInjectionMessages(emptyData, 4000, allFlags)
-    const b = buildContextInjectionMessages({ ...emptyData }, 4000, allFlags)
+    const a = buildContextInjectionMessages(emptyData, ALL_FLAGS)
+    const b = buildContextInjectionMessages({ ...emptyData }, ALL_FLAGS)
     expect(a).toEqual(b)
     expect(a[0].toolCalls?.map((c) => c.id)).toEqual([
       'ctx-check-memory',
@@ -181,12 +232,28 @@ describe('buildContextInjectionMessages', () => {
       'ctx-check-ooc',
     ])
   })
+
+  it('serves payloads as pure data — the bookkeeping guidance rides in the pivot', () => {
+    expect(buildStatePayload({ a: 1 })).not.toMatch(/update_state|STATUS|Plotter/)
+    expect(buildMemoryPayload({})).toBe('(no memory yet)')
+    const emptyData = { state: {}, plot: [], memory: {}, ooc: [] }
+    for (const m of buildContextInjectionMessages(emptyData, ALL_FLAGS)) {
+      expect(m.content).not.toMatch(/update_|Plotter/)
+    }
+    const guidance = buildPlotterGuidance(emptyData, 4000, ALL_FLAGS)
+    expect(guidance).toContain('`update_memory`')
+    expect(guidance).toContain('`update_state`')
+    expect(guidance).toContain('`update_ooc`')
+    expect(buildPlotterGuidance(emptyData, 4000, { ...ALL_FLAGS, includeMemory: false })).not.toContain(
+      'update_memory',
+    )
+  })
 })
 
-describe('buildStatePayload', () => {
+describe('buildStateGuidance', () => {
   it('flags oversized state against the cleanup threshold', () => {
     const big = { notes: 'x'.repeat(100) }
-    expect(buildStatePayload(big, 50)).toContain('OVER the 50 cleanup threshold')
-    expect(buildStatePayload(big, 5000)).toContain('within budget')
+    expect(buildStateGuidance(big, 50)).toContain('OVER the 50 cleanup threshold')
+    expect(buildStateGuidance(big, 5000)).toContain('within budget')
   })
 })

@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  MAX_NARRATOR_ITERATIONS,
   MAX_PLOTTER_ITERATIONS,
   buildPlotterInstruction,
   runNarrator,
   type NarratorContext,
 } from './narrator'
 import { completeModel } from '../model/client'
-import type { ModelCompletion } from '../model/types'
+import type { ModelCompletion, ModelMessage } from '../model/types'
 
 vi.mock('../model/client', () => ({ completeModel: vi.fn() }))
 const mockedModel = vi.mocked(completeModel)
@@ -183,12 +184,16 @@ describe('runNarrator two-phase flow', () => {
   })
 
   it('builds a pivot that names only the enabled subsystems', () => {
-    const memoryOnly = buildPlotterInstruction({
-      includeWorldState: false,
-      includePlotOutline: false,
-      includeMemory: true,
-      includeOoc: false,
-    })
+    const memoryOnly = buildPlotterInstruction(
+      {
+        includeWorldState: false,
+        includePlotOutline: false,
+        includeMemory: true,
+        includeOoc: false,
+      },
+      CTX.initialData,
+      4000,
+    )
     expect(memoryOnly).toContain('check_memory')
     expect(memoryOnly).toContain('`update_memory`')
     expect(memoryOnly).not.toContain('check_state')
@@ -198,16 +203,88 @@ describe('runNarrator two-phase flow', () => {
     // A single subsystem needs no distinction clause.
     expect(memoryOnly).not.toContain('Keep the subsystems distinct')
 
-    const all = buildPlotterInstruction({
-      includeWorldState: true,
-      includePlotOutline: true,
-      includeMemory: true,
-      includeOoc: true,
-    })
+    const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
     expect(all).toContain('check_state')
     expect(all).toContain('`update_state`')
     expect(all).toContain('`update_ooc`')
     expect(all).toContain('Keep the subsystems distinct')
+    // The per-subsystem guidance and size status ride in the pivot.
+    expect(all).toContain('STATUS: state size')
+    expect(all).toContain('Memory: ')
+  })
+
+  it('keeps every request of the turn an extension of the previous one', async () => {
+    const snapshots: ModelMessage[][] = []
+    mockedModel.mockImplementation(async (req) => {
+      snapshots.push(req.messages.map((m) => ({ ...m })))
+      if (snapshots.length === 1) {
+        // A stray narrator-phase read: the loop must append, not rebuild.
+        return completion({ toolCalls: [{ id: 'r0', name: 'check_state', arguments: '{}' }] })
+      }
+      if (snapshots.length === 2) return completion({ text: 'Prose.' })
+      return completion({ text: 'DONE' })
+    })
+
+    await runNarrator(CTX, new AbortController().signal)
+
+    expect(snapshots).toHaveLength(3)
+    for (let i = 1; i < snapshots.length; i++) {
+      expect(snapshots[i].slice(0, snapshots[i - 1].length)).toEqual(snapshots[i - 1])
+    }
+    // The turn reminder is appended once, ahead of any tool exchange, and is
+    // still present (never removed) when the plotter request goes out.
+    const reminders = snapshots[2].filter(
+      (m) => m.role === 'system' && m.content.startsWith('# Turn reminder'),
+    )
+    expect(reminders).toHaveLength(1)
+    const reminderIdx = snapshots[2].findIndex((m) => m.content.startsWith('# Turn reminder'))
+    const strayIdx = snapshots[2].findIndex((m) => m.toolCalls?.some((c) => c.id === 'r0'))
+    expect(reminderIdx).toBeLessThan(strayIdx)
+  })
+
+  it('keeps the tool schemas on the final narrative attempt and forbids calls instead', async () => {
+    let n = 0
+    mockedModel.mockImplementation(async () => {
+      n++
+      return n < MAX_NARRATOR_ITERATIONS
+        ? completion({ toolCalls: [{ id: `s${n}`, name: 'check_state', arguments: '{}' }] })
+        : completion({ text: 'Prose at last.' })
+    })
+
+    const result = await runNarrator(CTX, new AbortController().signal)
+
+    expect(result.text).toBe('Prose at last.')
+    const requests = mockedModel.mock.calls.map(([req]) => req)
+    const last = requests[MAX_NARRATOR_ITERATIONS - 1]
+    expect(last.tools).toEqual(requests[0].tools)
+    expect(last.toolChoice).toBe('none')
+    expect(requests.slice(0, MAX_NARRATOR_ITERATIONS - 1).every((r) => r.toolChoice === undefined)).toBe(
+      true,
+    )
+  })
+
+  it('records the provider’s prompt and cached token counts per request', async () => {
+    mockedModel.mockResolvedValueOnce(
+      completion({ text: 'Prose.', promptTokens: 1000, cachedTokens: 900 }),
+    )
+    mockedModel.mockResolvedValueOnce(
+      completion({ text: 'DONE', promptTokens: 1200, cachedTokens: 1100 }),
+    )
+
+    const result = await runNarrator(CTX, new AbortController().signal)
+
+    expect(result.trace).toContainEqual({
+      kind: 'usage',
+      label: 'narrator:0',
+      promptTokens: 1000,
+      cachedTokens: 900,
+    })
+    expect(result.plotterTrace).toContainEqual({
+      kind: 'usage',
+      label: 'plotter:0',
+      promptTokens: 1200,
+      cachedTokens: 1100,
+    })
   })
 
   it('skips the plotter phase when no subsystems are enabled', async () => {

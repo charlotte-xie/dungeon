@@ -7,21 +7,32 @@
 //      narration against the injected state/memory/plan and recording every
 //      material change via the update tools, looping until it makes no calls.
 //
-// Both phases advertise the identical tool set and extend the same message
-// list append-only, so the plotter request is a near-total provider cache hit
-// on the narrator's prefix, and updates reflect what was actually narrated
-// rather than what the model intended to write. Provider transport and
-// response-format quirks live under ../model.
+// One message list, append-only, for the whole turn: the turn reminder is
+// appended once up front, each narrator iteration adds its tool exchange or
+// nudge after it, and the plotter adds the prose and pivot after that. Both
+// phases advertise the identical tool set — the final narrative attempt
+// forbids calls via tool_choice rather than dropping the schemas, which are
+// part of the provider's cached prefix. So every request of the turn is a
+// byte-for-byte extension of the previous one: the plotter request is a
+// near-total prefix-cache hit on the narrator's, and updates reflect what was
+// actually narrated rather than what the model intended to write. Provider
+// transport and response-format quirks live under ../model.
 
 import {
   CONTEXT_SUBSYSTEMS,
   applyTurnReminder,
   buildModelMessages,
+  buildPlotterGuidance,
   type ContextFlags,
 } from '../request'
 import { executeEnabledTool } from '../tools'
 import { completeModel } from '../model/client'
-import type { ApiProtocol, ModelToolCall, ModelToolDefinition } from '../model/types'
+import type {
+  ApiProtocol,
+  ModelCompletion,
+  ModelToolCall,
+  ModelToolDefinition,
+} from '../model/types'
 import type {
   AdventureSlots,
   Chronicle,
@@ -67,20 +78,28 @@ const FINAL_NARRATIVE_INSTRUCTION =
 
 // The plotter pivot names only the subsystems that are actually enabled —
 // a static text would point the model at injections that don't exist and
-// tools that aren't advertised whenever a subsystem is switched off.
-export function buildPlotterInstruction(flags: ContextFlags): string {
+// tools that aren't advertised whenever a subsystem is switched off. It also
+// carries each enabled subsystem's bookkeeping guidance and size-pressure
+// hints, computed from the data as it stands at the pivot.
+export function buildPlotterInstruction(
+  flags: ContextFlags,
+  data: StoryData,
+  stateCleanupThreshold: number,
+): string {
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
   const reads = enabled.map((s) => s.checkTool.name)
   const updates = enabled.map((s) => `\`${s.updateTool.name}\``)
   const distinctions = enabled.map((s) => s.pivotDistinction)
   const distinctLine =
     distinctions.length > 1 ? ` Keep the subsystems distinct: ${distinctions.join('; ')}.` : ''
+  const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
     'The narration for this turn is complete. You are now acting as the Plotter: ' +
     `compare the player’s input and the narration above against the current working data (see the ${reads.join(' / ')} results). ` +
     `Record every material change by calling ${updates.join(', ')}, following each subsystem’s rules — batch every needed call into this single response.` +
     distinctLine +
-    ' If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.'
+    ' If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.' +
+    (guidance ? `\n\n${guidance}` : '')
   )
 }
 
@@ -111,20 +130,29 @@ export async function runNarrator(
 ): Promise<NarratorResult> {
   let data = ctx.initialData
   // The context (memory/plot/state) is injected as a seeded tool exchange at
-  // the tail of these messages. From here on the conversation is append-only —
-  // never rewritten mid-turn — so every loop iteration extends the provider's
-  // cached prefix instead of invalidating it.
-  const messages = buildModelMessages({
-    systemPrompt: ctx.systemPrompt,
-    slots: ctx.slots,
-    chronicle: ctx.chronicle,
-    history: ctx.history,
-    data,
-    stateCleanupThreshold: ctx.stateCleanupThreshold,
-    includePriorPlayerTurns: ctx.includePriorPlayerTurns,
-    flags: ctx.flags,
-    nsfw: ctx.nsfw,
-  })
+  // the tail of the built messages, and the turn reminder is appended once
+  // right after it. From here on the conversation is append-only — never
+  // rewritten mid-turn — so every request of this turn extends the previous
+  // one and the provider's cached prefix keeps growing instead of resetting.
+  const messages = applyTurnReminder(
+    buildModelMessages({
+      systemPrompt: ctx.systemPrompt,
+      slots: ctx.slots,
+      chronicle: ctx.chronicle,
+      history: ctx.history,
+      data,
+      includePriorPlayerTurns: ctx.includePriorPlayerTurns,
+      flags: ctx.flags,
+      nsfw: ctx.nsfw,
+    }),
+    ctx.reminderAsSystem,
+    {
+      worldState: ctx.flags.includeWorldState,
+      plotOutline: ctx.flags.includePlotOutline,
+      memory: ctx.flags.includeMemory,
+      ooc: ctx.flags.includeOoc,
+    },
+  )
   const tools: ModelToolDefinition[] = []
   const enabledToolNames = new Set<string>()
   for (const s of CONTEXT_SUBSYSTEMS) {
@@ -163,6 +191,27 @@ export async function runNarrator(
       text: `(nudge → ${message.role}) ${message.content}`,
     })
   }
+  // Shared by both phases: file a completion's prompt usage (the provider's
+  // own cached-token count is the evidence that prefix caching is working),
+  // reasoning, and protocol anomalies into the active trace.
+  const recordCompletion = (label: string, completion: ModelCompletion) => {
+    if (completion.promptTokens !== undefined || completion.cachedTokens !== undefined) {
+      trace.push({
+        kind: 'usage',
+        label,
+        promptTokens: completion.promptTokens,
+        cachedTokens: completion.cachedTokens,
+      })
+    }
+    for (const reasoning of completion.reasoning) {
+      trace.push({ kind: 'reasoning', text: reasoning })
+    }
+    for (const anomaly of completion.anomalies) {
+      trace.push({ kind: 'thought', text: `(model protocol: ${anomaly.detail})` })
+    }
+    const iterReasoningTokens = completion.reasoningTokens ?? 0
+    if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
+  }
 
   // Shared by both phases: append the model's tool-call turn and execute each
   // call, serving context reads from the live data and mutations through the
@@ -181,7 +230,7 @@ export async function runNarrator(
       const readSubsystem = CONTEXT_SUBSYSTEMS.find((s) => s.checkTool.name === call.name)
       if (readSubsystem && enabledToolNames.has(call.name)) {
         sawRead = true
-        pushToolResult(call, readSubsystem.buildPayload(data, ctx.stateCleanupThreshold))
+        pushToolResult(call, readSubsystem.buildPayload(data))
         continue
       }
       const exec = executeEnabledTool(enabledToolNames, call.name, call.arguments, data)
@@ -197,48 +246,30 @@ export async function runNarrator(
   let nudged = false
   for (let iter = 0; iter < MAX_NARRATOR_ITERATIONS; iter++) {
     const finalNarrativeAttempt = iter === MAX_NARRATOR_ITERATIONS - 1
-    const reminded = applyTurnReminder(messages, ctx.reminderAsSystem, {
-      worldState: !finalNarrativeAttempt && ctx.flags.includeWorldState,
-      plotOutline: !finalNarrativeAttempt && ctx.flags.includePlotOutline,
-      memory: !finalNarrativeAttempt && ctx.flags.includeMemory,
-      ooc: !finalNarrativeAttempt && ctx.flags.includeOoc,
-    })
-    if (finalNarrativeAttempt) {
-      const message = ctx.reminderAsSystem
-        ? { role: 'system' as const, content: FINAL_NARRATIVE_INSTRUCTION }
-        : { role: 'user' as const, content: `(OOC: ${FINAL_NARRATIVE_INSTRUCTION})` }
-      reminded.push(message)
-      trace.push({
-        kind: 'thought',
-        text: `(nudge → ${message.role}) ${message.content}`,
-      })
-    }
+    if (finalNarrativeAttempt) pushNudge(FINAL_NARRATIVE_INSTRUCTION)
     if (iter === 0) {
       console.debug('[dm] narrator iter 0 — memory/plot/state slices injected as tool results', {
         initialData: ctx.initialData,
       })
     }
+    const label = `narrator:${iter}`
     const completion = await completeModel(
       {
         model: ctx.model,
-        messages: reminded,
-        tools: finalNarrativeAttempt ? undefined : tools,
+        messages,
+        tools,
+        // The last attempt forbids tool use without dropping the schemas,
+        // which sit in the provider's cached prefix.
+        toolChoice: finalNarrativeAttempt ? 'none' : undefined,
         temperature: ctx.sampling.temperature,
-        label: `narrator:${iter}`,
+        label,
       },
       { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
       signal,
     )
-    for (const reasoning of completion.reasoning) {
-      trace.push({ kind: 'reasoning', text: reasoning })
-    }
-    for (const anomaly of completion.anomalies) {
-      trace.push({ kind: 'thought', text: `(model protocol: ${anomaly.detail})` })
-    }
-    const iterReasoningTokens = completion.reasoningTokens ?? 0
-    if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
+    recordCompletion(label, completion)
 
-    if (completion.toolCalls.length) {
+    if (completion.toolCalls.length && !(finalNarrativeAttempt && completion.text)) {
       // The narrator is instructed not to call tools; execute defensively and
       // continue toward prose. The plotter phase cleans up after regardless.
       const interstitial = completion.text
@@ -249,6 +280,13 @@ export async function runNarrator(
 
     const content = completion.text
     if (content) {
+      if (completion.toolCalls.length) {
+        // Final attempt: the prose is what matters; stray calls are dropped.
+        trace.push({
+          kind: 'thought',
+          text: `(final attempt: ${completion.toolCalls.length} stray tool call(s) ignored)`,
+        })
+      }
       proseText = content
       break
     }
@@ -283,7 +321,7 @@ export async function runNarrator(
   // are kept, and the rest of the state simply carries forward.
   if (tools.length) {
     messages.push({ role: 'assistant', content: proseText })
-    const plotterInstruction = buildPlotterInstruction(ctx.flags)
+    const plotterInstruction = buildPlotterInstruction(ctx.flags, data, ctx.stateCleanupThreshold)
     const pivot = ctx.reminderAsSystem
       ? { role: 'system' as const, content: plotterInstruction }
       : { role: 'user' as const, content: `(OOC: ${plotterInstruction})` }
@@ -291,25 +329,19 @@ export async function runNarrator(
     trace = plotterTrace
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
+        const label = `plotter:${iter}`
         const completion = await completeModel(
           {
             model: ctx.model,
             messages,
             tools,
             temperature: ctx.sampling.temperature,
-            label: `plotter:${iter}`,
+            label,
           },
           { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
           signal,
         )
-        for (const reasoning of completion.reasoning) {
-          trace.push({ kind: 'reasoning', text: reasoning })
-        }
-        for (const anomaly of completion.anomalies) {
-          trace.push({ kind: 'thought', text: `(model protocol: ${anomaly.detail})` })
-        }
-        const iterReasoningTokens = completion.reasoningTokens ?? 0
-        if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
+        recordCompletion(label, completion)
         if (completion.text && completion.text.trim().toUpperCase() !== 'DONE') {
           trace.push({ kind: 'thought', text: completion.text })
         }

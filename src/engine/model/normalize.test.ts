@@ -206,3 +206,52 @@ describe('Responses API normalization', () => {
     expect(result.finishReason).toBe('max_output_tokens')
   })
 })
+
+describe('prompt usage', () => {
+  it('surfaces prompt and cached token counts from Chat Completions', () => {
+    const result = normalizeOpenAIChatCompletion(
+      {
+        choices: [{ finish_reason: 'stop', message: { content: 'Hi.' } }],
+        usage: { prompt_tokens: 4000, prompt_tokens_details: { cached_tokens: 3840 } },
+      },
+      allowed,
+    )
+    expect(result.promptTokens).toBe(4000)
+    expect(result.cachedTokens).toBe(3840)
+  })
+
+  it('distinguishes a reported cache miss from an unreported count', () => {
+    const miss = normalizeOpenAIChatCompletion(
+      {
+        choices: [{ finish_reason: 'stop', message: { content: 'Hi.' } }],
+        usage: { prompt_tokens: 900, prompt_tokens_details: { cached_tokens: 0 } },
+      },
+      allowed,
+    )
+    expect(miss.promptTokens).toBe(900)
+    expect(miss.cachedTokens).toBe(0)
+
+    const silent = normalizeOpenAIChatCompletion(response({ content: 'Hi.' }), allowed)
+    expect(silent.promptTokens).toBeUndefined()
+    expect(silent.cachedTokens).toBeUndefined()
+  })
+
+  it('surfaces prompt and cached token counts from the Responses API', () => {
+    const result = normalizeResponsesApiResponse(
+      {
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Hi.' }],
+          },
+        ],
+        usage: { input_tokens: 5000, input_tokens_details: { cached_tokens: 4096 } },
+      },
+      allowed,
+    )
+    expect(result.promptTokens).toBe(5000)
+    expect(result.cachedTokens).toBe(4096)
+  })
+})

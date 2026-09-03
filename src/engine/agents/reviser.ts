@@ -74,6 +74,14 @@ export async function runReviser(
     { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
     signal,
   )
+  if (completion.promptTokens !== undefined || completion.cachedTokens !== undefined) {
+    trace.push({
+      kind: 'usage',
+      label: 'reviser',
+      promptTokens: completion.promptTokens,
+      cachedTokens: completion.cachedTokens,
+    })
+  }
   for (const reasoning of completion.reasoning) {
     trace.push({ kind: 'reasoning', text: reasoning })
   }

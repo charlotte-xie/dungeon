@@ -41,7 +41,7 @@ Keep named entities in plain form ("Jack", "the Vault", "the iron seal"). Do NOT
 
 # Length
 
-Use at most {{targetChars}} characters where possible. This is a ceiling, not a target. HARD MAXIMUM: {{maxChars}}. Prefer a substantially shorter entry when the inputs contain little lasting change.
+The character budget for this entry is given with the inputs. Use at most that many characters where possible. This is a ceiling, not a target, and the hard maximum given there is absolute. Prefer a substantially shorter entry when the inputs contain little lasting change.
 
 # Output
 

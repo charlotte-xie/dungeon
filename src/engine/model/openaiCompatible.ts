@@ -154,7 +154,10 @@ async function completeOpenAICompatibleChatWithinTimeout(
     messages: request.messages.map(toWireMessage),
     stream: false,
   }
-  if (request.tools?.length) body.tools = request.tools.map(toWireTool)
+  if (request.tools?.length) {
+    body.tools = request.tools.map(toWireTool)
+    if (request.toolChoice) body.tool_choice = request.toolChoice
+  }
   const capabilityKey = `${baseUrl}\u0000${request.model}`
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature
@@ -272,7 +275,10 @@ async function completeResponsesWithinTimeout(
     // Stateless by design: never rely on (or pay for) server-side storage.
     store: false,
   }
-  if (request.tools?.length) body.tools = request.tools.map(toResponsesTool)
+  if (request.tools?.length) {
+    body.tools = request.tools.map(toResponsesTool)
+    if (request.toolChoice) body.tool_choice = request.toolChoice
+  }
   const capabilityKey = `${baseUrl}\u0000${request.model}`
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature

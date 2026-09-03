@@ -17,6 +17,27 @@ function makeRecoveredCallId(): string {
   return `recovered-${crypto.randomUUID()}`
 }
 
+function countOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+// Prompt-side usage: total prompt tokens and how many the provider served
+// from its prefix cache. Chat Completions reports prompt_tokens /
+// prompt_tokens_details.cached_tokens; the Responses API reports
+// input_tokens / input_tokens_details.cached_tokens.
+function promptUsage(
+  usage: Record<string, unknown> | undefined,
+  totalKey: 'prompt_tokens' | 'input_tokens',
+  detailsKey: 'prompt_tokens_details' | 'input_tokens_details',
+): { promptTokens?: number; cachedTokens?: number } {
+  if (!usage) return {}
+  const details = isRecord(usage[detailsKey]) ? usage[detailsKey] : undefined
+  return {
+    promptTokens: countOrUndefined(usage[totalKey]),
+    cachedTokens: countOrUndefined(details?.cached_tokens),
+  }
+}
+
 function contentToText(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
@@ -306,6 +327,7 @@ export function normalizeResponsesApiResponse(
     ? usage.output_tokens_details
     : undefined
   const reasoningTokens = details?.reasoning_tokens
+  const prompt = promptUsage(usage, 'input_tokens', 'input_tokens_details')
   const incompleteReason =
     isRecord(raw.incomplete_details) && typeof raw.incomplete_details.reason === 'string'
       ? raw.incomplete_details.reason
@@ -319,6 +341,7 @@ export function normalizeResponsesApiResponse(
       incompleteReason ?? (typeof raw.status === 'string' ? raw.status : undefined),
     reasoningTokens:
       typeof reasoningTokens === 'number' && reasoningTokens > 0 ? reasoningTokens : undefined,
+    ...prompt,
     anomalies,
     raw,
   }
@@ -360,6 +383,7 @@ export function normalizeOpenAIChatCompletion(
     ? usage.completion_tokens_details
     : undefined
   const reasoningTokens = details?.reasoning_tokens
+  const prompt = promptUsage(usage, 'prompt_tokens', 'prompt_tokens_details')
 
   return {
     text: content,
@@ -368,6 +392,7 @@ export function normalizeOpenAIChatCompletion(
     finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : undefined,
     reasoningTokens:
       typeof reasoningTokens === 'number' && reasoningTokens > 0 ? reasoningTokens : undefined,
+    ...prompt,
     anomalies,
     raw,
   }

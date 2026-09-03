@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONTEXT } from './config'
-import { isSavedGameLike, loadStoredContext, normalizeSavedGame } from './persistence'
+import { isSavedGameLike, isTurnLike, loadStoredContext, normalizeSavedGame } from './persistence'
 
 function validSave() {
   return {
@@ -147,4 +147,23 @@ describe('legacy data tolerance', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('turn validation', () => {
+  it('accepts usage trace events and failed-reply markers', () => {
+    expect(
+      isTurnLike({
+        id: 't',
+        kind: 'player',
+        input: 'x',
+        reply: {
+          id: 'r',
+          model: 'm',
+          text: '(The dungeon master falters: boom)',
+          error: 'boom',
+          trace: [{ kind: 'usage', label: 'narrator:0', promptTokens: 10, cachedTokens: 5 }],
+        },
+      }),
+    ).toBe(true)
+  })
 })

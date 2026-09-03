@@ -427,6 +427,7 @@ export function useGameController(settings: GameSettings) {
                 reply: {
                   ...t.reply,
                   text: failureText,
+                  error: err instanceof Error ? err.message : String(err),
                   trace: failureTrace,
                   reasoningTokens: failureReasoningTokens,
                 },

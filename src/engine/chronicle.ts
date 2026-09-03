@@ -66,6 +66,8 @@ export interface CompactionResult {
 }
 
 function renderTurnForSummary(t: Turn): string {
+  // A failed turn produced no narration — there is nothing to fold.
+  if (t.reply.error) return ''
   const lines: string[] = []
   if (t.input && t.kind === 'player') lines.push(`PLAYER: ${t.input}`)
   if (t.reply.text) lines.push(`DM: ${t.reply.text}`)
@@ -109,8 +111,10 @@ export async function compactCascade(
         batches.push(turns.slice(c, Math.min(c + M, targetCutoff)))
       }
       const summaries = await Promise.all(
-        batches.map((batch) => {
+        batches.map(async (batch) => {
           const inputs = batch.map(renderTurnForSummary).filter(Boolean)
+          // A sub-batch of nothing but failed turns has no story to record.
+          if (!inputs.length) return null
           return runSummarizer(
             {
               model: agent.model,
@@ -125,14 +129,20 @@ export async function compactCascade(
           )
         }),
       )
-      const entries: ChronicleEntry[] = summaries.map((result, i) => ({
-        id: crypto.randomUUID(),
-        text: result.summary,
-        turnsCovered: batches[i].length,
-        createdAt: Date.now(),
-      }))
-      if (nextChronicle.length === 0) nextChronicle.push([])
-      nextChronicle[0] = [...nextChronicle[0], ...entries]
+      const entries: ChronicleEntry[] = []
+      summaries.forEach((result, i) => {
+        if (!result) return
+        entries.push({
+          id: crypto.randomUUID(),
+          text: result.summary,
+          turnsCovered: batches[i].length,
+          createdAt: Date.now(),
+        })
+      })
+      if (entries.length) {
+        if (nextChronicle.length === 0) nextChronicle.push([])
+        nextChronicle[0] = [...nextChronicle[0], ...entries]
+      }
       nextCutoff = targetCutoff
       continue
     }

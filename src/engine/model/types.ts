@@ -38,6 +38,9 @@ export interface ModelCompletionRequest {
   model: string
   messages: ModelMessage[]
   tools?: ModelToolDefinition[]
+  // 'none' keeps the tool schemas in the request (they are part of the
+  // provider's cached prefix) while forbidding calls for this completion.
+  toolChoice?: 'auto' | 'none'
   temperature?: number
   label?: string
 }
@@ -59,6 +62,12 @@ export interface ModelCompletion {
   toolCalls: ModelToolCall[]
   finishReason?: string
   reasoningTokens?: number
+  // Prompt-side usage when the provider reports it. cachedTokens is the
+  // provider's own count of prompt tokens served from its prefix cache — the
+  // observable proof that the append-only request layout is paying off.
+  // Undefined means the provider did not report it; 0 means a full miss.
+  promptTokens?: number
+  cachedTokens?: number
   anomalies: ProtocolAnomaly[]
   raw: unknown
 }

@@ -8,6 +8,10 @@ export type TraceEvent =
   | { kind: 'thought'; text: string }
   | { kind: 'reasoning'; text: string }
   | { kind: 'call'; name: string; arguments: string; result: string }
+  // One per model request: the provider's prompt-token usage, including how
+  // many prompt tokens it served from its prefix cache. Lets the trace pane
+  // show whether the append-only request layout is actually being reused.
+  | { kind: 'usage'; label: string; promptTokens?: number; cachedTokens?: number }
 
 export type TurnKind = 'bootstrap' | 'player' | 'continue'
 
@@ -18,6 +22,10 @@ export interface ModelCall {
   trace?: TraceEvent[]
   reasoningTokens?: number
   durationMs?: number
+  // Set when the call failed and `text` holds the player-facing failure
+  // notice rather than narration. A failed turn stays in the log but is
+  // never replayed to the model or folded into the chronicle.
+  error?: string
 }
 
 export interface Turn {

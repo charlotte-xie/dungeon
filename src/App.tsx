@@ -284,7 +284,6 @@ function App() {
                   memory: game.memory,
                   ooc: game.ooc,
                 },
-                stateCleanupThreshold: context.stateCleanupChars,
                 includePriorPlayerTurns: context.includePriorPlayerTurns,
                 flags: context,
                 nsfw: context.nsfw,

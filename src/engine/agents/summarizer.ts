@@ -6,7 +6,7 @@
 // The chronicle module decides what to summarize and at what target length;
 // the agent just renders the inputs and calls the model.
 
-import { buildSummarizerPrompt } from '../../prompts'
+import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerLengthNote } from '../../prompts'
 import { completeModel } from '../model/client'
 import type { ApiProtocol, ModelMessage } from '../model/types'
 import type { Memory } from '../types'
@@ -93,6 +93,7 @@ export async function runSummarizer(
     `--- BEGIN INPUTS (${input.inputs.length} ${input.inputs.length === 1 ? 'entry' : 'entries'} to fold into one summary) ---\n\n` +
     `${joined}\n\n` +
     `--- END INPUTS ---\n\n` +
+    `${buildSummarizerLengthNote(input.targetChars)}\n\n` +
     `Produce one compact continuity record containing only consequential changes established ` +
     `by the inputs above. Use complete sentences and decrease resolution as material recedes ` +
     `into the past. The inputs are RAW MATERIAL — do not echo their formatting, headers, ` +
@@ -100,7 +101,7 @@ export async function runSummarizer(
     `preamble, headers, bullet markers, or meta commentary.`
 
   const messages: ModelMessage[] = [
-    { role: 'system', content: buildSummarizerPrompt(input.targetChars) },
+    { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },
     { role: 'user', content: userContent },
   ]
 

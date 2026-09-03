@@ -62,12 +62,14 @@ export function buildOocRules(maxOocItems: number, maxOocItemChars: number): str
   return fill(oocRulesTemplate, { maxOocItems, maxOocItemChars }).trim()
 }
 
-export function buildSummarizerPrompt(targetChars: number): string {
+export const SUMMARIZER_SYSTEM_PROMPT = summarizerTemplate.trim()
+
+// The length budget rides with the inputs rather than in the system prompt,
+// so every summarizer call — including the parallel folds of one drain
+// event — shares one byte-identical system prefix.
+export function buildSummarizerLengthNote(targetChars: number): string {
   const maxChars = Math.ceil(targetChars * 1.5)
-  return fill(summarizerTemplate, {
-    targetChars: targetChars.toLocaleString(),
-    maxChars: maxChars.toLocaleString(),
-  }).trim()
+  return `Length budget: use at most ${targetChars.toLocaleString()} characters where possible. HARD MAXIMUM: ${maxChars.toLocaleString()}.`
 }
 
 export function buildNewAdventureBootstrap(): string {

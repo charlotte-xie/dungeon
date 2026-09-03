@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildNewAdventureBootstrap,
   buildPlotRules,
-  buildSummarizerPrompt,
+  buildSummarizerLengthNote,
   buildTurnReminder,
   DEFAULT_SYSTEM_PROMPT,
+  SUMMARIZER_SYSTEM_PROMPT,
 } from './prompts'
 
 describe('capability-aware prompts', () => {
@@ -56,8 +57,16 @@ describe('capability-aware prompts', () => {
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {
-    const prompt = buildSummarizerPrompt(500)
-    expect(prompt).toContain('This is a ceiling, not a target')
-    expect(prompt).toContain('Details whose removal would not affect a later consequence')
+    expect(SUMMARIZER_SYSTEM_PROMPT).toContain('This is a ceiling, not a target')
+    expect(SUMMARIZER_SYSTEM_PROMPT).toContain(
+      'Details whose removal would not affect a later consequence',
+    )
+  })
+
+  it('keeps the summarizer system prompt byte-stable — the budget rides with the inputs', () => {
+    expect(SUMMARIZER_SYSTEM_PROMPT).not.toContain('{{')
+    const note = buildSummarizerLengthNote(500)
+    expect(note).toContain('500')
+    expect(note).toContain('750')
   })
 })

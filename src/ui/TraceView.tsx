@@ -92,6 +92,19 @@ function formatToolArgs(raw: string): string {
   }
 }
 
+type UsageEvent = Extract<TraceEvent, { kind: 'usage' }>
+
+// Prompt tokens across every request in the call, and how many of them the
+// provider served from its prefix cache. Null when nothing was reported.
+function promptCacheTotals(trace: TraceEvent[]): { prompt: number; cached: number } | null {
+  const usage = trace.filter((e): e is UsageEvent => e.kind === 'usage')
+  if (!usage.some((e) => e.promptTokens !== undefined)) return null
+  return {
+    prompt: usage.reduce((n, e) => n + (e.promptTokens ?? 0), 0),
+    cached: usage.reduce((n, e) => n + (e.cachedTokens ?? 0), 0),
+  }
+}
+
 function summarizeCall(view: ModelCallView): string {
   const trace = view.call.trace ?? []
   const calls = trace.filter((e) => e.kind === 'call').length
@@ -102,6 +115,12 @@ function summarizeCall(view: ModelCallView): string {
   if (thoughts) parts.push(`${thoughts} note${thoughts === 1 ? '' : 's'}`)
   if (reasonings) parts.push(`${reasonings} reasoning step${reasonings === 1 ? '' : 's'}`)
   if (view.call.reasoningTokens) parts.push(`${view.call.reasoningTokens} reasoning tok`)
+  const totals = promptCacheTotals(trace)
+  if (totals) {
+    parts.push(
+      `${totals.cached.toLocaleString()}/${totals.prompt.toLocaleString()} prompt tok cached`,
+    )
+  }
   if (parts.length === 0) return view.label
   return `${view.label}: ${parts.join(' · ')}`
 }
@@ -120,6 +139,25 @@ function TraceEventView({ event }: { event: TraceEvent }) {
       <div className="trace-event trace-reasoning">
         <span className="trace-label">reasoning</span>
         <p>{event.text}</p>
+      </div>
+    )
+  }
+  if (event.kind === 'usage') {
+    const pct =
+      event.promptTokens && event.cachedTokens !== undefined
+        ? Math.round((100 * event.cachedTokens) / event.promptTokens)
+        : undefined
+    return (
+      <div className="trace-event trace-usage">
+        <span className="trace-label">usage</span>
+        <p>
+          <code>{event.label}</code>
+          {event.promptTokens !== undefined &&
+            ` · prompt ${event.promptTokens.toLocaleString()} tok`}
+          {event.cachedTokens !== undefined &&
+            ` · cached ${event.cachedTokens.toLocaleString()} tok`}
+          {pct !== undefined && ` (${pct}%)`}
+        </p>
       </div>
     )
   }
