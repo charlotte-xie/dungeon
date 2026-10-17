@@ -52,6 +52,8 @@ export interface ChronicleAgentArgs {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
+  // The adventure's prompt-cache key; see ModelConnection.
+  cacheKey?: string
   // Long-term memory at fold time — passed to the summariser as grounding
   // canon so entity names and facts stay consistent across chronicle entries.
   memory: Memory
@@ -123,6 +125,7 @@ export async function compactCascade(
               apiKey: agent.apiKey,
               baseUrl: agent.baseUrl,
               protocol: agent.protocol,
+              cacheKey: agent.cacheKey,
               memory: agent.memory,
               inputs,
               targetChars: targetForInputs(inputs, batch.length),
@@ -164,6 +167,7 @@ export async function compactCascade(
           apiKey: agent.apiKey,
           baseUrl: agent.baseUrl,
           protocol: agent.protocol,
+          cacheKey: agent.cacheKey,
           memory: agent.memory,
           inputs,
           targetChars: targetForInputs(inputs, M),

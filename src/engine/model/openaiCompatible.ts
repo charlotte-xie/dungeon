@@ -66,11 +66,12 @@ function authorizationHeaders(apiKey: string): Record<string, string> {
 }
 
 // Capabilities vary by endpoint and model, and names are not reliable signals.
-// Learn unsupported temperature and reasoning settings from a provider's
-// validation response once, then omit the field for later calls in this
-// browser session.
+// Learn unsupported temperature, reasoning and cache-key settings from a
+// provider's validation response once, then omit the field for later calls in
+// this browser session.
 const temperatureUnsupported = new Set<string>()
 const reasoningUnsupported = new Set<string>()
+const cacheKeyUnsupported = new Set<string>()
 
 export const MODEL_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
 const MODEL_LIST_TIMEOUT_MS = 30 * 1000
@@ -85,6 +86,15 @@ export function rejectsReasoning(status: number, errorBody: string): boolean {
   return status === 400 && /reasoning/i.test(errorBody) && UNSUPPORTED_WORDING.test(errorBody)
 }
 
+// Strict validators reject fields they don't know, some with a 422.
+export function rejectsCacheKey(status: number, errorBody: string): boolean {
+  return (
+    (status === 400 || status === 422) &&
+    /prompt_cache_key/i.test(errorBody) &&
+    (UNSUPPORTED_WORDING.test(errorBody) || /extra/i.test(errorBody))
+  )
+}
+
 // Dropping reasoning changes how the model behaves, so it is noted in the
 // call's trace rather than only in the console.
 const REASONING_DROPPED: ProtocolAnomaly = {
@@ -95,20 +105,21 @@ const REASONING_DROPPED: ProtocolAnomaly = {
 const REJECTABLE_FIELDS = [
   { name: 'temperature', fields: ['temperature'], rejects: rejectsTemperature, unsupported: temperatureUnsupported },
   { name: 'reasoning', fields: ['reasoning_effort', 'reasoning'], rejects: rejectsReasoning, unsupported: reasoningUnsupported },
+  { name: 'cache key', fields: ['prompt_cache_key'], rejects: rejectsCacheKey, unsupported: cacheKeyUnsupported },
 ]
 
-// Post a completion request. On a 400 that rejects an optional field still in
-// the body, remember that for this endpoint and model, drop the field, and
-// retry; each retry removes a field, so this ends after at most two.
+// Post a completion request. On a rejection of an optional field still in the
+// body, remember that for this endpoint and model, drop the field, and retry;
+// each retry removes a field, so this ends after at most three.
 async function postWithFallbacks(
   url: string,
-  apiKey: string,
+  headers: Record<string, string>,
   body: Record<string, unknown>,
   signal: AbortSignal,
   capabilityKey: string,
   label: string,
 ): Promise<Response> {
-  let response = await postCompletion(url, apiKey, body, signal)
+  let response = await postCompletion(url, headers, body, signal)
   while (!response.ok) {
     const { status, statusText } = response
     const errorBody = await response.text().catch(() => '')
@@ -121,14 +132,14 @@ async function postWithFallbacks(
     rejected.unsupported.add(capabilityKey)
     for (const field of rejected.fields) delete body[field]
     console.debug(`[model:${label}] retrying without unsupported ${rejected.name}`)
-    response = await postCompletion(url, apiKey, body, signal)
+    response = await postCompletion(url, headers, body, signal)
   }
   return response
 }
 
 async function postCompletion(
   url: string,
-  apiKey: string,
+  headers: Record<string, string>,
   body: Record<string, unknown>,
   signal: AbortSignal,
 ): Promise<Response> {
@@ -136,7 +147,7 @@ async function postCompletion(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authorizationHeaders(apiKey),
+      ...headers,
     },
     body: JSON.stringify(body),
     signal,
@@ -212,10 +223,17 @@ async function completeOpenAICompatibleChatWithinTimeout(
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature
   }
+  if (connection.cacheKey && !cacheKeyUnsupported.has(capabilityKey)) {
+    body.prompt_cache_key = connection.cacheKey
+  }
+  // xAI routes Chat Completions to its prompt cache by header rather than by
+  // the body field. Its CORS policy allows any request header.
+  const headers = authorizationHeaders(connection.apiKey)
+  if (connection.cacheKey && isXaiHost(baseUrl)) headers['x-grok-conv-id'] = connection.cacheKey
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
   const url = `${baseUrl}/chat/completions`
-  const response = await postWithFallbacks(url, connection.apiKey, body, signal, capabilityKey, label)
+  const response = await postWithFallbacks(url, headers, body, signal, capabilityKey, label)
   const raw = (await response.json()) as unknown
   console.debug(`[model:${label}] response`, { raw })
   const completion = normalizeOpenAIChatCompletion(
@@ -318,10 +336,20 @@ async function completeResponsesWithinTimeout(
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature
   }
+  if (connection.cacheKey && !cacheKeyUnsupported.has(capabilityKey)) {
+    body.prompt_cache_key = connection.cacheKey
+  }
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
   const url = `${baseUrl}/responses`
-  const response = await postWithFallbacks(url, connection.apiKey, body, signal, capabilityKey, label)
+  const response = await postWithFallbacks(
+    url,
+    authorizationHeaders(connection.apiKey),
+    body,
+    signal,
+    capabilityKey,
+    label,
+  )
   const raw = (await response.json()) as unknown
   console.debug(`[model:${label}] response`, { raw })
   const completion = normalizeResponsesApiResponse(

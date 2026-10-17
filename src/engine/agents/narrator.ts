@@ -52,6 +52,8 @@ export interface NarratorContext {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
+  // The adventure's prompt-cache key; see ModelConnection.
+  cacheKey?: string
   slots: AdventureSlots
   chronicle: Chronicle
   history: Turn[]
@@ -273,7 +275,7 @@ export async function runNarrator(
         temperature: ctx.sampling.temperature,
         label,
       },
-      { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
+      { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol, cacheKey: ctx.cacheKey },
       signal,
     )
     recordCompletion(label, completion)
@@ -350,7 +352,7 @@ export async function runNarrator(
             temperature: ctx.sampling.temperature,
             label,
           },
-          { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
+          { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol, cacheKey: ctx.cacheKey },
           signal,
         )
         recordCompletion(label, completion)

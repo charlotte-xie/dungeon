@@ -17,6 +17,8 @@ export interface SummarizerInput {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
+  // The adventure's prompt-cache key; see ModelConnection.
+  cacheKey?: string
   // Long-term memory at the time of the fold, passed as grounding canon so
   // summaries keep entity names and established facts consistent across folds
   // (without it, adjacent entries can drift — "the priest" vs. his name).
@@ -113,7 +115,7 @@ export async function runSummarizer(
       messages,
       label: 'summarizer',
     },
-    { baseUrl: input.baseUrl, apiKey: input.apiKey, protocol: input.protocol },
+    { baseUrl: input.baseUrl, apiKey: input.apiKey, protocol: input.protocol, cacheKey: input.cacheKey },
     signal,
   )
   const content = completion.text

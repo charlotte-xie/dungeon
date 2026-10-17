@@ -21,6 +21,8 @@ export interface ReviserContext {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
+  // The adventure's prompt-cache key; see ModelConnection.
+  cacheKey?: string
   slots: AdventureSlots
   draft: string
   sampling: SamplingParams
@@ -72,7 +74,7 @@ export async function runReviser(
       temperature: ctx.sampling.temperature,
       label: 'reviser',
     },
-    { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol },
+    { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol, cacheKey: ctx.cacheKey },
     signal,
   )
   if (completion.promptTokens !== undefined || completion.cachedTokens !== undefined) {

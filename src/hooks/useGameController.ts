@@ -276,6 +276,9 @@ export function useGameController(settings: GameSettings) {
     }
     const baseChronicle = world.chronicle
     const baseCutoff = world.compactCutoff
+    // The adventure's first turn names its prompt cache, so every request in
+    // one adventure is routed to the same provider cache.
+    const cacheKey = baseTurns[0]?.id ?? pendingTurn.id
     // Reassigned if compaction commits at the start of the turn, so Undo,
     // Retry and Stop restore the compacted world: the fold is never reverted
     // or paid for twice.
@@ -327,6 +330,7 @@ export function useGameController(settings: GameSettings) {
               apiKey,
               baseUrl,
               protocol: context.apiProtocol,
+              cacheKey,
               memory: memoryForCompaction(baseData.memory, context.includeMemory),
             },
             controller.signal,
@@ -374,6 +378,7 @@ export function useGameController(settings: GameSettings) {
           apiKey,
           baseUrl,
           protocol: context.apiProtocol,
+          cacheKey,
           slots: turnSlots,
           chronicle: workingChronicle,
           history: allTurns.slice(workingCutoff),
@@ -432,6 +437,7 @@ export function useGameController(settings: GameSettings) {
               apiKey,
               baseUrl,
               protocol: context.apiProtocol,
+              cacheKey,
               slots: turnSlots,
               draft: result.text,
               sampling,
@@ -637,6 +643,7 @@ export function useGameController(settings: GameSettings) {
           apiKey,
           baseUrl,
           protocol: context.apiProtocol,
+          cacheKey: turns[0]?.id,
           memory: memoryForCompaction(memory, context.includeMemory),
         },
         controller.signal,

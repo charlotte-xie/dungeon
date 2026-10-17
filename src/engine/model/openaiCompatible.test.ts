@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   completeOpenAICompatibleChat,
   completeOpenAICompatibleResponses,
+  rejectsCacheKey,
   rejectsReasoning,
   rejectsTemperature,
   toResponsesInput,
@@ -133,6 +134,76 @@ describe('OpenAI-compatible capability fallback', () => {
       { baseUrl: 'http://localhost:1234/v1', apiKey: '' },
       new AbortController().signal,
     )).rejects.toThrow('model API 400')
+  })
+})
+
+describe('prompt-cache key', () => {
+  const chatReply = () => new Response(JSON.stringify({
+    choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }],
+  }), { status: 200 })
+
+  it('sends the key in the Responses body, and nothing without one', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ output: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await completeOpenAICompatibleResponses(
+      { model: 'grok-4.7', messages: [] },
+      { baseUrl: 'https://api.x.ai/v1', apiKey: 'test', cacheKey: 'adventure-1' },
+      new AbortController().signal,
+    )
+    await completeOpenAICompatibleResponses(
+      { model: 'grok-4.7', messages: [] },
+      { baseUrl: 'https://api.x.ai/v1', apiKey: 'test' },
+      new AbortController().signal,
+    )
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toHaveProperty('prompt_cache_key', 'adventure-1')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('prompt_cache_key')
+  })
+
+  it('adds the routing header for xAI Chat Completions only', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => chatReply())
+    vi.stubGlobal('fetch', fetchMock)
+    for (const baseUrl of ['https://api.x.ai/v1', 'https://api.mistral.ai/v1']) {
+      await completeOpenAICompatibleChat(
+        { model: 'some-model', messages: [] },
+        { baseUrl, apiKey: 'test', cacheKey: 'adventure-1' },
+        new AbortController().signal,
+      )
+    }
+    const [xai, other] = fetchMock.mock.calls.map((call) => call[1])
+    expect(xai.headers).toHaveProperty('x-grok-conv-id', 'adventure-1')
+    expect(other.headers).not.toHaveProperty('x-grok-conv-id')
+    expect(JSON.parse(other.body)).toHaveProperty('prompt_cache_key', 'adventure-1')
+  })
+
+  it.each([
+    [400, `{"error":{"message":"Unrecognized request argument supplied: prompt_cache_key"}}`],
+    [422, `{"detail":[{"type":"extra_forbidden","loc":["body","prompt_cache_key"],"msg":"Extra inputs are not permitted"}]}`],
+  ])('recognises a provider rejection of the key: %s', (status, body) => {
+    expect(rejectsCacheKey(status, body)).toBe(true)
+  })
+
+  it('does not mistake other failures for a rejected key', () => {
+    expect(rejectsCacheKey(401, 'invalid API key')).toBe(false)
+    expect(rejectsCacheKey(422, '{"detail":"messages must not be empty"}')).toBe(false)
+  })
+
+  it('retries without a rejected key and stops sending it', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ detail: [{ type: 'extra_forbidden', loc: ['body', 'prompt_cache_key'], msg: 'Extra inputs are not permitted' }] }),
+        { status: 422 },
+      ))
+      .mockImplementation(async () => chatReply())
+    vi.stubGlobal('fetch', fetchMock)
+    const request = { model: 'strict-chat', messages: [] }
+    const connection = { baseUrl: 'http://localhost:4321/v1', apiKey: '', cacheKey: 'adventure-1' }
+    const first = await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    expect(first.text).toBe('Done.')
+    expect(first.anomalies).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('prompt_cache_key')
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).not.toHaveProperty('prompt_cache_key')
   })
 })
 
