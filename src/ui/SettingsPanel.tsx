@@ -8,6 +8,8 @@ import {
   DEFAULT_SAMPLING,
   MODEL_OPTIONS,
   PROVIDER_SETUPS,
+  reasoningOffConflict,
+  type ModelRole,
   type ProviderId,
 } from '../engine/config'
 import { listModels } from '../engine/model/client'
@@ -18,6 +20,12 @@ import type {
   SamplingParams,
   SlotKey,
 } from '../engine/types'
+
+const ROLE_NAMES: Record<ModelRole, string> = {
+  narrator: 'Narrator',
+  plotter: 'Plotter',
+  summarizer: 'Summariser',
+}
 
 interface SettingsPanelProps {
   model: string
@@ -142,14 +150,14 @@ export function SettingsPanel({
   }
 
   function save() {
-    const roles = [
-      { name: 'Narrator', model: draftModel, effort: draftContext.narratorReasoning },
-      { name: 'Plotter', model: draftContext.plotterModel || draftModel, effort: draftContext.plotterReasoning },
-      { name: 'Summariser', model: draftContext.summarizerModel || draftModel, effort: draftContext.summarizerReasoning },
-    ]
-    const invalid = roles.find((r) => /^grok-4\.7(?:-|$)/.test(r.model.trim()) && r.effort === 'none')
-    if (invalid) {
-      setSettingsError(`${invalid.name}: Grok 4.7 requires reasoning. Choose Low or higher.`)
+    const context: ContextConfig = {
+      ...draftContext,
+      plotterModel: draftContext.plotterModel.trim(),
+      summarizerModel: draftContext.summarizerModel.trim(),
+    }
+    const conflict = reasoningOffConflict(draftModel, context)
+    if (conflict) {
+      setSettingsError(`${ROLE_NAMES[conflict]}: Grok 4.7 requires reasoning. Choose Low or higher.`)
       return
     }
     const trimmed = {} as AdventureSlots
@@ -160,7 +168,7 @@ export function SettingsPanel({
       draftBaseUrl.trim() || DEFAULT_BASE_URL,
       trimmed,
       draftSampling,
-      draftContext,
+      context,
       draftShowTrace,
     )
     onClose()

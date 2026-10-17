@@ -165,6 +165,22 @@ export const PROVIDER_SETUPS: Record<ProviderId, ProviderSetup> = {
   lmstudio: { baseUrl: LMSTUDIO_BASE_URL, context: FOLLOW_NARRATOR },
 }
 
+export type ModelRole = 'narrator' | 'plotter' | 'summarizer'
+
+// Grok 4.7 cannot turn reasoning off. Returns the first role whose effective
+// model would be sent reasoning 'none', or null. As at request time, a blank
+// or whitespace-only role model follows the narrator model.
+export function reasoningOffConflict(model: string, context: ContextConfig): ModelRole | null {
+  const narrator = model.trim()
+  const roles: [ModelRole, string, ContextConfig['narratorReasoning']][] = [
+    ['narrator', narrator, context.narratorReasoning],
+    ['plotter', context.plotterModel.trim() || narrator, context.plotterReasoning],
+    ['summarizer', context.summarizerModel.trim() || narrator, context.summarizerReasoning],
+  ]
+  const conflict = roles.find(([, id, effort]) => /^grok-4\.7(?:-|$)/.test(id) && effort === 'none')
+  return conflict ? conflict[0] : null
+}
+
 export const DEFAULT_SAMPLING: SamplingParams = {
   temperature: 0.75,
 }
