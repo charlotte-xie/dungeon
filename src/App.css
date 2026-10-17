@@ -613,6 +613,51 @@ textarea.state-json-editor.tab-editor {
   white-space: pre-wrap;
 }
 
+/* Non-fatal problems: the turn went ahead, but something needs attention. */
+.turn-notice {
+  margin: 0.4rem 0 0;
+  color: #d8a85a;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.turn-notice p {
+  margin: 0;
+}
+
+.notice-details summary {
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.notice-details pre {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.app-notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #6b5228;
+  border-radius: 6px;
+  color: #d8a85a;
+  font-size: 0.85em;
+}
+
+.app-notice-body {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-notice p {
+  margin: 0;
+}
+
 .saves-subhead {
   margin: 1rem 0 0.35rem;
   font-size: 0.8rem;

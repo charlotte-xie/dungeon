@@ -4,6 +4,7 @@ import { DEFAULT_SYSTEM_PROMPT } from './prompts'
 import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
+import { describeModelError } from './engine/model/errors'
 import { applyTurnReminder, buildModelMessages } from './engine/request'
 import { CONTEXT_SUBSYSTEMS } from './engine/request'
 import { useGameController } from './hooks/useGameController'
@@ -11,6 +12,7 @@ import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
 import { ContextViewer } from './ui/ContextViewer'
 import { EditableMessage } from './ui/EditableMessage'
+import { ErrorDetails } from './ui/ErrorDetails'
 import { NewAdventurePrompt } from './ui/NewAdventurePrompt'
 import { SavesPanel } from './ui/SavesPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
@@ -130,6 +132,15 @@ function App() {
                     text={t.reply.text ?? ''}
                     onSave={(next) => game.editTurnReply(t.id, next)}
                   />
+                  {t.plotter?.error && (
+                    <div className="turn-notice" role="status">
+                      <p>
+                        Plotter failed — state, plot, memory and OOC weren't updated this turn:{' '}
+                        {describeModelError(t.plotter.error)}
+                      </p>
+                      <ErrorDetails error={t.plotter.error} />
+                    </div>
+                  )}
                   {showTrace && (t.reply.trace !== undefined || t.narrator || t.plotter) && (
                     <TraceView
                       calls={
@@ -159,6 +170,18 @@ function App() {
         })}
         {thinking && <div className="msg msg-dm thinking">{statusText}</div>}
       </div>
+      {game.compactionError && (
+        <div className="app-notice" role="status">
+          <div className="app-notice-body">
+            <p>
+              Compaction failed: {describeModelError(game.compactionError).replace(/\.+$/, '')}. Your turn
+              went ahead; it will try again next turn. Check the summariser model in Settings.
+            </p>
+            <ErrorDetails error={game.compactionError} />
+          </div>
+          <button className="ghost" onClick={game.dismissCompactionError}>Dismiss</button>
+        </div>
+      )}
       <div className="composer">
         <textarea
           value={input}

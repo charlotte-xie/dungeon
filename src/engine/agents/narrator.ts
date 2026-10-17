@@ -72,6 +72,9 @@ export interface NarratorResult {
   trace: TraceEvent[]
   plotterTrace?: TraceEvent[]
   plotterReasoningTokens?: number
+  // Set when the plotter phase failed; the prose and any updates recorded
+  // before the failure are still returned.
+  plotterError?: string
   reasoningTokens?: number
 }
 
@@ -326,6 +329,7 @@ export async function runNarrator(
   // failure never loses the turn: the prose and any updates recorded so far
   // are kept, and the rest of the state simply carries forward.
   const narratorReasoningTokens = totalReasoningTokens
+  let plotterError: string | undefined
   if (tools.length) {
     messages.push({ role: 'assistant', content: proseText })
     const plotterInstruction = buildPlotterInstruction(ctx.flags, data, ctx.stateCleanupThreshold)
@@ -371,6 +375,7 @@ export async function runNarrator(
     } catch (err) {
       if (signal.aborted) throw err
       const msg = err instanceof Error ? err.message : String(err)
+      plotterError = msg
       trace.push({
         kind: 'thought',
         text: `(plotter failed: ${msg} — updates recorded so far are kept; anything else carries forward unchanged)`,
@@ -385,5 +390,6 @@ export async function runNarrator(
     plotterTrace: plotterTrace.length ? plotterTrace : undefined,
     reasoningTokens: narratorReasoningTokens || undefined,
     plotterReasoningTokens: (totalReasoningTokens - narratorReasoningTokens) || undefined,
+    plotterError,
   }
 }

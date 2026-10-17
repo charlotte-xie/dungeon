@@ -101,6 +101,7 @@ export function useGameController(settings: GameSettings) {
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [statusText, setStatusText] = useState('DM is thinking…')
+  const [compactionError, setCompactionError] = useState<string | null>(null)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, INITIAL_TURN_RECOVERY)
   const [operations] = useState(() => new OperationCoordinator())
 
@@ -276,41 +277,52 @@ export function useGameController(settings: GameSettings) {
       // Compact BEFORE the in-flight turn (we don't want to summarise a turn
       // that doesn't have a reply yet). We measure against `baseTurns`.
       if (chronicleNeedsCompaction(baseTurns, workingCutoff, workingChronicle, settings)) {
-        const compacted = await compactCascade(
-          baseTurns,
-          workingCutoff,
-          workingChronicle,
-          settings,
-          {
-            model: context.summarizerModel.trim() || model,
-            reasoningEffort: context.summarizerReasoning,
-            apiKey,
-            baseUrl,
-            protocol: context.apiProtocol,
-            memory: memoryForCompaction(baseData.memory, context.includeMemory),
-          },
-          controller.signal,
-          (label) => {
-            if (operationCanCommit(operation)) setStatusText(label)
-          },
-        )
+        let compacted: Awaited<ReturnType<typeof compactCascade>> | null = null
+        try {
+          compacted = await compactCascade(
+            baseTurns,
+            workingCutoff,
+            workingChronicle,
+            settings,
+            {
+              model: context.summarizerModel.trim() || model,
+              reasoningEffort: context.summarizerReasoning,
+              apiKey,
+              baseUrl,
+              protocol: context.apiProtocol,
+              memory: memoryForCompaction(baseData.memory, context.includeMemory),
+            },
+            controller.signal,
+            (label) => {
+              if (operationCanCommit(operation)) setStatusText(label)
+            },
+          )
+        } catch (err) {
+          // A failed compaction doesn't sink the turn: the chronicle stays as
+          // it was, the turn goes ahead, and the next turn tries again.
+          if (controller.signal.aborted || !isCurrentOperation(operation)) throw err
+          setCompactionError(err instanceof Error ? err.message : String(err))
+        }
         if (!operationCanCommit(operation)) return
-        workingChronicle = compacted.chronicle
-        workingCutoff = compacted.cutoff
-        commitChronicle(workingChronicle)
-        commitCompactCutoff(workingCutoff)
-        setTurns((ts) => stripTracesBefore(ts, workingCutoff))
-        // Compaction is story-invariant and already paid for: rebase the
-        // recovery checkpoint on the compacted world so undo reverts the
-        // in-flight turn but never the fold.
-        args.action.checkpoint = {
-          turns: stripTracesBefore(baseTurns, workingCutoff),
-          state: baseData.state,
-          plot: baseData.plot,
-          memory: baseData.memory,
-          ooc: baseData.ooc,
-          chronicle: workingChronicle,
-          compactCutoff: workingCutoff,
+        if (compacted) {
+          setCompactionError(null)
+          workingChronicle = compacted.chronicle
+          workingCutoff = compacted.cutoff
+          commitChronicle(workingChronicle)
+          commitCompactCutoff(workingCutoff)
+          setTurns((ts) => stripTracesBefore(ts, workingCutoff))
+          // Compaction is story-invariant and already paid for: rebase the
+          // recovery checkpoint on the compacted world so undo reverts the
+          // in-flight turn but never the fold.
+          args.action.checkpoint = {
+            turns: stripTracesBefore(baseTurns, workingCutoff),
+            state: baseData.state,
+            plot: baseData.plot,
+            memory: baseData.memory,
+            ooc: baseData.ooc,
+            chronicle: workingChronicle,
+            compactCutoff: workingCutoff,
+          }
         }
         setStatusText('DM is thinking…')
       }
@@ -352,12 +364,15 @@ export function useGameController(settings: GameSettings) {
         trace: result.trace,
         reasoningTokens: result.reasoningTokens,
       }
-      const plotterCall: ModelCall | undefined = result.plotterTrace
+      // A plotter error rides on the plotter call, not the reply: the turn
+      // itself succeeded and is replayed and summarised as normal.
+      const plotterCall: ModelCall | undefined = result.plotterTrace || result.plotterError
         ? {
             id: crypto.randomUUID(),
             model: context.plotterModel.trim() || model,
             trace: result.plotterTrace,
             reasoningTokens: result.plotterReasoningTokens,
+            error: result.plotterError,
           }
         : undefined
       if (context.useReviser) {
@@ -613,6 +628,7 @@ export function useGameController(settings: GameSettings) {
         },
       )
       if (!operationCanCommit(operation)) return
+      setCompactionError(null)
       commitChronicle(compacted.chronicle)
       commitCompactCutoff(compacted.cutoff)
       setTurns((ts) => stripTracesBefore(ts, compacted.cutoff))
@@ -640,6 +656,7 @@ export function useGameController(settings: GameSettings) {
     commitEngineOoc([])
     commitChronicle([])
     commitCompactCutoff(0)
+    setCompactionError(null)
     const action: RetryAction = {
       checkpoint: {
         turns: [],
@@ -690,6 +707,7 @@ export function useGameController(settings: GameSettings) {
   function restoreGame(save: SavedGame) {
     supersedeCurrentOperation()
     dispatchRecovery({ type: 'reset' })
+    setCompactionError(null)
     commitSlots({ ...defaultSlots(), ...save.slots })
     commitState(structuredClone(save.state))
     commitPlot([...(save.plot ?? [])])
@@ -719,6 +737,8 @@ export function useGameController(settings: GameSettings) {
     thinking,
     statusText,
     canCompact,
+    compactionError,
+    dismissCompactionError: () => setCompactionError(null),
     // actions
     send,
     continueStory,

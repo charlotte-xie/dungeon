@@ -189,6 +189,7 @@ describe('runNarrator two-phase flow', () => {
     expect(
       result.plotterTrace?.some((e) => e.kind === 'thought' && e.text.includes('plotter failed')),
     ).toBe(true)
+    expect(result.plotterError).toBe('network down')
   })
 
   it('caps the plotter loop even if the model keeps failing', async () => {
