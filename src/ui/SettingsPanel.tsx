@@ -6,10 +6,9 @@ import {
   DEFAULT_MODEL,
   DEFAULT_REVISER_MODEL,
   DEFAULT_SAMPLING,
-  LMSTUDIO_BASE_URL,
-  MISTRAL_BASE_URL,
   MODEL_OPTIONS,
-  XAI_BASE_URL,
+  PROVIDER_SETUPS,
+  type ProviderId,
 } from '../engine/config'
 import { listModels } from '../engine/model/client'
 import type { ReasoningEffort } from '../engine/model/types'
@@ -176,21 +175,13 @@ export function SettingsPanel({
     setSettingsError(null)
   }
 
-  function applyGrokPreset() {
+  function applyProvider(id: ProviderId) {
+    const setup = PROVIDER_SETUPS[id]
     resetDetection()
     setSettingsError(null)
-    setDraftBaseUrl(XAI_BASE_URL)
-    setDraftModel('grok-4.7')
-    setDraftContext((c) => ({
-      ...c,
-      narratorReasoning: 'low',
-      plotterModel: 'grok-4.3',
-      plotterReasoning: 'low',
-      summarizerModel: 'grok-4.3',
-      summarizerReasoning: 'none',
-      apiProtocol: 'responses',
-      useReviser: false,
-    }))
+    setDraftBaseUrl(setup.baseUrl)
+    if (setup.model) setDraftModel(setup.model)
+    setDraftContext((c) => ({ ...c, ...setup.context }))
   }
 
   return (
@@ -201,7 +192,7 @@ export function SettingsPanel({
           <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
         <label
-          title={`OpenAI-compatible chat completions endpoint. Default: ${DEFAULT_BASE_URL} (xAI). Mistral's La Plateforme works via the Mistral button (needs a Mistral API key; use the Chat Completions protocol). For LM Studio, click the LM Studio button — make sure the local server is running on the same port. Any other server that exposes /chat/completions in OpenAI shape works too.`}
+          title={`OpenAI-compatible chat completions endpoint. Default: ${DEFAULT_BASE_URL} (xAI). Mistral's La Plateforme works via the Mistral button (needs a Mistral API key; the button also switches to Chat Completions). For LM Studio, click the LM Studio button — make sure the local server is running on the same port. Any other server that exposes /chat/completions in OpenAI shape works too.`}
         >
           <span>API base URL</span>
           <div className="model-picker">
@@ -219,33 +210,24 @@ export function SettingsPanel({
             <button
               type="button"
               className="ghost"
-              onClick={() => {
-                resetDetection()
-                setDraftBaseUrl(XAI_BASE_URL)
-              }}
-              title="Use the default xAI API endpoint"
+              onClick={() => applyProvider('xai')}
+              title="Use the default xAI API endpoint with the Grok preset: Grok 4.7 narrator, Grok 4.3 plotter and summariser, Responses protocol"
             >
               xAI
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => {
-                resetDetection()
-                setDraftBaseUrl(MISTRAL_BASE_URL)
-              }}
-              title="Use Mistral's La Plateforme API endpoint (requires a Mistral API key; Chat Completions protocol)"
+              onClick={() => applyProvider('mistral')}
+              title="Use Mistral's La Plateforme API endpoint (requires a Mistral API key). Switches to Chat Completions, and the plotter and summariser follow the narrator model; pick a Mistral model below."
             >
               Mistral
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => {
-                resetDetection()
-                setDraftBaseUrl(LMSTUDIO_BASE_URL)
-              }}
-              title="Use LM Studio's default local server URL (port 1234)"
+              onClick={() => applyProvider('lmstudio')}
+              title="Use LM Studio's default local server URL (port 1234). Switches to Chat Completions, and the plotter and summariser follow the narrator model; use Detect models to pick the loaded model."
             >
               LM Studio
             </button>
@@ -364,7 +346,7 @@ export function SettingsPanel({
             </div>
           )
         })}
-        <button type="button" className="ghost" onClick={applyGrokPreset}>
+        <button type="button" className="ghost" onClick={() => applyProvider('xai')}>
           Use Grok 4.7 narrator + 4.3 plotting
         </button>
         <p className="hint">

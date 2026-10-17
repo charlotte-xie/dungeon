@@ -113,6 +113,58 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   nsfw: true,
 }
 
+export type ProviderId = 'xai' | 'mistral' | 'lmstudio'
+
+type ProviderRouting = Pick<
+  ContextConfig,
+  | 'apiProtocol'
+  | 'narratorReasoning'
+  | 'plotterModel'
+  | 'plotterReasoning'
+  | 'summarizerModel'
+  | 'summarizerReasoning'
+>
+
+export interface ProviderSetup {
+  baseUrl: string
+  // Narrator model to select. Omitted when the right id depends on what the
+  // provider or local server offers; the player picks or detects it.
+  model?: string
+  context: ProviderRouting & Partial<ContextConfig>
+}
+
+// Blank plotter and summariser models follow the narrator model, and
+// provider-default reasoning omits the reasoning parameter.
+const FOLLOW_NARRATOR: ProviderRouting = {
+  apiProtocol: 'chat-completions',
+  narratorReasoning: 'default',
+  plotterModel: '',
+  plotterReasoning: 'default',
+  summarizerModel: '',
+  summarizerReasoning: 'default',
+}
+
+// The provider buttons in Settings apply a whole setup, not just a base URL:
+// role models, reasoning levels, and protocol tuned for one provider fail on
+// another. The xAI setup is also the Grok preset and the new-install default.
+export const PROVIDER_SETUPS: Record<ProviderId, ProviderSetup> = {
+  xai: {
+    baseUrl: XAI_BASE_URL,
+    model: 'grok-4.7',
+    context: {
+      apiProtocol: 'responses',
+      narratorReasoning: 'low',
+      plotterModel: 'grok-4.3',
+      plotterReasoning: 'low',
+      summarizerModel: 'grok-4.3',
+      summarizerReasoning: 'none',
+      useReviser: false,
+    },
+  },
+  mistral: { baseUrl: MISTRAL_BASE_URL, context: FOLLOW_NARRATOR },
+  lmstudio: { baseUrl: LMSTUDIO_BASE_URL, context: FOLLOW_NARRATOR },
+}
+
 export const DEFAULT_SAMPLING: SamplingParams = {
   temperature: 0.75,
 }

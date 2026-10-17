@@ -69,6 +69,7 @@ In **Settings**:
 - **Summariser model / reasoning** — defaults to `grok-4.3` with reasoning off.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
 - The **Use Grok 4.7 narrator + 4.3 plotting** button applies these choices, selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
+- The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - System prompt, scenario, style guide, sampling params, context limits.
 
 New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The plotter currently receives the same conversation context as the narrator, so selecting the same model lets you compare shared-prefix caching against a separate plotting model.
