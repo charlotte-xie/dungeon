@@ -27,8 +27,8 @@ export function SteeringPanel({
   const [scope, setScope] = useState<SteeringScope>('once')
   const [draftPreferences, setDraftPreferences] = useState([...preferences])
   const [error, setError] = useState<string | null>(null)
-  const preferencesChanged =
-    JSON.stringify(draftPreferences.map((entry) => entry.trim()).filter(Boolean)) !== JSON.stringify(preferences)
+  const tidy = (list: string[]) => JSON.stringify(list.map((entry) => entry.trim()).filter(Boolean))
+  const preferencesChanged = tidy(draftPreferences) !== tidy(preferences)
   const retryReady = canRetry && !busy && (guidance.trim() !== '' || preferencesChanged)
 
   function apply() {

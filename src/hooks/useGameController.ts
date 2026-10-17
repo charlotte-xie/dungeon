@@ -215,7 +215,9 @@ export function useGameController(settings: GameSettings) {
   }
 
   function restoreAbortedAction(action: RetryAction) {
-    restoreCheckpoint(action.checkpoint)
+    // The in-flight checkpoint already carries the player's edits, so restore
+    // it exactly rather than against a list captured before the turn began.
+    restoreCheckpoint(action.checkpoint, action.checkpoint.ooc)
     setInput((box) => restoreIntoBox(box, action.restoreInput))
     dispatchRecovery({ type: 'abort', action })
   }

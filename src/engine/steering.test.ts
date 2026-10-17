@@ -83,6 +83,12 @@ describe('carrying OOC edits across a restored checkpoint', () => {
     expect(target).toEqual(['A'])
   })
 
+  it('restores the checkpoint exactly when the current list is the checkpoint', () => {
+    const target = ['A', 'P']
+    expect(carryOocEdits(target, ['A', 'X'], target)).toEqual(target)
+    expect(carryOocEdits(target, [], target)).toEqual(target)
+  })
+
   it('does not duplicate an entry the checkpoint already has', () => {
     expect(carryOocEdits(['A', 'P'], ['A'], ['A', 'P'])).toEqual(['A', 'P'])
   })
