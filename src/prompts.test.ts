@@ -28,16 +28,13 @@ describe('capability-aware prompts', () => {
     expect(bare).not.toContain('Plotter pass')
   })
 
-  it('mentions the direction plan only while the plot outline is enabled', () => {
-    const withPlan = buildTurnReminder({ worldState: false, plotOutline: true, memory: false, ooc: false })
-    expect(withPlan).toContain(
-      "without waiting for repeated confirmation; adapt the private direction plan to the player's action.",
-    )
+  it('keeps the turn reminder to a pointer at the latest input', () => {
+    const bare = buildTurnReminder({ worldState: false, plotOutline: false, memory: false, ooc: false })
+    expect(bare).toBe("Reply to the player's latest input.")
 
-    const withoutPlan = buildTurnReminder({ worldState: true, plotOutline: false, memory: true, ooc: true })
-    expect(withoutPlan).not.toContain('direction plan')
-    expect(withoutPlan).toContain('without waiting for repeated confirmation.')
-    expect(withoutPlan).not.toContain('{{')
+    const withTools = buildTurnReminder({ worldState: true, plotOutline: true, memory: true, ooc: true })
+    expect(withTools.startsWith("Reply to the player's latest input.")).toBe(true)
+    expect(withTools).not.toContain('{{')
   })
 
   it('does not demand a specific tool during bootstrap', () => {
@@ -47,19 +44,10 @@ describe('capability-aware prompts', () => {
     expect(bootstrap).not.toMatch(/update_state|future_plot_plan|update_memory/)
   })
 
-  it('defines progression as causal change without random escalation', () => {
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('Progression Without Churn')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('Prefer the next consequence of an established cause')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('not random escalation')
-
-    const reminder = buildTurnReminder({
-      worldState: false,
-      plotOutline: false,
-      memory: false,
-      ooc: false,
-    })
-    expect(reminder).toContain('advance one existing cause into a new consequence')
-    expect(reminder).toContain('Prefer concrete progression')
+  it('describes progression as causal change without random escalation', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('Developments grow out of what is already in play')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('rather than new threats from nowhere')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('makes way for the next instead of being restated')
   })
 
   it('prevents semantically duplicate future plot beats', () => {

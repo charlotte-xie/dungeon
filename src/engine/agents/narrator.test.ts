@@ -258,10 +258,10 @@ describe('runNarrator two-phase flow', () => {
     // The turn reminder is appended once, ahead of any tool exchange, and is
     // still present (never removed) when the plotter request goes out.
     const reminders = snapshots[2].filter(
-      (m) => m.role === 'system' && m.content.startsWith('# Turn reminder'),
+      (m) => m.role === 'system' && m.content.startsWith("Reply to the player's latest input"),
     )
     expect(reminders).toHaveLength(1)
-    const reminderIdx = snapshots[2].findIndex((m) => m.content.startsWith('# Turn reminder'))
+    const reminderIdx = snapshots[2].findIndex((m) => m.content.startsWith("Reply to the player's latest input"))
     const strayIdx = snapshots[2].findIndex((m) => m.toolCalls?.some((c) => c.id === 'r0'))
     expect(reminderIdx).toBeLessThan(strayIdx)
   })

@@ -30,6 +30,10 @@ export interface TurnReminderCapabilities {
   ooc: boolean
 }
 
+// The last thing the narrator reads before writing, so it points at the
+// player's input and nothing more: the system prompt carries the story's
+// guidance. Restating it here would invite a rule-by-rule check every turn,
+// and this tail is never cached.
 export function buildTurnReminder(capabilities: TurnReminderCapabilities): string {
   const anyTools =
     capabilities.worldState ||
@@ -37,13 +41,9 @@ export function buildTurnReminder(capabilities: TurnReminderCapabilities): strin
     capabilities.memory ||
     capabilities.ooc
   const toolReminder = anyTools
-    ? '- Do not call tools while narrating — write the prose reply only. After your reply, a separate Plotter pass reviews the turn and records its bookkeeping.'
+    ? ' Do not call tools while narrating: write the prose only. A separate Plotter pass records the bookkeeping after your reply.'
     : ''
-  // The direction plan exists only while the plot outline is enabled.
-  const directionPlan = capabilities.plotOutline
-    ? "; adapt the private direction plan to the player's action"
-    : ''
-  return fill(turnReminder, { toolReminder, directionPlan }).trim()
+  return fill(turnReminder, { toolReminder }).trim()
 }
 
 export const NSFW_ON_PROMPT =
