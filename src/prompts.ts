@@ -39,7 +39,11 @@ export function buildTurnReminder(capabilities: TurnReminderCapabilities): strin
   const toolReminder = anyTools
     ? '- Do not call tools while narrating — write the prose reply only. After your reply, a separate Plotter pass reviews the turn and records its bookkeeping.'
     : ''
-  return fill(turnReminder, { toolReminder }).trim()
+  // The direction plan exists only while the plot outline is enabled.
+  const directionPlan = capabilities.plotOutline
+    ? "; adapt the private direction plan to the player's action"
+    : ''
+  return fill(turnReminder, { toolReminder, directionPlan }).trim()
 }
 
 export const NSFW_ON_PROMPT =

@@ -28,6 +28,18 @@ describe('capability-aware prompts', () => {
     expect(bare).not.toContain('Plotter pass')
   })
 
+  it('mentions the direction plan only while the plot outline is enabled', () => {
+    const withPlan = buildTurnReminder({ worldState: false, plotOutline: true, memory: false, ooc: false })
+    expect(withPlan).toContain(
+      "without waiting for repeated confirmation; adapt the private direction plan to the player's action.",
+    )
+
+    const withoutPlan = buildTurnReminder({ worldState: true, plotOutline: false, memory: true, ooc: true })
+    expect(withoutPlan).not.toContain('direction plan')
+    expect(withoutPlan).toContain('without waiting for repeated confirmation.')
+    expect(withoutPlan).not.toContain('{{')
+  })
+
   it('does not demand a specific tool during bootstrap', () => {
     const bootstrap = buildNewAdventureBootstrap()
 
