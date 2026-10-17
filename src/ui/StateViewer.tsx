@@ -6,6 +6,7 @@ import {
   MAX_PLOT_ITEM_CHARS,
 } from '../engine/tools'
 import type { Chronicle, ContextConfig, Memory, WorldState } from '../engine/types'
+import { InspectSwitch, type InspectView } from './InspectSwitch'
 
 interface StateViewerProps {
   state: WorldState
@@ -15,7 +16,10 @@ interface StateViewerProps {
   chronicle: Chronicle
   context: ContextConfig
   busy: boolean
+  canCompact: boolean
   onClose: () => void
+  onInspect: (view: InspectView) => void
+  onCompact: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
   onSavePlot: (next: string[]) => void
@@ -56,7 +60,10 @@ export function StateViewer({
   chronicle,
   context,
   busy,
+  canCompact,
   onClose,
+  onInspect,
+  onCompact,
   onResetState,
   onSaveState,
   onSavePlot,
@@ -273,6 +280,13 @@ export function StateViewer({
         <div className="ctx-head-block">
           <div className="modal-header">
             <h2>Engine state</h2>
+            <InspectSwitch
+              view="state"
+              onChange={(next) => {
+                if (anyDirty && !confirm('Discard your unsaved state edits?')) return
+                onInspect(next)
+              }}
+            />
             <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
           </div>
           <div className="ctx-tabs">
@@ -489,6 +503,16 @@ export function StateViewer({
               disabled={busy || ooc.length === 0}
             >
               Clear OOC
+            </button>
+          )}
+          {tab === 'chronicle' && canCompact && (
+            <button
+              className="ghost"
+              onClick={onCompact}
+              disabled={busy || anyDirty}
+              title={anyDirty ? 'Save or discard your edits first' : 'Fold older turns into the chronicle now'}
+            >
+              Compact now
             </button>
           )}
           {tab === 'chronicle' && (

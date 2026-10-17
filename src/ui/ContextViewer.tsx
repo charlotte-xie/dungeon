@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ModelMessage } from '../engine/model/types'
 import type { SamplingParams } from '../engine/types'
+import { InspectSwitch, type InspectView } from './InspectSwitch'
 
 export interface ReviserPreview {
   messages: ModelMessage[]
@@ -17,6 +18,7 @@ interface ContextViewerProps {
   sampling: SamplingParams
   reviser?: ReviserPreview
   onClose: () => void
+  onInspect: (view: InspectView) => void
 }
 
 type Tab = 'system' | 'chronicle' | 'history' | 'notes' | 'tools' | 'reviser'
@@ -57,7 +59,7 @@ function MessageList({ items }: { items: ModelMessage[] }) {
   )
 }
 
-export function ContextViewer({ messages, tools, sampling, reviser, onClose }: ContextViewerProps) {
+export function ContextViewer({ messages, tools, sampling, reviser, onClose, onInspect }: ContextViewerProps) {
   const [tab, setTab] = useState<Tab>('history')
 
   // Segment the request into its architectural sections. The seeded
@@ -93,6 +95,7 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose }: C
                 ? 'Context for reviser request (preview)'
                 : 'Context for next DM request'}
             </h2>
+            <InspectSwitch view="context" onChange={onInspect} />
             <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
           </div>
           <div className="ctx-tabs">

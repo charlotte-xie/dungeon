@@ -68,7 +68,7 @@ In **Settings**:
 - **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
 - **Summariser model / reasoning** — defaults to `grok-4.3` with reasoning off.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
-- The **Use Grok 4.7 narrator + 4.3 plotting** button applies these choices, selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
+- The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - System prompt, scenario, style guide, sampling params, context limits.
 
@@ -83,10 +83,10 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
   - `tools.ts`: tool schemas and the game-state executor. `state.ts`: path operations on world state.
   - `chronicle.ts`: recursive compaction of older turns into summaries.
   - `persistence.ts`: all `localStorage` IO, the save-file format, and its migrations.
-  - `steering.ts`, `turnRecovery.ts`, `operation.ts`: story steering, undo/redo/retry, and coordination of the running operation.
+  - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying OOC edits across restores, undo/redo/retry, and coordination of the running operation.
 - `src/prompts/*.md`: the product's own LLM prompts (system prompt, subsystem rules, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. They are part of the game, not instructions for coding agents.
 - `src/hooks/`: React hooks. `useGameController.ts` drives turns.
-- `src/ui/`: panels and viewers (settings, saves, steering, context, state, trace).
+- `src/ui/`: panels and viewers (settings, saves, the Adventure menu, the Inspect panel's state and context views, trace).
 
 ## Working on this project
 

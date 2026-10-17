@@ -27,6 +27,99 @@ header h1 {
   gap: 0.5rem;
 }
 
+.menu {
+  position: relative;
+}
+
+.menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+  padding: 0.25rem;
+  background: #161616;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
+.menu-list button {
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  color: #e6e6e6;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.menu-list button:hover {
+  color: #c9a959;
+  background: #222;
+}
+
+/* Actions that fix the latest reply sit under it, not in the action bar. */
+.reply-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.link {
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #c9a959;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.empty-log .link {
+  display: block;
+  margin: 0.6rem auto 0;
+  padding: 0;
+  color: #c9a959;
+  background: none;
+}
+
+.rewrite-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.rewrite-form input {
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: #e6e6e6;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
+.rewrite-form .error-text {
+  flex-basis: 100%;
+}
+
+.inspect-switch {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
 .ghost {
   padding: 0.35rem 0.8rem;
   font: inherit;
@@ -228,23 +321,6 @@ header h1 {
   gap: 0.35rem;
   align-items: stretch;
   flex-wrap: wrap;
-}
-
-.steering-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.steering-preference {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.steering-preference textarea {
-  flex: 1;
-  min-width: 0;
 }
 
 .composer-buttons .primary {
@@ -611,6 +687,12 @@ textarea.state-json-editor.tab-editor {
   color: #d87070;
   font-size: 0.85em;
   white-space: pre-wrap;
+}
+
+.warning-text {
+  margin: 0.5rem 0 0;
+  color: #d8a85a;
+  font-size: 0.9em;
 }
 
 /* Non-fatal problems: the turn went ahead, but something needs attention. */

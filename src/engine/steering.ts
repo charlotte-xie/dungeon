@@ -1,42 +1,15 @@
-import { MAX_OOC_ITEMS, MAX_OOC_ITEM_CHARS } from './tools'
-
-export type SteeringScope = 'once' | 'standing'
-
+// One-reply guidance travels with the player's input, so retry, undo and
+// cancel preserve its scope along with the action. The NEXT REPLY ONLY label
+// keeps the plotter from recording it as a standing OOC directive.
 const NEXT_REPLY_ONLY = '(OOC: NEXT REPLY ONLY — '
 
 function nextReplyOnly(text: string): string {
   return `${NEXT_REPLY_ONLY}${text})`
 }
 
-// Standing preferences are saved directly rather than relying on a model to
-// remember them. One-turn guidance travels with the player's input so existing
-// retry/undo/cancel behaviour preserves its scope along with the action.
-export function prepareSteering(
-  input: string,
-  guidance: string,
-  scope: SteeringScope,
-  preferences: string[],
-): { input: string; preferences: string[] } {
-  const next = preferences.map((entry) => entry.trim()).filter(Boolean)
-  const text = guidance.trim()
-  if (scope === 'standing' && text && !next.includes(text)) next.push(text)
-  if (next.length > MAX_OOC_ITEMS) {
-    throw new Error(`Keep at most ${MAX_OOC_ITEMS} standing preferences. Edit or remove one first.`)
-  }
-  if (next.some((entry) => entry.length > MAX_OOC_ITEM_CHARS)) {
-    throw new Error(`Keep each standing preference within ${MAX_OOC_ITEM_CHARS} characters.`)
-  }
-  return {
-    input: scope === 'once' && text
-      ? [input.trim(), nextReplyOnly(text)].filter(Boolean).join('\n\n')
-      : input,
-    preferences: next,
-  }
-}
-
-// Retry with guidance: attach one-reply guidance to the input being retried.
-// It replaces one-reply guidance already ending that input, since the player
-// is re-steering the same reply; anything else in the input is kept.
+// Rewrite: attach one-reply guidance to the input being retried. It replaces
+// one-reply guidance already ending that input, since the player is
+// re-steering the same reply; anything else in the input is kept.
 export function withRetryGuidance(input: string, guidance: string): string {
   const text = guidance.trim()
   if (!text) return input

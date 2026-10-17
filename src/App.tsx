@@ -18,7 +18,8 @@ import { SavesPanel } from './ui/SavesPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { StateViewer } from './ui/StateViewer'
 import { TraceView } from './ui/TraceView'
-import { SteeringPanel } from './ui/SteeringPanel'
+import { AdventureMenu } from './ui/AdventureMenu'
+import type { InspectView } from './ui/InspectSwitch'
 
 function App() {
   const systemPrompt = DEFAULT_SYSTEM_PROMPT
@@ -33,11 +34,12 @@ function App() {
   const { turns, compactCutoff, input, thinking, statusText } = game
 
   const [showSettings, setShowSettings] = useState(false)
-  const [showState, setShowState] = useState(false)
-  const [showContext, setShowContext] = useState(false)
+  const [inspect, setInspect] = useState<InspectView | null>(null)
   const [showNewAdventure, setShowNewAdventure] = useState(false)
   const [showSaves, setShowSaves] = useState(false)
-  const [showSteering, setShowSteering] = useState(false)
+  const [rewriting, setRewriting] = useState(false)
+  const [rewriteText, setRewriteText] = useState('')
+  const [rewriteError, setRewriteError] = useState<string | null>(null)
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(() => new Set())
 
   function toggleTrace(id: string) {
@@ -57,8 +59,47 @@ function App() {
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      void game.send()
+      act()
     }
+  }
+
+  // Any new turn closes an open Rewrite field, so it never reappears under a
+  // later reply.
+  function act() {
+    setRewriting(false)
+    void game.send()
+  }
+
+  function continueStory() {
+    setRewriting(false)
+    void game.continueStory()
+  }
+
+  function retry() {
+    setRewriting(false)
+    void game.retry()
+  }
+
+  function undo() {
+    setRewriting(false)
+    game.undo()
+  }
+
+  function openRewrite() {
+    setRewriteText('')
+    setRewriteError(null)
+    setRewriting(true)
+  }
+
+  function submitRewrite(e: React.FormEvent) {
+    e.preventDefault()
+    const guidance = rewriteText.trim()
+    if (!guidance) {
+      setRewriteError('Say how the reply should change.')
+      return
+    }
+    setRewriting(false)
+    void game.retry({ guidance })
   }
 
   return (
@@ -66,31 +107,19 @@ function App() {
       <header>
         <h1>AI Dungeon Master</h1>
         <div className="header-actions">
-          <button
-            className="ghost"
-            onClick={() => setShowNewAdventure(true)}
-            title={thinking
+          <AdventureMenu
+            newTitle={thinking
               ? 'Start a new adventure and cancel the current generation'
               : 'Start a new adventure — confirm or edit the scenario brief'}
-          >
-            New Adventure
-          </button>
+            onNew={() => setShowNewAdventure(true)}
+            onSaves={() => setShowSaves(true)}
+          />
           <button
             className="ghost"
-            onClick={() => void game.compactNow()}
-            disabled={thinking || !game.canCompact}
-            title="Fold older turns into the chronicle now"
+            onClick={() => setInspect('state')}
+            title="Engine state, standing OOC preferences, and the context for the next request"
           >
-            Compact
-          </button>
-          <button className="ghost" onClick={() => setShowSaves(true)}>
-            Saves
-          </button>
-          <button className="ghost" onClick={() => setShowContext(true)}>
-            Context
-          </button>
-          <button className="ghost" onClick={() => setShowState(true)}>
-            State
+            Inspect
           </button>
           <button className="ghost" onClick={() => setShowSettings(true)}>
             Settings
@@ -102,6 +131,11 @@ function App() {
           <div className="empty-log">
             <p>No adventure in progress.</p>
             <button onClick={() => setShowNewAdventure(true)}>Begin Adventure</button>
+            {game.canRedo && (
+              <button className="link" onClick={game.redo} title="Restore the opening you just undid">
+                Redo
+              </button>
+            )}
             <p className="hint">The DM will narrate the opening based on your scenario brief (edit in Settings).</p>
           </div>
         )}
@@ -109,6 +143,10 @@ function App() {
           const folded = i < compactCutoff
           const showInput = t.kind === 'player' && t.input !== undefined
           const showReply = !!t.reply.text
+          // Fixing a reply happens at the reply: only the latest one can be
+          // retried, rewritten, or undone, and Redo takes their place after an undo.
+          const latest = i === turns.length - 1 && !thinking
+          const replyActions = latest && (game.canRedo || game.canRetry || game.canUndo)
           return (
             <Fragment key={t.id}>
               {i === compactCutoff && compactCutoff > 0 && (
@@ -140,6 +178,68 @@ function App() {
                       </p>
                       <ErrorDetails error={t.plotter.error} />
                     </div>
+                  )}
+                  {replyActions && (
+                    <div className="reply-actions">
+                      {game.canRedo ? (
+                        <button className="link" onClick={game.redo} title="Restore the turn you just undid">
+                          Redo
+                        </button>
+                      ) : (
+                        <>
+                          {game.canRetry && (
+                            <button
+                              className="link"
+                              onClick={retry}
+                              title="Discard this reply and write it again from the same action"
+                            >
+                              Retry
+                            </button>
+                          )}
+                          {game.canRetry && (
+                            <button
+                              className="link"
+                              onClick={openRewrite}
+                              title="Discard this reply and write it again following your instruction"
+                            >
+                              Rewrite
+                            </button>
+                          )}
+                          {game.canUndo && (
+                            <button
+                              className="link"
+                              onClick={undo}
+                              title="Take back this turn and put your action back in the box"
+                            >
+                              Undo
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {latest && rewriting && (
+                    <form className="rewrite-form" onSubmit={submitRewrite}>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={rewriteText}
+                        onChange={(e) => {
+                          setRewriteText(e.target.value)
+                          setRewriteError(null)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setRewriting(false)
+                        }}
+                        placeholder="Make the guard back down, and keep it shorter"
+                        aria-label="How should the reply change?"
+                      />
+                      <button type="submit">Rewrite</button>
+                      <button type="button" className="ghost" onClick={() => setRewriting(false)}>
+                        Cancel
+                      </button>
+                      {rewriteError && <p className="error-text" role="alert">{rewriteError}</p>}
+                    </form>
                   )}
                   {showTrace && (t.reply.trace !== undefined || t.narrator || t.plotter) && (
                     <TraceView
@@ -191,82 +291,30 @@ function App() {
           rows={1}
         />
         <div className="composer-buttons">
-          <button
-            className="ghost"
-            onClick={() => setShowSteering(true)}
-            disabled={thinking || turns.length === 0}
-            title="Adjust the pace, tone, or direction; review your standing preferences"
-          >
-            Steer story
-          </button>
-          <button
-            className="primary"
-            onClick={() => void game.send()}
-            disabled={thinking || !input.trim()}
-          >
-            Act
-          </button>
-          <button
-            className="ghost"
-            onClick={game.cancelOperation}
-            disabled={!thinking}
-            title="Cancel the active model request and restore the pending input"
-          >
-            Cancel
-          </button>
-          <button
-            className="ghost"
-            onClick={game.undo}
-            disabled={thinking || !game.canUndo}
-            title="Roll back the last turn — restore state and put your input back in the box"
-          >
-            Undo
-          </button>
-          <button
-            className="ghost"
-            onClick={game.redo}
-            disabled={thinking || !game.canRedo}
-            title="Invert the undo — restore the turn you just rolled back"
-          >
-            Redo
-          </button>
-          <button
-            className="ghost"
-            onClick={() => void game.retry()}
-            disabled={thinking || !game.canRetry}
-            title="Discard the DM's last reply and re-roll with the same action"
-          >
-            Retry
-          </button>
-          <button
-            className="ghost"
-            onClick={() => void game.continueStory()}
-            disabled={thinking || turns.length === 0}
-            title="Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision"
-          >
-            Continue
-          </button>
+          {thinking ? (
+            <button
+              className="primary"
+              onClick={game.cancelOperation}
+              title="Stop the DM and put your action back in the box"
+            >
+              Stop
+            </button>
+          ) : (
+            <button className="primary" onClick={act} disabled={!input.trim()}>
+              Act
+            </button>
+          )}
+          {!thinking && turns.length > 0 && (
+            <button
+              className="ghost"
+              onClick={continueStory}
+              title="Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision"
+            >
+              Continue
+            </button>
+          )}
         </div>
       </div>
-      {showSteering && (
-        <SteeringPanel
-          input={input}
-          preferences={game.ooc}
-          enabled={context.includeOoc}
-          busy={thinking}
-          canRetry={game.canRetry}
-          onClose={() => setShowSteering(false)}
-          onApply={(next) => {
-            if (thinking) return
-            game.commitOoc(next.preferences)
-            game.setInput(next.input)
-          }}
-          onRetry={(next) => {
-            if (thinking) return
-            void game.retry(next)
-          }}
-        />
-      )}
       {showSettings && (
         <SettingsPanel
           model={model}
@@ -283,7 +331,7 @@ function App() {
           }}
         />
       )}
-      {showState && (
+      {inspect === 'state' && (
         <StateViewer
           state={game.state}
           plot={game.plot}
@@ -292,7 +340,10 @@ function App() {
           chronicle={game.chronicle}
           context={context}
           busy={thinking}
-          onClose={() => setShowState(false)}
+          canCompact={game.canCompact}
+          onClose={() => setInspect(null)}
+          onInspect={setInspect}
+          onCompact={() => void game.compactNow()}
           onResetState={() => game.commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={game.commitState}
           onSavePlot={game.commitPlot}
@@ -308,7 +359,7 @@ function App() {
           }}
         />
       )}
-      {showContext && (() => {
+      {inspect === 'context' && (() => {
         const lastTurn = [...turns].reverse().find((t) => t.reply.text || t.narrator?.text)
         const lastDraft = lastTurn?.narrator?.text ?? lastTurn?.reply.text ?? ''
         const reviserPreview = context.useReviser
@@ -354,7 +405,8 @@ function App() {
             ])}
             sampling={sampling}
             reviser={reviserPreview}
-            onClose={() => setShowContext(false)}
+            onClose={() => setInspect(null)}
+            onInspect={setInspect}
           />
         )
       })()}

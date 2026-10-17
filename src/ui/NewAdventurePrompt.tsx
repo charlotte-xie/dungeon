@@ -35,11 +35,12 @@ export function NewAdventurePrompt({
           <h2>New adventure</h2>
           <button className="modal-close" aria-label="Close" onClick={onCancel}>×</button>
         </div>
-        <p className="hint">
-          {inProgress
-            ? 'This will end the current adventure and start a fresh one. The DM will narrate the opening from the brief below.'
-            : 'The DM will narrate the opening from the brief below.'}
-        </p>
+        {inProgress && (
+          <p className="warning-text" role="alert">
+            This ends your current adventure. Anything you haven't saved in Saves will be lost.
+          </p>
+        )}
+        <p className="hint">The DM will narrate the opening from the brief below.</p>
         {ADVENTURE_SLOTS.map((def, i) => (
           <label key={def.key}>
             <span>{def.label}</span>
@@ -57,7 +58,7 @@ export function NewAdventurePrompt({
           <span className="spacer" />
           <button className="ghost" onClick={onCancel}>Cancel</button>
           <button onClick={begin} disabled={!scenarioReady}>
-            Begin Adventure
+            {inProgress ? 'End current and begin' : 'Begin Adventure'}
           </button>
         </div>
       </div>
