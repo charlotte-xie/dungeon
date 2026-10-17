@@ -53,6 +53,7 @@ export type ProtocolAnomalyKind =
   | 'recovered_tool_call'
   | 'duplicate_tool_call'
   | 'unadvertised_tool_call'
+  | 'unsupported_reasoning'
 
 export interface ProtocolAnomaly {
   kind: ProtocolAnomalyKind

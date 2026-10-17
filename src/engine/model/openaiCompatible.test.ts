@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { completeOpenAICompatibleChat, completeOpenAICompatibleResponses, rejectsTemperature, toResponsesInput } from './openaiCompatible'
+import {
+  completeOpenAICompatibleChat,
+  completeOpenAICompatibleResponses,
+  rejectsReasoning,
+  rejectsTemperature,
+  toResponsesInput,
+} from './openaiCompatible'
 import type { ModelMessage } from './types'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -62,6 +68,71 @@ describe('OpenAI-compatible capability fallback', () => {
   it('does not reinterpret unrelated request failures', () => {
     expect(rejectsTemperature(401, 'invalid API key')).toBe(false)
     expect(rejectsTemperature(400, 'messages must not be empty')).toBe(false)
+    expect(rejectsReasoning(401, 'invalid API key')).toBe(false)
+    expect(rejectsReasoning(400, 'messages must not be empty')).toBe(false)
+  })
+
+  it.each([
+    `{"error":{"message":"Unrecognized request argument supplied: reasoning_effort"}}`,
+    `{"detail":[{"type":"extra_forbidden","loc":["body","reasoning_effort"],"msg":"Extra inputs are not permitted"}]}`,
+    `{"error":{"message":"This model does not support reasoning.effort"}}`,
+  ])('recognises a provider rejection of reasoning: %s', (body) => {
+    expect(rejectsReasoning(400, body)).toBe(true)
+  })
+
+  const completed = (text: string) => new Response(JSON.stringify({
+    choices: [{ message: { content: text }, finish_reason: 'stop' }],
+  }), { status: 200 })
+  const rejected = (message: string) => new Response(JSON.stringify({ error: { message } }), { status: 400 })
+
+  it('retries without rejected reasoning, remembers it, and notes it on each call', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(rejected('Unrecognized request argument supplied: reasoning_effort'))
+      .mockResolvedValueOnce(completed('First.'))
+      .mockResolvedValueOnce(completed('Second.'))
+    vi.stubGlobal('fetch', fetchMock)
+    const request = { model: 'no-reasoning-chat', messages: [], reasoningEffort: 'low' as const }
+    const connection = { baseUrl: 'http://localhost:1234/v1', apiKey: '' }
+
+    const first = await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    expect(first.text).toBe('First.')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toHaveProperty('reasoning_effort', 'low')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('reasoning_effort')
+    expect(first.anomalies).toContainEqual(expect.objectContaining({ kind: 'unsupported_reasoning' }))
+
+    const second = await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).not.toHaveProperty('reasoning_effort')
+    expect(second.anomalies).toContainEqual(expect.objectContaining({ kind: 'unsupported_reasoning' }))
+  })
+
+  it('drops temperature and then reasoning when a Responses provider rejects both', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(rejected("Unsupported parameter: 'temperature' is not supported with this model."))
+      .mockResolvedValueOnce(rejected('Unsupported parameter: reasoning.effort'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Done.' }] }],
+      }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await completeOpenAICompatibleResponses(
+      { model: 'strict-responses', messages: [], reasoningEffort: 'high', temperature: 0.8 },
+      { baseUrl: 'http://localhost:1234/v1', apiKey: '' },
+      new AbortController().signal,
+    )
+    expect(result.text).toBe('Done.')
+    const finalBody = JSON.parse(fetchMock.mock.calls[2][1].body)
+    expect(finalBody).not.toHaveProperty('temperature')
+    expect(finalBody).not.toHaveProperty('reasoning')
+    expect(result.anomalies).toContainEqual(expect.objectContaining({ kind: 'unsupported_reasoning' }))
+  })
+
+  it('still fails on a rejection it cannot repair', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(rejected('model not found')))
+    await expect(completeOpenAICompatibleChat(
+      { model: 'missing-model', messages: [], reasoningEffort: 'low' },
+      { baseUrl: 'http://localhost:1234/v1', apiKey: '' },
+      new AbortController().signal,
+    )).rejects.toThrow('model API 400')
   })
 })
 

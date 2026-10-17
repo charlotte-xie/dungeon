@@ -14,6 +14,7 @@ import type {
   ModelConnection,
   ModelMessage,
   ModelToolDefinition,
+  ProtocolAnomaly,
 } from './types'
 
 function trimTrailingSlashes(value: string): string {
@@ -65,19 +66,64 @@ function authorizationHeaders(apiKey: string): Record<string, string> {
 }
 
 // Capabilities vary by endpoint and model, and names are not reliable signals.
-// Learn unsupported temperature settings from a provider's validation response
-// once, then omit the field for later calls in this browser session.
+// Learn unsupported temperature and reasoning settings from a provider's
+// validation response once, then omit the field for later calls in this
+// browser session.
 const temperatureUnsupported = new Set<string>()
+const reasoningUnsupported = new Set<string>()
 
 export const MODEL_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
 const MODEL_LIST_TIMEOUT_MS = 30 * 1000
 
+const UNSUPPORTED_WORDING = /unsupported|not\s+support|not\s+allowed|not\s+permitted|unknown|unrecognized|invalid/i
+
 export function rejectsTemperature(status: number, errorBody: string): boolean {
-  return (
-    status === 400 &&
-    /temperature/i.test(errorBody) &&
-    /unsupported|not\s+support|not\s+allowed|unknown|unrecognized|invalid/i.test(errorBody)
-  )
+  return status === 400 && /temperature/i.test(errorBody) && UNSUPPORTED_WORDING.test(errorBody)
+}
+
+export function rejectsReasoning(status: number, errorBody: string): boolean {
+  return status === 400 && /reasoning/i.test(errorBody) && UNSUPPORTED_WORDING.test(errorBody)
+}
+
+// Dropping reasoning changes how the model behaves, so it is noted in the
+// call's trace rather than only in the console.
+const REASONING_DROPPED: ProtocolAnomaly = {
+  kind: 'unsupported_reasoning',
+  detail: 'reasoning setting rejected by the provider; sent without it',
+}
+
+const REJECTABLE_FIELDS = [
+  { name: 'temperature', fields: ['temperature'], rejects: rejectsTemperature, unsupported: temperatureUnsupported },
+  { name: 'reasoning', fields: ['reasoning_effort', 'reasoning'], rejects: rejectsReasoning, unsupported: reasoningUnsupported },
+]
+
+// Post a completion request. On a 400 that rejects an optional field still in
+// the body, remember that for this endpoint and model, drop the field, and
+// retry; each retry removes a field, so this ends after at most two.
+async function postWithFallbacks(
+  url: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+  capabilityKey: string,
+  label: string,
+): Promise<Response> {
+  let response = await postCompletion(url, apiKey, body, signal)
+  while (!response.ok) {
+    const { status, statusText } = response
+    const errorBody = await response.text().catch(() => '')
+    const rejected = REJECTABLE_FIELDS.find(
+      (option) => option.fields.some((field) => Object.hasOwn(body, field)) && option.rejects(status, errorBody),
+    )
+    if (!rejected) {
+      throw new Error(`${label} API ${status}: ${errorBody.slice(0, 200) || statusText}`)
+    }
+    rejected.unsupported.add(capabilityKey)
+    for (const field of rejected.fields) delete body[field]
+    console.debug(`[model:${label}] retrying without unsupported ${rejected.name}`)
+    response = await postCompletion(url, apiKey, body, signal)
+  }
+  return response
 }
 
 async function postCompletion(
@@ -158,44 +204,26 @@ async function completeOpenAICompatibleChatWithinTimeout(
     body.tools = request.tools.map(toWireTool)
     if (request.toolChoice) body.tool_choice = request.toolChoice
   }
-  if (request.reasoningEffort && request.reasoningEffort !== 'default') {
+  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  const wantsReasoning = !!request.reasoningEffort && request.reasoningEffort !== 'default'
+  if (wantsReasoning && !reasoningUnsupported.has(capabilityKey)) {
     body.reasoning_effort = request.reasoningEffort
   }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature
   }
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
   const url = `${baseUrl}/chat/completions`
-  let response = await postCompletion(url, connection.apiKey, body, signal)
-  if (!response.ok) {
-    let errorBody = await response.text().catch(() => '')
-    if (Object.hasOwn(body, 'temperature') && rejectsTemperature(response.status, errorBody)) {
-      temperatureUnsupported.add(capabilityKey)
-      delete body.temperature
-      console.debug(`[model:${label}] retrying without unsupported temperature`)
-      response = await postCompletion(url, connection.apiKey, body, signal)
-      if (!response.ok) errorBody = await response.text().catch(() => '')
-    }
-    if (response.ok) {
-      const raw = (await response.json()) as unknown
-      console.debug(`[model:${label}] response`, { raw })
-      return normalizeOpenAIChatCompletion(
-        raw,
-        new Set((request.tools ?? []).map((tool) => tool.name)),
-      )
-    }
-    throw new Error(
-      `${label} API ${response.status}: ${errorBody.slice(0, 200) || response.statusText}`,
-    )
-  }
+  const response = await postWithFallbacks(url, connection.apiKey, body, signal, capabilityKey, label)
   const raw = (await response.json()) as unknown
   console.debug(`[model:${label}] response`, { raw })
-  return normalizeOpenAIChatCompletion(
+  const completion = normalizeOpenAIChatCompletion(
     raw,
     new Set((request.tools ?? []).map((tool) => tool.name)),
   )
+  if (wantsReasoning && !Object.hasOwn(body, 'reasoning_effort')) completion.anomalies.push(REASONING_DROPPED)
+  return completion
 }
 
 // --- Responses API (stateless) ---
@@ -278,42 +306,30 @@ async function completeResponsesWithinTimeout(
     // Stateless by design: never rely on (or pay for) server-side storage.
     store: false,
   }
-  if (request.reasoningEffort && request.reasoningEffort !== 'default') {
+  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  const wantsReasoning = !!request.reasoningEffort && request.reasoningEffort !== 'default'
+  if (wantsReasoning && !reasoningUnsupported.has(capabilityKey)) {
     body.reasoning = { effort: request.reasoningEffort }
   }
   if (request.tools?.length) {
     body.tools = request.tools.map(toResponsesTool)
     if (request.toolChoice) body.tool_choice = request.toolChoice
   }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature
   }
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
   const url = `${baseUrl}/responses`
-  let response = await postCompletion(url, connection.apiKey, body, signal)
-  if (!response.ok) {
-    let errorBody = await response.text().catch(() => '')
-    if (Object.hasOwn(body, 'temperature') && rejectsTemperature(response.status, errorBody)) {
-      temperatureUnsupported.add(capabilityKey)
-      delete body.temperature
-      console.debug(`[model:${label}] retrying without unsupported temperature`)
-      response = await postCompletion(url, connection.apiKey, body, signal)
-      if (!response.ok) errorBody = await response.text().catch(() => '')
-    }
-    if (!response.ok) {
-      throw new Error(
-        `${label} API ${response.status}: ${errorBody.slice(0, 200) || response.statusText}`,
-      )
-    }
-  }
+  const response = await postWithFallbacks(url, connection.apiKey, body, signal, capabilityKey, label)
   const raw = (await response.json()) as unknown
   console.debug(`[model:${label}] response`, { raw })
-  return normalizeResponsesApiResponse(
+  const completion = normalizeResponsesApiResponse(
     raw,
     new Set((request.tools ?? []).map((tool) => tool.name)),
   )
+  if (wantsReasoning && !Object.hasOwn(body, 'reasoning')) completion.anomalies.push(REASONING_DROPPED)
+  return completion
 }
 
 export async function listOpenAICompatibleModels(
