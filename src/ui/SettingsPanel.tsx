@@ -12,6 +12,7 @@ import {
   XAI_BASE_URL,
 } from '../engine/config'
 import { listModels } from '../engine/model/client'
+import type { ReasoningEffort } from '../engine/model/types'
 import type {
   AdventureSlots,
   ContextConfig,
@@ -39,6 +40,26 @@ interface SettingsPanelProps {
   ) => void
 }
 
+function ReasoningPicker({ label, value, onChange }: {
+  label: string
+  value: ReasoningEffort
+  onChange: (value: ReasoningEffort) => void
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as ReasoningEffort)}>
+        <option value="default">Provider default (omit setting)</option>
+        <option value="none">Off</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="xhigh">Extra high</option>
+      </select>
+    </label>
+  )
+}
+
 export function SettingsPanel({
   model,
   apiKey,
@@ -60,6 +81,7 @@ export function SettingsPanel({
   const [detectedModels, setDetectedModels] = useState<string[] | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
   const detectControllerRef = useRef<AbortController | null>(null)
 
   useEffect(
@@ -121,6 +143,16 @@ export function SettingsPanel({
   }
 
   function save() {
+    const roles = [
+      { name: 'Narrator', model: draftModel, effort: draftContext.narratorReasoning },
+      { name: 'Plotter', model: draftContext.plotterModel || draftModel, effort: draftContext.plotterReasoning },
+      { name: 'Summariser', model: draftContext.summarizerModel || draftModel, effort: draftContext.summarizerReasoning },
+    ]
+    const invalid = roles.find((r) => /^grok-4\.7(?:-|$)/.test(r.model.trim()) && r.effort === 'none')
+    if (invalid) {
+      setSettingsError(`${invalid.name}: Grok 4.7 requires reasoning. Choose Low or higher.`)
+      return
+    }
     const trimmed = {} as AdventureSlots
     for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
     onSave(
@@ -141,6 +173,24 @@ export function SettingsPanel({
     setDraftBaseUrl(DEFAULT_BASE_URL)
     setDraftSampling({ ...DEFAULT_SAMPLING })
     setDraftContext({ ...DEFAULT_CONTEXT })
+    setSettingsError(null)
+  }
+
+  function applyGrokPreset() {
+    resetDetection()
+    setSettingsError(null)
+    setDraftBaseUrl(XAI_BASE_URL)
+    setDraftModel('grok-4.7')
+    setDraftContext((c) => ({
+      ...c,
+      narratorReasoning: 'low',
+      plotterModel: 'grok-4.3',
+      plotterReasoning: 'low',
+      summarizerModel: 'grok-4.3',
+      summarizerReasoning: 'none',
+      apiProtocol: 'responses',
+      useReviser: false,
+    }))
   }
 
   return (
@@ -222,7 +272,7 @@ export function SettingsPanel({
           )}
         </label>
         <label
-          title={`Which OpenAI-compatible wire protocol to use for all model calls. Chat Completions (/chat/completions) works on every provider, including Mistral, LM Studio, and llama.cpp — Mistral supports only this one. Responses (/responses) is the newer format xAI and OpenAI recommend (xAI has deprecated Chat Completions) and is also supported by Ollama and vLLM; used statelessly, so behavior is otherwise identical. Default ${DEFAULT_CONTEXT.apiProtocol === 'responses' ? 'Responses' : 'Chat Completions'}.`}
+          title={`Which OpenAI-compatible wire protocol to use for all model calls. Chat Completions (/chat/completions) works on every provider, including Mistral, LM Studio, and llama.cpp — Mistral supports only this one. Responses (/responses) is the newer format xAI and OpenAI recommend (xAI has deprecated Chat Completions) and is also supported by Ollama and vLLM; used statelessly, so behaviour is otherwise identical. Default ${DEFAULT_CONTEXT.apiProtocol === 'responses' ? 'Responses' : 'Chat Completions'}.`}
         >
           <span>API protocol</span>
           <select
@@ -250,9 +300,9 @@ export function SettingsPanel({
           />
         </label>
         <label
-          title={`Pick a preset on the left or type any model id on the right. Sent to /chat/completions. Default: ${DEFAULT_MODEL}. Click "Detect models" above to populate this list from your endpoint. Applies on the next turn.`}
+          title={`Pick a preset on the left or type any model id on the right. Default: ${DEFAULT_MODEL}. Click "Detect models" above to populate this list from your endpoint. Applies on the next turn.`}
         >
-          <span>Model</span>
+          <span>Narrator model</span>
           <div className="model-picker">
             <select
               value={modelChoices.includes(draftModel) ? draftModel : ''}
@@ -274,6 +324,55 @@ export function SettingsPanel({
             />
           </div>
         </label>
+        <ReasoningPicker
+          label="Narrator reasoning"
+          value={draftContext.narratorReasoning}
+          onChange={(value) => setContextField('narratorReasoning', value)}
+        />
+        {(['plotter', 'summarizer'] as const).map((role) => {
+          const modelKey = `${role}Model` as const
+          const reasoningKey = `${role}Reasoning` as const
+          const name = role === 'plotter' ? 'Plotter' : 'Summariser'
+          return (
+            <div key={role} className="role-settings">
+              <label>
+                <span>{name} model</span>
+                <div className="model-picker">
+                  <select
+                    aria-label={`${name} model preset`}
+                    value={modelChoices.includes(draftContext[modelKey]) ? draftContext[modelKey] : ''}
+                    onChange={(e) => setContextField(modelKey, e.target.value)}
+                  >
+                    <option value="">Use narrator model / custom</option>
+                    {modelChoices.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    aria-label={`${name} model ID`}
+                    value={draftContext[modelKey]}
+                    onChange={(e) => setContextField(modelKey, e.target.value)}
+                    placeholder="Use narrator model"
+                    spellCheck={false}
+                  />
+                </div>
+              </label>
+              <ReasoningPicker
+                label={`${name} reasoning`}
+                value={draftContext[reasoningKey]}
+                onChange={(value) => setContextField(reasoningKey, value)}
+              />
+            </div>
+          )
+        })}
+        <button type="button" className="ghost" onClick={applyGrokPreset}>
+          Use Grok 4.7 narrator + 4.3 plotting
+        </button>
+        <p className="hint">
+          Preset: narrator 4.7 low, plotter 4.3 low, summariser 4.3 off; Responses API,
+          reviser off. Keeps your adventure and API key. For other providers, choose
+          a supported reasoning level or Provider default. Grok 4.7 requires reasoning;
+          choose Low or higher.
+        </p>
         <label
           title={`Model id used for the optional reviser pass. A small, fast instruction-following model is usually sufficient. Default: ${DEFAULT_REVISER_MODEL}.`}
         >
@@ -497,6 +596,7 @@ export function SettingsPanel({
           turn. Click <em>New Adventure</em> in the header to restart — the DM
           will generate a fresh opening from the brief above.
         </p>
+        {settingsError && <p className="error-text" role="alert">{settingsError}</p>}
         <div className="modal-actions">
           <button className="ghost" onClick={resetDefaults}>
             Reset to defaults

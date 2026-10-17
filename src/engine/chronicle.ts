@@ -15,18 +15,18 @@
 //    entry each (summaries run in parallel; entries append in story order).
 //    Between events the chronicle and cutoff are frozen.
 // 2. After folding, if chronicle[k].length >= N for some k, take the first
-//    M entries at level k, summarize them into one entry of approximately
+//    M entries at level k, summarise them into one entry of approximately
 //    entryTargetChars, append it to chronicle[k+1]. Recurse. Levels only
 //    grow during folds, so promotions can only fire inside a drain event.
 // 3. If level k is the topmost and gets compacted, chronicle gains a new
 //    level k+1.
 //
-// All summarization goes through runSummarizer (one model call per fold or
+// All summarisation goes through runSummarizer (one model call per fold or
 // promotion). Old turns stay in `turns[]` for inspection/replay; the cutoff
-// just marks the boundary the model sees as "summarized".
+// just marks the boundary the model sees as "summarised".
 
 import { runSummarizer } from './agents/summarizer'
-import type { ApiProtocol, ModelMessage } from './model/types'
+import type { ApiProtocol, ModelMessage, ReasoningEffort } from './model/types'
 import type { Chronicle, ChronicleEntry, Memory, Turn } from './types'
 
 export interface ChronicleSettings {
@@ -48,10 +48,11 @@ function targetForInputs(inputs: string[], M: number): number {
 
 export interface ChronicleAgentArgs {
   model: string
+  reasoningEffort?: ReasoningEffort
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
-  // Long-term memory at fold time — passed to the summarizer as grounding
+  // Long-term memory at fold time — passed to the summariser as grounding
   // canon so entity names and facts stay consistent across chronicle entries.
   memory: Memory
 }
@@ -76,7 +77,7 @@ function renderTurnForSummary(t: Turn): string {
 
 // One pass through the cascade: fold raw turns into chronicle[0] if eligible,
 // then promote upward as long as any level is over threshold. Each iteration
-// makes at most one summarizer call. Loop until no further compaction is
+// makes at most one summariser call. Loop until no further compaction is
 // triggered.
 export async function compactCascade(
   turns: Turn[],
@@ -90,7 +91,7 @@ export async function compactCascade(
   const N = Math.max(2, settings.compactionThreshold)
   const M = Math.max(1, Math.min(settings.compactionBatch, N - 1))
   // Drain target. Clamping to N - M guarantees an event folds at least one
-  // full sub-batch (and reproduces legacy fold-one-batch behavior for stored
+  // full sub-batch (and reproduces legacy fold-one-batch behaviour for stored
   // configs whose threshold predates the floor setting).
   const low = Math.max(0, Math.min(settings.compactionFloor, N - M))
   let nextChronicle: Chronicle = chronicle.map((level) => level.slice())
@@ -118,6 +119,7 @@ export async function compactCascade(
           return runSummarizer(
             {
               model: agent.model,
+              reasoningEffort: agent.reasoningEffort,
               apiKey: agent.apiKey,
               baseUrl: agent.baseUrl,
               protocol: agent.protocol,
@@ -158,6 +160,7 @@ export async function compactCascade(
       const result = await runSummarizer(
         {
           model: agent.model,
+          reasoningEffort: agent.reasoningEffort,
           apiKey: agent.apiKey,
           baseUrl: agent.baseUrl,
           protocol: agent.protocol,

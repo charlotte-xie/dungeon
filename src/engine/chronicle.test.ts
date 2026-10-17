@@ -78,9 +78,25 @@ describe('compactCascade drain events', () => {
     expect(mockedSummarizer).not.toHaveBeenCalled()
   })
 
+  it('forwards the summariser model and effort through folds and promotions', async () => {
+    const result = await compactCascade(
+      Array.from({ length: 8 }, (_, i) => completedTurn(i)),
+      0,
+      [],
+      { compactionThreshold: 4, compactionFloor: 0, compactionBatch: 2 },
+      { ...AGENT, model: 'grok-4.3', reasoningEffort: 'none' },
+      new AbortController().signal,
+    )
+    expect(result.chronicle).toHaveLength(2)
+    expect(mockedSummarizer).toHaveBeenCalledTimes(5)
+    for (const [input] of mockedSummarizer.mock.calls) {
+      expect(input).toMatchObject({ model: 'grok-4.3', reasoningEffort: 'none' })
+    }
+  })
+
   it('clamps the floor for legacy configs whose threshold predates it', async () => {
     // Stored threshold 8 with the new default floor 16: floor clamps to
-    // N - M = 4, reproducing the old fold-one-batch behavior.
+    // N - M = 4, reproducing the old fold-one-batch behaviour.
     const turns = Array.from({ length: 8 }, (_, i) => completedTurn(i))
     const result = await compactCascade(
       turns,
@@ -127,7 +143,7 @@ describe('failed turns', () => {
     expect(result.chronicle[0][0].text).toContain('PLAYER: p2')
   })
 
-  it('makes no entry — and no summarizer call — for a sub-batch of nothing but failures', async () => {
+  it('makes no entry — and no summariser call — for a sub-batch of nothing but failures', async () => {
     mockedSummarizer.mockClear()
     const turns = [
       ...Array.from({ length: 4 }, (_, i) => failedTurn(i)),

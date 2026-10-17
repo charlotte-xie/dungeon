@@ -1,18 +1,19 @@
-// Summarizer agent. Single-purpose: given a list of input texts (raw turns
+// Summariser agent. Single-purpose: given a list of input texts (raw turns
 // rendered as PLAYER:/DM: lines, OR existing chronicle entries being promoted
 // to a higher level), produce one compact continuity record within the
 // requested length budget.
 //
-// The chronicle module decides what to summarize and at what target length;
+// The chronicle module decides what to summarise and at what target length;
 // the agent just renders the inputs and calls the model.
 
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerLengthNote } from '../../prompts'
 import { completeModel } from '../model/client'
-import type { ApiProtocol, ModelMessage } from '../model/types'
+import type { ApiProtocol, ModelMessage, ReasoningEffort } from '../model/types'
 import type { Memory } from '../types'
 
 export interface SummarizerInput {
   model: string
+  reasoningEffort?: ReasoningEffort
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
@@ -25,7 +26,7 @@ export interface SummarizerInput {
   // are existing chronicle entry texts.
   inputs: string[]
   // Target length for the resulting summary, in chars. Used both as the
-  // summarizer's prompt directive and for budgeting at higher levels.
+  // summariser's prompt directive and for budgeting at higher levels.
   targetChars: number
 }
 
@@ -38,9 +39,9 @@ function normalizeWords(text: string): string {
 }
 
 // Memory is useful for canonical entity names, but sending the entire store
-// distracts the summarizer and can leak unrelated facts into the chronicle.
+// distracts the summariser and can leak unrelated facts into the chronicle.
 // Keep only entries whose slug or leading identity phrase is mentioned in the
-// material being summarized.
+// material being summarised.
 export function relevantMemoryForInputs(memory: Memory, inputs: string[]): Memory {
   const source = ` ${normalizeWords(inputs.join('\n'))} `
   const relevant: Memory = {}
@@ -83,7 +84,7 @@ export async function runSummarizer(
   const canonBlock = Object.keys(relevantMemory).length
     ? `--- CANON (long-term memory — grounding only) ---\n\n` +
       `Use this only to preserve the spelling and identity of entities already mentioned ` +
-      `in the inputs. Do NOT summarize this block or import any fact that the inputs ` +
+      `in the inputs. Do NOT summarise this block or import any fact that the inputs ` +
       `themselves do not establish or change.\n\n` +
       `\`\`\`json\n${JSON.stringify(relevantMemory, null, 2)}\n\`\`\`\n\n`
     : ''
@@ -108,6 +109,7 @@ export async function runSummarizer(
   const completion = await completeModel(
     {
       model: input.model,
+      reasoningEffort: input.reasoningEffort,
       messages,
       label: 'summarizer',
     },
@@ -115,6 +117,6 @@ export async function runSummarizer(
     signal,
   )
   const content = completion.text
-  if (!content) throw new Error('Summarizer returned an empty continuity record')
+  if (!content) throw new Error('Summariser returned an empty continuity record')
   return { summary: content }
 }

@@ -6,7 +6,7 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 
 - Significant player actions and commitments.
 - Irreversible outcomes and changes to the current situation.
-- Unresolved discoveries, threats, mysteries, debts, promises, and objectives that can affect what comes later.
+- Established discoveries, threats, mysteries, debts, promises, and objectives with consequential effects, including developments the player is following without explicitly requesting each step.
 - Changes in an NPC's intentions, knowledge, allegiance, or relationship with the player.
 - Who was present when something significant was revealed, done, or agreed — who knows what matters later.
 - Important resources, injuries, objects, access, or leverage gained or lost.
@@ -19,6 +19,7 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 - Atmosphere, scenery, weather, clothing, incidental gestures, and sensory description.
 - Action choreography, travel between known places, exact dialogue, and intermediate steps once their outcome is known.
 - Transient reactions, repeated facts, introductions already established elsewhere, and resolved minor obstacles.
+- Incidental offers the player passed over and future directions they explicitly rejected. Do not turn these into outstanding objectives or promises to revisit. Brief replies, silence, or Continue are not rejection of the established story. Keep consequential events that actually happened, without preserving abandoned hooks as future business or treating narrator repetition as player interest.
 - Details whose removal would not affect a later consequence, mystery, relationship, objective, or continuity check.
 
 Do not import facts from grounding context that the inputs do not establish or change. Never preserve a detail merely because it is vivid, named, or occupies many words in the source.
@@ -27,7 +28,7 @@ If the inputs contain little consequential change, one sentence is sufficient. D
 
 # Style — complete grammatical English, NO EXCEPTIONS
 
-Past tense, second person. Every sentence is complete: subject, verb, all required articles, auxiliaries, prepositions, conjunctions, and pronouns in place.
+Past tense, second person, British/international English. Every sentence is complete: subject, verb, all required articles, auxiliaries, prepositions, conjunctions, and pronouns in place.
 
 The entry is short by omitting unimportant details, not by stripping grammar. Write full, proper English sentences.
 

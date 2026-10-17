@@ -1,4 +1,4 @@
-// Pure normalization for OpenAI-compatible responses — both the legacy Chat
+// Pure normalisation for OpenAI-compatible responses — both the legacy Chat
 // Completions shape and the newer Responses API shape. Provider quirks are
 // quarantined here so game orchestration never parses wire payloads or
 // model-specific text protocols.
@@ -95,7 +95,7 @@ interface JsonSpan {
 }
 
 // Find complete top-level JSON objects/arrays embedded in otherwise free-form
-// text. Candidates are parsed and removed only when they have a recognized
+// text. Candidates are parsed and removed only when they have a recognised
 // tool-envelope shape, so ordinary prose and JSON remain untouched.
 function findJsonSpans(text: string): JsonSpan[] {
   const spans: JsonSpan[] = []
@@ -268,7 +268,7 @@ function recoverTextToolCalls(
   }
 }
 
-// Normalize a Responses API payload: typed `output` items instead of a
+// Normalise a Responses API payload: typed `output` items instead of a
 // single choice message. Reasoning items surface readable summaries only
 // (encrypted reasoning content is ignored); the same text-form recovery and
 // quarantine rules as the chat path apply to the message text.

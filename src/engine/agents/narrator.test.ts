@@ -112,6 +112,29 @@ describe('runNarrator two-phase flow', () => {
     expect(result.plotterTrace).toBeUndefined()
   })
 
+  it('routes narration and plotting independently and attributes reasoning to each phase', async () => {
+    mockedModel.mockResolvedValueOnce(completion({ text: 'The door opens.', reasoningTokens: 12 }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE', reasoningTokens: 5 }))
+    const result = await runNarrator({
+      ...CTX,
+      model: 'grok-4.7',
+      reasoningEffort: 'low',
+      plotterModel: 'grok-4.3',
+      plotterReasoning: 'none',
+    }, new AbortController().signal)
+    expect(mockedModel.mock.calls[0][0]).toMatchObject({ model: 'grok-4.7', reasoningEffort: 'low' })
+    expect(mockedModel.mock.calls[1][0]).toMatchObject({ model: 'grok-4.3', reasoningEffort: 'none' })
+    expect(result.reasoningTokens).toBe(12)
+    expect(result.plotterReasoningTokens).toBe(5)
+  })
+
+  it('uses the narrator model when the plotter model is blank', async () => {
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    await runNarrator({ ...CTX, plotterModel: '  ', plotterReasoning: 'low' }, new AbortController().signal)
+    expect(mockedModel.mock.calls[1][0]).toMatchObject({ model: CTX.model, reasoningEffort: 'low' })
+  })
+
   it('iterates after a context read so the model can act on it', async () => {
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
     mockedModel.mockResolvedValueOnce(

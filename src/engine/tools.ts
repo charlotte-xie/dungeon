@@ -44,7 +44,7 @@ export const UPDATE_STATE_TOOL: ModelToolDefinition = {
 export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
     name: 'future_plot_plan',
     description:
-      `Edit the private numbered plan of future pressures, revelations, NPC moves, and unresolved hooks. Call when the plan materially changes. Use one operation per call: \`append\` or \`insert\` a genuine new direction, \`update\` a direction that shifted, or \`delete\` a beat once it has played out. Positions are 1-indexed. Maximum ${MAX_PLOT_ITEMS} entries and ${MAX_PLOT_ITEM_CHARS} characters per entry.`,
+      `Edit the private director's notebook: six labelled entries Promise, Question, Stakes, Intentions, Next, and Payoff. Plan NPC actions and changing circumstances, never the player's choices. Use one operation per call: \`append\` or \`insert\` a missing entry, \`update\` one that materially changed, or \`delete\` an obsolete or duplicate entry. Keep a stable Promise; refresh Next and Payoff as developments land. Convert legacy hook lists using these labels. Positions are 1-indexed. Maximum ${MAX_PLOT_ITEMS} entries and ${MAX_PLOT_ITEM_CHARS} characters per entry.`,
     parameters: {
       type: 'object',
       properties: {

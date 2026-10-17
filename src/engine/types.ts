@@ -1,6 +1,6 @@
 // Shared data types for the DM engine. Plain TypeScript — no React, no IO.
 
-import type { ApiProtocol } from './model/types'
+import type { ApiProtocol, ReasoningEffort } from './model/types'
 
 export type Role = 'dm' | 'player'
 
@@ -97,6 +97,12 @@ export interface SlotDef {
 }
 
 export interface ContextConfig {
+  narratorReasoning: ReasoningEffort
+  // Empty model means use the narrator model (also preserves legacy settings).
+  plotterModel: string
+  plotterReasoning: ReasoningEffort
+  summarizerModel: string
+  summarizerReasoning: ReasoningEffort
   // N (high watermark) — when the live tail (turns past the cutoff) reaches
   // this many turns, a compaction event runs and drains the tail down to
   // compactionFloor. N also remains the per-level promotion threshold: when

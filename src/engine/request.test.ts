@@ -59,7 +59,7 @@ describe('buildModelMessages layout', () => {
   it('puts subsystem rules in the stable prefix, before any history', () => {
     const messages = build([playerTurn('t1', 'I enter the mill.')])
     const firstUser = messages.findIndex((m) => m.role === 'user')
-    const ruleIndexes = ['# Long-Term Memory', '# Future Plot Plan', '# Live State'].map(
+    const ruleIndexes = ['# Long-Term Memory', '# Story Direction', '# Live State'].map(
       (heading) => messages.findIndex((m) => m.role === 'system' && m.content.includes(heading)),
     )
     for (const idx of ruleIndexes) {

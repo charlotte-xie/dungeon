@@ -29,7 +29,7 @@ describe('saved-game validation', () => {
     expect(isSavedGameLike({ ...validSave(), turns: [null] })).toBe(false)
   })
 
-  it('clamps a finite cutoff to the normalized turn list', () => {
+  it('clamps a finite cutoff to the normalised turn list', () => {
     const raw = { ...validSave(), compactCutoff: 999 }
     expect(isSavedGameLike(raw)).toBe(true)
     if (!isSavedGameLike(raw)) throw new Error('fixture unexpectedly invalid')
@@ -107,7 +107,7 @@ describe('legacy data tolerance', () => {
     expect(ctx.compactionFloor).toBe(DEFAULT_CONTEXT.compactionFloor)
   })
 
-  it('keeps a deliberately customized compaction threshold', () => {
+  it('keeps a deliberately customised compaction threshold', () => {
     const stored: Record<string, string> = {
       'dm.context': JSON.stringify({ compactionThreshold: 12, compactionBatch: 4 }),
     }
@@ -138,10 +138,44 @@ describe('legacy data tolerance', () => {
     expect(ctx.includeWorldState).toBe(true)
     // New fields fall back to defaults…
     expect(ctx.includeOoc).toBe(DEFAULT_CONTEXT.includeOoc)
-    expect(ctx.apiProtocol).toBe(DEFAULT_CONTEXT.apiProtocol)
+    expect(ctx.apiProtocol).toBe('chat-completions')
+    expect(ctx.plotterModel).toBe('')
+    expect(ctx.summarizerModel).toBe('')
+    expect(ctx.narratorReasoning).toBe('default')
+    expect(ctx.plotterReasoning).toBe('default')
+    expect(ctx.summarizerReasoning).toBe('default')
     expect(ctx.compactionFloor).toBe(DEFAULT_CONTEXT.compactionFloor)
     // …and removed fields are dropped rather than carried along.
     expect('includeToolCallHistory' in ctx).toBe(false)
+  })
+})
+
+describe('role settings', () => {
+  it('loads the recommended defaults for a new installation', () => {
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    expect(loadStoredContext()).toMatchObject({
+      narratorReasoning: 'low', plotterModel: 'grok-4.3', plotterReasoning: 'low',
+      summarizerModel: 'grok-4.3', summarizerReasoning: 'none', apiProtocol: 'responses', useReviser: false,
+    })
+  })
+
+  it('preserves saved custom model and effort choices', () => {
+    const saved = {
+      ...DEFAULT_CONTEXT,
+      narratorReasoning: 'medium', plotterModel: 'grok-4.7', plotterReasoning: 'high',
+      summarizerModel: 'custom-model', summarizerReasoning: 'default',
+    }
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(saved) })
+    expect(loadStoredContext()).toEqual(saved)
+  })
+
+  it('ignores invalid persisted role settings', () => {
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({
+      plotterModel: 42, narratorReasoning: 'invalid', summarizerReasoning: null,
+    }) })
+    expect(loadStoredContext()).toMatchObject({
+      plotterModel: '', narratorReasoning: 'default', summarizerReasoning: 'default',
+    })
   })
 })
 

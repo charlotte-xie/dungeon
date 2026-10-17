@@ -65,7 +65,7 @@ export function buildOocRules(maxOocItems: number, maxOocItemChars: number): str
 export const SUMMARIZER_SYSTEM_PROMPT = summarizerTemplate.trim()
 
 // The length budget rides with the inputs rather than in the system prompt,
-// so every summarizer call — including the parallel folds of one drain
+// so every summariser call — including the parallel folds of one drain
 // event — shares one byte-identical system prefix.
 export function buildSummarizerLengthNote(targetChars: number): string {
   const maxChars = Math.ceil(targetChars * 1.5)

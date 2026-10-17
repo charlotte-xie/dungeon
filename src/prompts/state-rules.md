@@ -39,7 +39,7 @@ Before adding anything to `set` (or keeping anything via `keep`), ask: *would th
 - Plot themes, macguffins, key past events.
 - Where the story is going next
 - **Pure narration**: a one-off gesture, a passing remark, an atmospheric detail, a single line of dialogue, a step taken across the room. If the next turn does not need this fact to stay consistent, it stays in the prose.
-- **Re-derivable flavor**: the colour of a stranger's cloak, the wording of a warning, the tavern's name when it won't recur. These live in narration.
+- **Re-derivable flavour**: the colour of a stranger's cloak, the wording of a warning, the tavern's name when it won't recur. These live in narration.
 - **Event log**: state mirrors what's true *right now*, not a record of what happened. "Player drew the sword" → put `player.holding: "drawn longsword"` in `set`, do not append to a history.
 
 ## Tool

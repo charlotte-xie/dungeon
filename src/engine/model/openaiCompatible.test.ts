@@ -1,9 +1,56 @@
-import { describe, expect, it } from 'vitest'
-import { rejectsTemperature, toResponsesInput } from './openaiCompatible'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { completeOpenAICompatibleChat, completeOpenAICompatibleResponses, rejectsTemperature, toResponsesInput } from './openaiCompatible'
 import type { ModelMessage } from './types'
 
+afterEach(() => vi.unstubAllGlobals())
+
+describe('reasoning settings on the wire', () => {
+  it.each(['low', 'none'] as const)('sends Responses reasoning effort %s', async (effort) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Done.' }] }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await completeOpenAICompatibleResponses(
+      { model: effort === 'none' ? 'grok-4.3' : 'grok-4.7', messages: [], reasoningEffort: effort },
+      { baseUrl: 'https://api.x.ai/v1', apiKey: 'test' },
+      new AbortController().signal,
+    )
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://api.x.ai/v1/responses')
+    expect(JSON.parse(init.body)).toMatchObject({ reasoning: { effort }, store: false })
+    expect(JSON.parse(init.body)).not.toHaveProperty('reasoning_effort')
+  })
+
+  it('uses the Chat Completions field and omits provider-default effort', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    for (const reasoningEffort of ['low', 'default'] as const) {
+      await completeOpenAICompatibleChat(
+        { model: 'grok-4.3', messages: [], reasoningEffort },
+        { baseUrl: 'https://api.x.ai/v1', apiKey: 'test' },
+        new AbortController().signal,
+      )
+    }
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ reasoning_effort: 'low' })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('reasoning_effort')
+  })
+
+  it('omits Responses reasoning when provider default is selected', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ output: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await completeOpenAICompatibleResponses(
+      { model: 'custom', messages: [], reasoningEffort: 'default' },
+      { baseUrl: 'http://localhost:1234/v1', apiKey: '' },
+      new AbortController().signal,
+    )
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('reasoning')
+  })
+})
+
 describe('OpenAI-compatible capability fallback', () => {
-  it('recognizes a provider rejection of temperature', () => {
+  it('recognises a provider rejection of temperature', () => {
     expect(
       rejectsTemperature(
         400,

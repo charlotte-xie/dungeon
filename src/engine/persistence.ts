@@ -2,6 +2,7 @@
 // sees only loadStored*/persist* functions and the SavedGame type.
 
 import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
+import type { ReasoningEffort } from './model/types'
 import type {
   AdventureSlots,
   Chronicle,
@@ -342,6 +343,12 @@ export function loadStoredContext(): ContextConfig {
       parsed.compactionThreshold = DEFAULT_CONTEXT.compactionThreshold
     }
     return {
+      // Preserve legacy routing, including local and non-xAI installations.
+      narratorReasoning: storedReasoning(parsed.narratorReasoning),
+      plotterModel: typeof parsed.plotterModel === 'string' ? parsed.plotterModel.trim() : '',
+      plotterReasoning: storedReasoning(parsed.plotterReasoning),
+      summarizerModel: typeof parsed.summarizerModel === 'string' ? parsed.summarizerModel.trim() : '',
+      summarizerReasoning: storedReasoning(parsed.summarizerReasoning),
       compactionThreshold:
         typeof parsed.compactionThreshold === 'number'
           ? parsed.compactionThreshold
@@ -393,7 +400,7 @@ export function loadStoredContext(): ContextConfig {
       apiProtocol:
         parsed.apiProtocol === 'responses' || parsed.apiProtocol === 'chat-completions'
           ? parsed.apiProtocol
-          : DEFAULT_CONTEXT.apiProtocol,
+          : 'chat-completions',
       nsfw:
         typeof parsed.nsfw === 'boolean'
           ? parsed.nsfw
@@ -402,6 +409,12 @@ export function loadStoredContext(): ContextConfig {
   } catch {
     return { ...DEFAULT_CONTEXT }
   }
+}
+
+function storedReasoning(value: unknown): ReasoningEffort {
+  return value === 'none' || value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh'
+    ? value
+    : 'default'
 }
 
 export function summaryToChronicle(summary: string, cutoff: number): Chronicle {

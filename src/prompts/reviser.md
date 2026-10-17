@@ -19,6 +19,8 @@ Find and fix these every time you see them:
 - **Grammar and mechanics.** Missing or wrong articles, dropped "is/are/the/a",
   mismatched tense, agreement errors, run-ons, comma splices, malformed
   punctuation, unfinished clauses, misused dashes/ellipses, typos.
+- **Spelling.** Write British/international English. Convert American spellings
+  (`color`, `realize`, `gray`) to British ones (`colour`, `realise`, `grey`).
 - **Word choice.** Replace vague verbs (`was`, `got`, `did`, `went`,
   `looked`) with concrete ones when the meaning is obvious from context.
   Cut hollow intensifiers (`very`, `really`, `just`, `quite`, `kind of`).

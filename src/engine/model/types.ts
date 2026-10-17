@@ -27,6 +27,8 @@ export interface ModelToolDefinition {
 // conversation, so the client-side prefix-cache architecture applies equally.
 export type ApiProtocol = 'chat-completions' | 'responses'
 
+export type ReasoningEffort = 'default' | 'none' | 'low' | 'medium' | 'high' | 'xhigh'
+
 export interface ModelConnection {
   baseUrl: string
   apiKey: string
@@ -42,6 +44,7 @@ export interface ModelCompletionRequest {
   // provider's cached prefix) while forbidding calls for this completion.
   toolChoice?: 'auto' | 'none'
   temperature?: number
+  reasoningEffort?: ReasoningEffort
   label?: string
 }
 

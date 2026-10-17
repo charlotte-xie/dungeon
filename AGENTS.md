@@ -21,16 +21,22 @@ Because requests originate in the browser, a local or hosted endpoint must allow
 
 Get a key at [console.x.ai](https://console.x.ai/).
 
-## Config
+## Settings reference
 
 In **Settings**:
 
 - **API key** — required by hosted providers; local servers may accept a placeholder.
 - **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
-- **Model** — defaults to `grok-4`; choose a model exposed by the configured endpoint.
+- **Narrator model / reasoning** — defaults to `grok-4.7` with low reasoning.
+- **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
+- **Summariser model / reasoning** — defaults to `grok-4.3` with reasoning off.
+- Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
+- The **Use Grok 4.7 narrator + 4.3 plotting** button applies these choices, selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
 - System prompt, scenario, style guide, sampling params, context limits.
 
-Provider transport and response repair are isolated under `src/engine/model`. Game orchestration consumes provider-neutral messages and tool calls. The normalizer handles native tool calls as well as common malformed text forms, while refusing calls for tools that were not advertised in the request.
+New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The plotter currently receives the same conversation context as the narrator, so selecting the same model lets you compare shared-prefix caching against a separate plotting model.
+
+Provider transport and response repair are isolated under `src/engine/model`. Game orchestration consumes provider-neutral messages and tool calls. The normaliser handles native tool calls as well as common malformed text forms, while refusing calls for tools that were not advertised in the request.
 
 ## Context efficiency
 

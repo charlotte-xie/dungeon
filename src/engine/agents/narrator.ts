@@ -13,8 +13,8 @@
 // phases advertise the identical tool set — the final narrative attempt
 // forbids calls via tool_choice rather than dropping the schemas, which are
 // part of the provider's cached prefix. So every request of the turn is a
-// byte-for-byte extension of the previous one: the plotter request is a
-// near-total prefix-cache hit on the narrator's, and updates reflect what was
+// byte-for-byte extension of the previous one: when both phases use the same
+// model, the plotter can reuse the narrator's prefix cache. Updates reflect what was
 // actually narrated rather than what the model intended to write. Provider
 // transport and response-format quirks live under ../model.
 
@@ -32,6 +32,7 @@ import type {
   ModelCompletion,
   ModelToolCall,
   ModelToolDefinition,
+  ReasoningEffort,
 } from '../model/types'
 import type {
   AdventureSlots,
@@ -45,6 +46,9 @@ import type {
 export interface NarratorContext {
   systemPrompt: string
   model: string
+  reasoningEffort?: ReasoningEffort
+  plotterModel?: string
+  plotterReasoning?: ReasoningEffort
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
@@ -67,6 +71,7 @@ export interface NarratorResult {
   // trace UI can present the two phases as distinct sections.
   trace: TraceEvent[]
   plotterTrace?: TraceEvent[]
+  plotterReasoningTokens?: number
   reasoningTokens?: number
 }
 
@@ -178,7 +183,7 @@ export async function runNarrator(
     })
   }
   // Re-prompt the model for prose when a turn produced tool calls / reasoning
-  // but no narrative. Honors ctx.reminderAsSystem (same convention as the turn
+  // but no narrative. Honours ctx.reminderAsSystem (same convention as the turn
   // reminder): a true system message when asSystem, otherwise an in-channel
   // (OOC: ...) user message. The trace records the exact text sent.
   const pushNudge = (instruction: string) => {
@@ -256,6 +261,7 @@ export async function runNarrator(
     const completion = await completeModel(
       {
         model: ctx.model,
+        reasoningEffort: ctx.reasoningEffort,
         messages,
         tools,
         // The last attempt forbids tool use without dropping the schemas,
@@ -271,7 +277,7 @@ export async function runNarrator(
 
     if (completion.toolCalls.length && !(finalNarrativeAttempt && completion.text)) {
       // The narrator is instructed not to call tools; execute defensively and
-      // continue toward prose. The plotter phase cleans up after regardless.
+      // continue towards prose. The plotter phase cleans up after regardless.
       const interstitial = completion.text
       if (interstitial) trace.push({ kind: 'thought', text: interstitial })
       handleToolCalls(completion)
@@ -319,6 +325,7 @@ export async function runNarrator(
   // Plotter role, and loop until it records nothing further. A plotter
   // failure never loses the turn: the prose and any updates recorded so far
   // are kept, and the rest of the state simply carries forward.
+  const narratorReasoningTokens = totalReasoningTokens
   if (tools.length) {
     messages.push({ role: 'assistant', content: proseText })
     const plotterInstruction = buildPlotterInstruction(ctx.flags, data, ctx.stateCleanupThreshold)
@@ -332,7 +339,8 @@ export async function runNarrator(
         const label = `plotter:${iter}`
         const completion = await completeModel(
           {
-            model: ctx.model,
+            model: ctx.plotterModel?.trim() || ctx.model,
+            reasoningEffort: ctx.plotterReasoning,
             messages,
             tools,
             temperature: ctx.sampling.temperature,
@@ -375,6 +383,7 @@ export async function runNarrator(
     data,
     trace: narratorTrace,
     plotterTrace: plotterTrace.length ? plotterTrace : undefined,
-    reasoningTokens: totalReasoningTokens || undefined,
+    reasoningTokens: narratorReasoningTokens || undefined,
+    plotterReasoningTokens: (totalReasoningTokens - narratorReasoningTokens) || undefined,
   }
 }

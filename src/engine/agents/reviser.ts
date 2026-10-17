@@ -1,6 +1,7 @@
 // Reviser agent. Takes the narrator's draft, runs a single non-reasoning
-// pass to polish the prose into fluent English without changing what happens,
-// and returns the revised text as the final reply for the turn.
+// pass to polish the prose into fluent British/international English without
+// changing what happens, and returns the revised text as the final reply for
+// the turn.
 //
 // One-shot: no tool use, no iteration loop. The reviser never mutates state,
 // plot, or memory — it only rewrites prose.
@@ -40,9 +41,9 @@ export function buildReviserMessages(
       role: 'system',
       content:
         `# Author style guide (preserve, do not amplify)\n\n${styleGuide}\n\n` +
-        `Use this only to recognize the intended voice so you don't flatten ` +
-        `it. Do not "push" toward this voice — the draft is already in it. ` +
-        `Your job is grammar and clarity, not stylization.`,
+        `Use this only to recognise the intended voice so you don't flatten ` +
+        `it. Do not "push" towards this voice — the draft is already in it. ` +
+        `Your job is grammar and clarity, not stylisation.`,
     })
   }
   const userText =

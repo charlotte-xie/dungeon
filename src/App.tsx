@@ -16,6 +16,7 @@ import { SavesPanel } from './ui/SavesPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { StateViewer } from './ui/StateViewer'
 import { TraceView } from './ui/TraceView'
+import { SteeringPanel } from './ui/SteeringPanel'
 
 function App() {
   const systemPrompt = DEFAULT_SYSTEM_PROMPT
@@ -34,6 +35,7 @@ function App() {
   const [showContext, setShowContext] = useState(false)
   const [showNewAdventure, setShowNewAdventure] = useState(false)
   const [showSaves, setShowSaves] = useState(false)
+  const [showSteering, setShowSteering] = useState(false)
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(() => new Set())
 
   function toggleTrace(id: string) {
@@ -167,6 +169,14 @@ function App() {
         />
         <div className="composer-buttons">
           <button
+            className="ghost"
+            onClick={() => setShowSteering(true)}
+            disabled={thinking || turns.length === 0}
+            title="Adjust the pace, tone, or direction; review your standing preferences"
+          >
+            Steer story
+          </button>
+          <button
             className="primary"
             onClick={() => void game.send()}
             disabled={thinking || !input.trim()}
@@ -215,6 +225,20 @@ function App() {
           </button>
         </div>
       </div>
+      {showSteering && (
+        <SteeringPanel
+          input={input}
+          preferences={game.ooc}
+          enabled={context.includeOoc}
+          busy={thinking}
+          onClose={() => setShowSteering(false)}
+          onApply={(next) => {
+            if (thinking) return
+            game.commitOoc(next.preferences)
+            game.setInput(next.input)
+          }}
+        />
+      )}
       {showSettings && (
         <SettingsPanel
           model={model}

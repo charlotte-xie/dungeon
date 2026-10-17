@@ -10,7 +10,7 @@ Memory holds **durable facts about entities**. The chronicle records the story's
 
 Prefer these facet names — avoid inventing a synonym for an existing facet. Include a facet only while it is relevant or important to the story, and delete it when it stops mattering.
 
-Shape beyond the suggested facets is your discretion: values are one or two complete sentences; itemize into a map when content is naturally keyed (`player.possessions.money`, `mark.relationships.phil`); nest deeper only when it genuinely helps. Keep the file tight by deleting what stopped mattering — never by clipping sentences into fragments.
+Shape beyond the suggested facets is your discretion: values are one or two complete sentences; itemise into a map when content is naturally keyed (`player.possessions.money`, `mark.relationships.phil`); nest deeper only when it genuinely helps. Keep the file tight by deleting what stopped mattering — never by clipping sentences into fragments.
 
 Any entry:
 
@@ -24,12 +24,12 @@ Characters add:
 - **`wants`** — specific goals and intentions of the character.
 - **`facts`** — important established facts about the character.
 - **`knowledge`** — what the character knows: things they have witnessed or been told, including about the player.
-- **`bond`** — current relationship and attitude toward the player.
-- **`relationships`** — ties to other characters; itemize by character name when there are several.
+- **`bond`** — current relationship and attitude towards the player.
+- **`relationships`** — ties to other characters; itemise by character name when there are several.
 
 Places add:
 
-- **`npcs`** — regulars and characters connected to the place; itemize by character name when there are several.
+- **`npcs`** — regulars and characters connected to the place; itemise by character name when there are several.
 - **`layout`** — physical arrangement and notable features.
 
 Things add:
@@ -41,7 +41,7 @@ The player (key `player`) adds these instead of the character facets — never `
 
 - **`background`** — pre-story origin and circumstances established in fiction.
 - **`skills`** — competencies and talents demonstrated or declared.
-- **`possessions`** — durable belongings and resources, as an itemized map of item → short description (`"money": "30 pounds"`). What is carried or worn right now is live state. (Other characters may carry a `possessions` facet too.)
+- **`possessions`** — durable belongings and resources, as an itemised map of item → short description (`"money": "30 pounds"`). What is carried or worn right now is live state. (Other characters may carry a `possessions` facet too.)
 - **`oaths`** — standing commitments: promises, debts, and deals made in fiction.
 - **`reputation`** — how the player is generally known and regarded.
 
@@ -95,7 +95,8 @@ The player (key `player`) adds these instead of the character facets — never `
 - **A running log**: `history` keeps only the few notable events that still shape the present — curated, never appended to every scene; the chronicle records everything else. Other facets never carry narrative ("…let Amy sing one number after the first set and approved after she delivered") — keep the standing fact (`bond: "He approves of Amy's singing and will give her a number on band nights."`) and reserve events for `history`. Narrative connectives ("after", "then", "last Friday") outside `history` are the warning sign.
 - **Temporary state of any kind**: where someone is standing right now, who is present, a mood of the moment, what's held or worn, the weather. That is current-scene data.
 - Planned beats, plot directions — planning data, not memory.
-- Irrelevant details and re-derivable flavor: every door, every meal, a cloak's colour, a tavern's name when it won't recur.
+- Irrelevant details and re-derivable flavour: every door, every meal, a cloak's colour, a tavern's name when it won't recur.
+- Incidental hooks the player passed over, explicitly rejected future directions, and speculative significance attached to minor details. Remove notes whose only purpose is to revive an abandoned idea, but retain established facts and consequential relationships. A short reply, silence, or Continue is not grounds to erase the established story. Repeated narrator mentions do not establish player interest.
 
 ## The durability test
 

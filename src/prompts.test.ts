@@ -63,7 +63,7 @@ describe('capability-aware prompts', () => {
     )
   })
 
-  it('keeps the summarizer system prompt byte-stable — the budget rides with the inputs', () => {
+  it('keeps the summariser system prompt byte-stable — the budget rides with the inputs', () => {
     expect(SUMMARIZER_SYSTEM_PROMPT).not.toContain('{{')
     const note = buildSummarizerLengthNote(500)
     expect(note).toContain('500')

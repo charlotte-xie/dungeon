@@ -340,11 +340,11 @@ export function StateViewer({
         {tab === 'plot' && context.includePlotOutline && (
           <>
             <p className="hint">
-              The DM maintains this numbered list via the <code>future_plot_plan</code> tool
-              (append/insert/update/delete by 1-indexed position) — a short private notebook
-              of plot directions the story is heading in. Keeping it lively is the DM's job.{' '}
-              <strong>Future only:</strong> entries should describe what is still ahead of the
-              player; past events should be deleted as they play out. One entry per line;
+              The director maintains six labelled entries: <strong>Promise, Question,
+              Stakes, Intentions, Next, and Payoff</strong>. Promise captures the intended
+              experience; the other entries guide consequential developments and scene
+              endings without choosing the player's actions. Next and Payoff change as
+              developments land. Older hook lists are reorganised on later turns. One entry per line;
               leading <code>-</code>, <code>*</code>, or{' '}
               <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
               each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr

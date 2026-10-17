@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { relevantMemoryForInputs } from './summarizer'
 
-describe('summarizer grounding', () => {
-  it('includes only memory for entities mentioned in the summarized inputs', () => {
+describe('summariser grounding', () => {
+  it('includes only memory for entities mentioned in the summarised inputs', () => {
     const memory = {
       the_baker: { is: 'Hesta the baker', secret: 'hiding her son upstairs' },
       masked_patron: { is: 'Duke Orlan', secret: 'secretly funds the river smugglers' },

@@ -252,7 +252,7 @@ export function useGameController(settings: GameSettings) {
       const allTurns = [...baseTurns, pendingTurn]
       let workingChronicle = baseChronicle
       let workingCutoff = baseCutoff
-      // Compact BEFORE the in-flight turn (we don't want to summarize a turn
+      // Compact BEFORE the in-flight turn (we don't want to summarise a turn
       // that doesn't have a reply yet). We measure against `baseTurns`.
       if (chronicleNeedsCompaction(baseTurns, workingCutoff, workingChronicle, settings)) {
         const compacted = await compactCascade(
@@ -261,7 +261,8 @@ export function useGameController(settings: GameSettings) {
           workingChronicle,
           settings,
           {
-            model,
+            model: context.summarizerModel.trim() || model,
+            reasoningEffort: context.summarizerReasoning,
             apiKey,
             baseUrl,
             protocol: context.apiProtocol,
@@ -297,6 +298,9 @@ export function useGameController(settings: GameSettings) {
         {
           systemPrompt,
           model,
+          reasoningEffort: context.narratorReasoning,
+          plotterModel: context.plotterModel,
+          plotterReasoning: context.plotterReasoning,
           apiKey,
           baseUrl,
           protocol: context.apiProtocol,
@@ -328,7 +332,12 @@ export function useGameController(settings: GameSettings) {
         reasoningTokens: result.reasoningTokens,
       }
       const plotterCall: ModelCall | undefined = result.plotterTrace
-        ? { id: crypto.randomUUID(), model, trace: result.plotterTrace }
+        ? {
+            id: crypto.randomUUID(),
+            model: context.plotterModel.trim() || model,
+            trace: result.plotterTrace,
+            reasoningTokens: result.plotterReasoningTokens,
+          }
         : undefined
       if (context.useReviser) {
         setTurns((ts) =>
@@ -541,7 +550,7 @@ export function useGameController(settings: GameSettings) {
     }
     if (
       !confirm(
-        'Compact the chronicle now? The oldest live turns are condensed into summary entries — the full text stays visible in your log, but the model will only see the summaries from then on. This is lossy, cannot be undone, and runs summarizer model calls immediately.',
+        'Compact the chronicle now? The oldest live turns are condensed into summary entries — the full text stays visible in your log, but the model will only see the summaries from then on. This is lossy, cannot be undone, and runs summariser model calls immediately.',
       )
     ) {
       return
@@ -557,7 +566,8 @@ export function useGameController(settings: GameSettings) {
         chronicle,
         settings,
         {
-          model,
+          model: context.summarizerModel.trim() || model,
+          reasoningEffort: context.summarizerReasoning,
           apiKey,
           baseUrl,
           protocol: context.apiProtocol,

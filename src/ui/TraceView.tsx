@@ -15,7 +15,7 @@ export interface ModelCallView {
 
 type DiffOp = { kind: 'eq' | 'add' | 'del'; text: string }
 
-// Word-level LCS diff. Tokenizes on word/whitespace boundaries so paragraph
+// Word-level LCS diff. Tokenises on word/whitespace boundaries so paragraph
 // breaks survive. Skipped (returns null) when either side is too long — LCS
 // is O(m·n) and a runaway DM reply shouldn't lock the UI.
 function diffWords(a: string, b: string): DiffOp[] | null {

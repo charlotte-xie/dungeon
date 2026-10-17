@@ -10,8 +10,8 @@ function response(message: Record<string, unknown>) {
   }
 }
 
-describe('OpenAI-compatible response normalization', () => {
-  it('normalizes native tool calls', () => {
+describe('OpenAI-compatible response normalisation', () => {
+  it('normalises native tool calls', () => {
     const result = normalizeOpenAIChatCompletion(
       response({
         content: '',
@@ -116,8 +116,8 @@ describe('OpenAI-compatible response normalization', () => {
   })
 })
 
-describe('Responses API normalization', () => {
-  it('normalizes typed output items into text, reasoning, and tool calls', () => {
+describe('Responses API normalisation', () => {
+  it('normalises typed output items into text, reasoning, and tool calls', () => {
     const result = normalizeResponsesApiResponse(
       {
         status: 'completed',
