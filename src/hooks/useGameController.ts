@@ -265,6 +265,11 @@ export function useGameController(settings: GameSettings) {
     }
     setStatusText('DM is thinking…')
     const { controller } = operation
+    // A response can land just as the player presses Stop. A cancelled turn
+    // must still be restored, while a superseded one belongs to its replacement.
+    const stopIfCancelled = () => {
+      if (isCurrentOperation(operation)) args.onAbortRestore()
+    }
     try {
       const settings = {
         compactionThreshold: context.compactionThreshold,
@@ -303,7 +308,7 @@ export function useGameController(settings: GameSettings) {
           if (controller.signal.aborted || !isCurrentOperation(operation)) throw err
           setCompactionError(err instanceof Error ? err.message : String(err))
         }
-        if (!operationCanCommit(operation)) return
+        if (!operationCanCommit(operation)) return stopIfCancelled()
         if (compacted) {
           setCompactionError(null)
           workingChronicle = compacted.chronicle
@@ -355,7 +360,7 @@ export function useGameController(settings: GameSettings) {
         },
         controller.signal,
       )
-      if (!operationCanCommit(operation)) return
+      if (!operationCanCommit(operation)) return stopIfCancelled()
 
       const narratorCall: ModelCall = {
         id: crypto.randomUUID(),
@@ -401,7 +406,7 @@ export function useGameController(settings: GameSettings) {
             },
             controller.signal,
           )
-          if (!operationCanCommit(operation)) return
+          if (!operationCanCommit(operation)) return stopIfCancelled()
           setTurns((ts) =>
             ts.map((t) =>
               t.id === pendingTurn.id
@@ -448,7 +453,7 @@ export function useGameController(settings: GameSettings) {
           ),
         )
       }
-      if (!operationCanCommit(operation)) return
+      if (!operationCanCommit(operation)) return stopIfCancelled()
       commitState(result.data.state)
       commitPlot(result.data.plot)
       commitMemory(result.data.memory)

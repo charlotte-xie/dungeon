@@ -42,8 +42,10 @@ export function turnRecoveryReducer(
   switch (event.type) {
     case 'start':
       return { undo: event.action, retry: event.action, redo: null }
+    // A cancelled action leaves nothing to undo or retry: its input is back in
+    // the action box, and Retry belongs to the reply shown, which it didn't make.
     case 'abort':
-      return recovery.undo === event.action ? { ...recovery, undo: null } : recovery
+      return recovery.undo === event.action ? { ...recovery, undo: null, retry: null } : recovery
     case 'undo':
       return recovery.undo
         ? {

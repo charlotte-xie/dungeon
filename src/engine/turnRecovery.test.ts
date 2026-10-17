@@ -43,12 +43,12 @@ describe('turnRecoveryReducer', () => {
     })
   })
 
-  it('removes undo but keeps retry when the current action is aborted', () => {
+  it('removes undo and retry when the current action is aborted', () => {
     const started = action()
     const recovery = { undo: started, retry: started, redo: null }
     expect(turnRecoveryReducer(recovery, { type: 'abort', action: started })).toEqual({
       undo: null,
-      retry: started,
+      retry: null,
       redo: null,
     })
   })
