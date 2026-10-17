@@ -11,7 +11,9 @@ export type TraceEvent =
   // One per model request: the provider's prompt-token usage, including how
   // many prompt tokens it served from its prefix cache. Lets the trace pane
   // show whether the append-only request layout is actually being reused.
-  | { kind: 'usage'; label: string; promptTokens?: number; cachedTokens?: number }
+  // durationMs is how long the request took, so a slow turn shows where the
+  // time went.
+  | { kind: 'usage'; label: string; promptTokens?: number; cachedTokens?: number; durationMs?: number }
 
 export type TurnKind = 'bootstrap' | 'player' | 'continue'
 
@@ -26,6 +28,9 @@ export interface ModelCall {
   // notice rather than narration. A failed turn stays in the log but is
   // never replayed to the model or folded into the chronicle.
   error?: string
+  // Set when the player stopped the call. On a plotter call, the turn's
+  // bookkeeping was skipped and the world stayed as the turn found it.
+  stopped?: boolean
 }
 
 export interface Turn {

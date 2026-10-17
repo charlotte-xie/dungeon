@@ -242,6 +242,16 @@ header h1 {
   color: #d8a85a;
 }
 
+.msg-status-working {
+  margin-top: 0.4rem;
+  font-size: 0.85em;
+}
+
+.elapsed {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
 .msg-aside > * + * {
   margin-top: 0.4rem;
 }

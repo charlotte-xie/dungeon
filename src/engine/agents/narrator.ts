@@ -80,6 +80,18 @@ export interface NarratorResult {
   reasoningTokens?: number
 }
 
+// The narration as soon as it's written, before the Plotter phase records the
+// turn, so the reply can be shown while the bookkeeping runs.
+export interface Narration {
+  text: string
+  trace: TraceEvent[]
+  reasoningTokens?: number
+}
+
+export interface NarratorHooks {
+  onNarrated?: (narration: Narration) => void
+}
+
 export const MAX_NARRATOR_ITERATIONS = 10
 export const MAX_PLOTTER_ITERATIONS = 4
 
@@ -137,6 +149,7 @@ export class EmptyNarrativeError extends Error {
 export async function runNarrator(
   ctx: NarratorContext,
   signal: AbortSignal,
+  hooks: NarratorHooks = {},
 ): Promise<NarratorResult> {
   let data = ctx.initialData
   // The context (memory/plot/state) is injected as a seeded tool exchange at
@@ -201,18 +214,17 @@ export async function runNarrator(
       text: `(nudge → ${message.role}) ${message.content}`,
     })
   }
-  // Shared by both phases: file a completion's prompt usage (the provider's
-  // own cached-token count is the evidence that prefix caching is working),
-  // reasoning, and protocol anomalies into the active trace.
-  const recordCompletion = (label: string, completion: ModelCompletion) => {
-    if (completion.promptTokens !== undefined || completion.cachedTokens !== undefined) {
-      trace.push({
-        kind: 'usage',
-        label,
-        promptTokens: completion.promptTokens,
-        cachedTokens: completion.cachedTokens,
-      })
-    }
+  // Shared by both phases: file a completion's timing and prompt usage (the
+  // provider's own cached-token count is the evidence that prefix caching is
+  // working), reasoning, and protocol anomalies into the active trace.
+  const recordCompletion = (label: string, completion: ModelCompletion, durationMs: number) => {
+    trace.push({
+      kind: 'usage',
+      label,
+      promptTokens: completion.promptTokens,
+      cachedTokens: completion.cachedTokens,
+      durationMs,
+    })
     for (const reasoning of completion.reasoning) {
       trace.push({ kind: 'reasoning', text: reasoning })
     }
@@ -263,6 +275,7 @@ export async function runNarrator(
       })
     }
     const label = `narrator:${iter}`
+    const startedAt = Date.now()
     const completion = await completeModel(
       {
         model: ctx.model,
@@ -278,7 +291,7 @@ export async function runNarrator(
       { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol, cacheKey: ctx.cacheKey },
       signal,
     )
-    recordCompletion(label, completion)
+    recordCompletion(label, completion, Date.now() - startedAt)
 
     if (completion.toolCalls.length && !(finalNarrativeAttempt && completion.text)) {
       // The narrator is instructed not to call tools; execute defensively and
@@ -324,6 +337,11 @@ export async function runNarrator(
   if (proseText === null) {
     throw new Error(`Narrator loop exceeded ${MAX_NARRATOR_ITERATIONS} iterations`)
   }
+  hooks.onNarrated?.({
+    text: proseText,
+    trace: [...narratorTrace],
+    reasoningTokens: totalReasoningTokens || undefined,
+  })
 
   // --- Phase 2: plot ---
   // Commit the prose into the same conversation, pivot the model into the
@@ -343,6 +361,7 @@ export async function runNarrator(
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
         const label = `plotter:${iter}`
+        const startedAt = Date.now()
         const completion = await completeModel(
           {
             model: ctx.plotterModel?.trim() || ctx.model,
@@ -355,7 +374,7 @@ export async function runNarrator(
           { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol, cacheKey: ctx.cacheKey },
           signal,
         )
-        recordCompletion(label, completion)
+        recordCompletion(label, completion, Date.now() - startedAt)
         if (completion.text && completion.text.trim().toUpperCase() !== 'DONE') {
           trace.push({ kind: 'thought', text: completion.text })
         }

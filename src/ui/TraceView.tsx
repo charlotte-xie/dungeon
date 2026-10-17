@@ -105,12 +105,31 @@ function promptCacheTotals(trace: TraceEvent[]): { prompt: number; cached: numbe
   }
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 10_000) return `${(ms / 1000).toFixed(1)} s`
+  if (ms < 60_000) return `${Math.round(ms / 1000)} s`
+  const seconds = Math.round(ms / 1000)
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+// How long the call's requests took, from its own timing or its usage events.
+function callDuration(view: ModelCallView): number | undefined {
+  if (view.call.durationMs !== undefined) return view.call.durationMs
+  const timed = (view.call.trace ?? []).filter(
+    (e): e is UsageEvent => e.kind === 'usage' && e.durationMs !== undefined,
+  )
+  return timed.length ? timed.reduce((n, e) => n + (e.durationMs ?? 0), 0) : undefined
+}
+
 function callStats(view: ModelCallView): string[] {
   const trace = view.call.trace ?? []
   const calls = trace.filter((e) => e.kind === 'call').length
   const thoughts = trace.filter((e) => e.kind === 'thought').length
   const reasonings = trace.filter((e) => e.kind === 'reasoning').length
   const parts: string[] = []
+  const duration = callDuration(view)
+  if (duration !== undefined) parts.push(formatDuration(duration))
+  if (view.call.stopped) parts.push('stopped')
   if (calls) parts.push(`${calls} tool call${calls === 1 ? '' : 's'}`)
   if (thoughts) parts.push(`${thoughts} note${thoughts === 1 ? '' : 's'}`)
   if (reasonings) parts.push(`${reasonings} reasoning step${reasonings === 1 ? '' : 's'}`)
@@ -157,6 +176,7 @@ function TraceEventView({ event }: { event: TraceEvent }) {
         <span className="trace-label">usage</span>
         <p>
           <code>{event.label}</code>
+          {event.durationMs !== undefined && ` · ${formatDuration(event.durationMs)}`}
           {event.promptTokens !== undefined &&
             ` · prompt ${event.promptTokens.toLocaleString()} tok`}
           {event.cachedTokens !== undefined &&

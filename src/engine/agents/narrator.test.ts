@@ -4,6 +4,7 @@ import {
   MAX_PLOTTER_ITERATIONS,
   buildPlotterInstruction,
   runNarrator,
+  type Narration,
   type NarratorContext,
 } from './narrator'
 import { completeModel } from '../model/client'
@@ -108,8 +109,33 @@ describe('runNarrator two-phase flow', () => {
     expect(result.text).toBe('Prose.')
     expect(result.data.state).toEqual({})
     expect(mockedModel).toHaveBeenCalledTimes(2)
-    // The bare DONE acknowledgement is not worth a trace entry.
-    expect(result.plotterTrace).toBeUndefined()
+    // The bare DONE acknowledgement is not worth a trace entry; only the
+    // request's timing is recorded.
+    expect(result.plotterTrace?.map((e) => e.kind)).toEqual(['usage'])
+  })
+
+  it('hands over the prose before the plotter phase begins', async () => {
+    const order: string[] = []
+    mockedModel.mockImplementationOnce(async () => {
+      order.push('narrator request')
+      return completion({ text: 'The door creaks open.', reasoningTokens: 12 })
+    })
+    mockedModel.mockImplementationOnce(async () => {
+      order.push('plotter request')
+      return completion({ text: 'DONE' })
+    })
+
+    let narration: Narration | undefined
+    await runNarrator(CTX, new AbortController().signal, {
+      onNarrated: (n) => {
+        order.push('narrated')
+        narration = n
+      },
+    })
+
+    expect(order).toEqual(['narrator request', 'narrated', 'plotter request'])
+    expect(narration).toMatchObject({ text: 'The door creaks open.', reasoningTokens: 12 })
+    expect(narration?.trace.some((e) => e.kind === 'usage' && e.label === 'narrator:0')).toBe(true)
   })
 
   it('routes narration and plotting independently and attributes reasoning to each phase', async () => {
@@ -302,12 +328,14 @@ describe('runNarrator two-phase flow', () => {
       label: 'narrator:0',
       promptTokens: 1000,
       cachedTokens: 900,
+      durationMs: expect.any(Number),
     })
     expect(result.plotterTrace).toContainEqual({
       kind: 'usage',
       label: 'plotter:0',
       promptTokens: 1200,
       cachedTokens: 1100,
+      durationMs: expect.any(Number),
     })
   })
 

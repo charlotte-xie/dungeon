@@ -13,6 +13,7 @@ import { useGameController } from './hooks/useGameController'
 import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
 import { ContextViewer } from './ui/ContextViewer'
+import { Elapsed } from './ui/Elapsed'
 import { EditableMessage } from './ui/EditableMessage'
 import { ErrorDetails } from './ui/ErrorDetails'
 import { NewAdventurePrompt } from './ui/NewAdventurePrompt'
@@ -116,14 +117,20 @@ function App() {
     void game.retry({ guidance })
   }
 
-  // While a reply is being written, the thinking row joins the turn it
-  // belongs to: the one whose action is shown but whose reply isn't yet.
+  // While the DM works, what it's doing and for how long joins the latest
+  // turn: as a DM row while the reply is being written, then under the reply
+  // while the turn is recorded.
   const lastTurn = turns[turns.length - 1]
-  const pendingTurn = thinking && lastTurn && !lastTurn.reply.text ? turns.length - 1 : -1
+  const pendingTurn = thinking && lastTurn ? turns.length - 1 : -1
+  const statusLine = (
+    <>
+      {statusText} <Elapsed since={game.statusSince} />
+    </>
+  )
   const thinkingRow = (
     <div className="msg msg-dm thinking" role="status">
       <span className="who">DM</span>
-      <div className="msg-body">{statusText}</div>
+      <div className="msg-body">{statusLine}</div>
     </div>
   )
 
@@ -177,7 +184,7 @@ function App() {
           const latest = i === turns.length - 1 && !thinking
           const replyActions = latest && (game.canRedo || game.canRetry || game.canUndo)
           const traced = showTrace && (t.reply.trace !== undefined || !!t.narrator || !!t.plotter)
-          // The reply being written sits in its turn, under the player's action.
+          // The DM's status sits in the turn it's working on.
           const pending = i === pendingTurn
           return (
             <Fragment key={t.id}>
@@ -206,6 +213,16 @@ function App() {
                         text={t.reply.text ?? ''}
                         onSave={(next) => game.editTurnReply(t.id, next)}
                       />
+                      {pending && (
+                        <p className="msg-status msg-status-working" role="status">
+                          {statusLine}
+                        </p>
+                      )}
+                      {t.plotter?.stopped && (
+                        <div className="turn-notice" role="status">
+                          <p>Recording stopped — state, plot, memory and OOC weren't updated this turn.</p>
+                        </div>
+                      )}
                       {t.plotter?.error && (
                         <div className="turn-notice" role="status">
                           <p>
@@ -333,7 +350,7 @@ function App() {
                     )}
                   </div>
                 )}
-                {pending && thinkingRow}
+                {pending && !showReply && thinkingRow}
               </div>
             </Fragment>
           )
@@ -365,7 +382,11 @@ function App() {
             <button
               className="primary"
               onClick={game.cancelOperation}
-              title="Stop the DM and put your action back in the box"
+              title={
+                game.recording
+                  ? 'Stop recording this turn: keep the reply and skip its bookkeeping'
+                  : 'Stop the DM and put your action back in the box'
+              }
             >
               Stop
             </button>

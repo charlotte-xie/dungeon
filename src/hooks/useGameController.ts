@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
-import { EmptyNarrativeError, runNarrator } from '../engine/agents/narrator'
+import { EmptyNarrativeError, runNarrator, type Narration } from '../engine/agents/narrator'
 import { runReviser } from '../engine/agents/reviser'
 import {
   chronicleNeedsCompaction,
@@ -107,7 +107,11 @@ export function useGameController(settings: GameSettings) {
   const [compactCutoff, setCompactCutoff] = useState<number>(initialCutoff)
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [statusText, setStatusText] = useState('DM is thinking…')
+  // What the running operation is doing, and since when, so the player can
+  // see which phase is taking the time.
+  const [status, setStatus] = useState({ text: 'DM is thinking…', since: Date.now() })
+  // Set while the reply is on screen but its turn is still being recorded.
+  const [recording, setRecording] = useState(false)
   const [compactionError, setCompactionError] = useState<string | null>(null)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
     recoveryForLog(loadStoredRecovery(), log),
@@ -154,16 +158,30 @@ export function useGameController(settings: GameSettings) {
     return operations.canCommit(operation)
   }
 
-  function beginOperation(replaceExisting = false): ActiveOperation | null {
+  // A new phase restarts the clock; the same phase keeps counting.
+  function setStatusText(text: string) {
+    setStatus((current) => (current.text === text ? current : { text, since: Date.now() }))
+  }
+
+  function beginOperation(replaceExisting = false, label = 'DM is thinking…'): ActiveOperation | null {
     const operation = operations.start(replaceExisting)
     if (!operation) return null
     setThinking(true)
+    setStatus({ text: label, since: Date.now() })
     return operation
+  }
+
+  function finishOperation(operation: ActiveOperation) {
+    if (operations.finish(operation)) {
+      setThinking(false)
+      setRecording(false)
+    }
   }
 
   function supersedeCurrentOperation() {
     operations.supersede()
     setThinking(false)
+    setRecording(false)
   }
 
   function cancelOperation() {
@@ -298,12 +316,76 @@ export function useGameController(settings: GameSettings) {
       restoreCancelled()
       return
     }
-    setStatusText('DM is thinking…')
     const { controller } = operation
+    // The reply appears as soon as the prose is written, while the Plotter
+    // records the turn. From then on the reply is the player's: Stop keeps it
+    // and skips the turn's bookkeeping, leaving the world as the turn found
+    // it. Before that, Stop undoes the turn.
+    let narration: Narration | undefined
+    const plotterModel = context.plotterModel.trim() || model
+    const updateTurn = (patch: Partial<Turn>) => {
+      setTurns((ts) => ts.map((t) => (t.id === pendingTurn.id ? { ...t, ...patch } : t)))
+    }
+    const draftReply = (n: Narration, trace = n.trace): Partial<Turn> => ({
+      narrator: undefined,
+      reply: { ...pendingTurn.reply, text: n.text, trace, reasoningTokens: n.reasoningTokens },
+    })
+    const keepNarration = (n: Narration) => {
+      setTurns((ts) =>
+        ts.map((t) =>
+          t.id === pendingTurn.id
+            ? {
+                ...t,
+                ...(t.reply.text ? {} : draftReply(n)),
+                plotter: { id: crypto.randomUUID(), model: plotterModel, stopped: true },
+              }
+            : t,
+        ),
+      )
+    }
     // A response can land just as the player presses Stop. A cancelled turn
-    // must still be restored, while a superseded one belongs to its replacement.
+    // must still be settled, while a superseded one belongs to its replacement.
     const stopIfCancelled = () => {
-      if (isCurrentOperation(operation)) restoreCancelled()
+      if (!isCurrentOperation(operation)) return
+      if (narration) keepNarration(narration)
+      else restoreCancelled()
+    }
+    // With the reviser on, the polish runs alongside the Plotter and the reply
+    // appears once it's ready; a failed polish shows the draft instead.
+    const revise = async (n: Narration) => {
+      let patch: Partial<Turn>
+      try {
+        const reviserCall = await runReviser(
+          {
+            model: context.reviserModel,
+            apiKey,
+            baseUrl,
+            protocol: context.apiProtocol,
+            cacheKey,
+            slots: turnSlots,
+            draft: n.text,
+            sampling,
+          },
+          controller.signal,
+        )
+        patch = {
+          narrator: {
+            id: crypto.randomUUID(),
+            model,
+            text: n.text,
+            trace: n.trace,
+            reasoningTokens: n.reasoningTokens,
+          },
+          reply: reviserCall,
+        }
+      } catch (reviserErr) {
+        if (controller.signal.aborted) return
+        patch = draftReply(n, withReviserFailureNote(n.trace, reviserErr))
+      }
+      if (!operationCanCommit(operation)) return
+      updateTurn(patch)
+      setRecording(true)
+      setStatusText('Recording the turn…')
     }
     try {
       const settings = {
@@ -368,6 +450,7 @@ export function useGameController(settings: GameSettings) {
         setStatusText('DM is thinking…')
       }
 
+      let revision: Promise<void> | undefined
       const result = await runNarrator(
         {
           systemPrompt,
@@ -396,101 +479,36 @@ export function useGameController(settings: GameSettings) {
           nsfw: context.nsfw,
         },
         controller.signal,
+        {
+          onNarrated: (n) => {
+            if (!operationCanCommit(operation)) return
+            narration = n
+            if (context.useReviser) {
+              setStatusText('Reviser polishing…')
+              revision = revise(n)
+            } else {
+              updateTurn(draftReply(n))
+              setRecording(true)
+              setStatusText('Recording the turn…')
+            }
+          },
+        },
       )
+      await revision
       if (!operationCanCommit(operation)) return stopIfCancelled()
 
-      const narratorCall: ModelCall = {
-        id: crypto.randomUUID(),
-        model,
-        text: result.text,
-        trace: result.trace,
-        reasoningTokens: result.reasoningTokens,
-      }
       // A plotter error rides on the plotter call, not the reply: the turn
       // itself succeeded and is replayed and summarised as normal.
       const plotterCall: ModelCall | undefined = result.plotterTrace || result.plotterError
         ? {
             id: crypto.randomUUID(),
-            model: context.plotterModel.trim() || model,
+            model: plotterModel,
             trace: result.plotterTrace,
             reasoningTokens: result.plotterReasoningTokens,
             error: result.plotterError,
           }
         : undefined
-      if (context.useReviser) {
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === pendingTurn.id
-              ? {
-                  ...t,
-                  narrator: narratorCall,
-                  plotter: plotterCall,
-                }
-              : t,
-          ),
-        )
-        setStatusText('Reviser polishing…')
-        try {
-          const reviserCall = await runReviser(
-            {
-              model: context.reviserModel,
-              apiKey,
-              baseUrl,
-              protocol: context.apiProtocol,
-              cacheKey,
-              slots: turnSlots,
-              draft: result.text,
-              sampling,
-            },
-            controller.signal,
-          )
-          if (!operationCanCommit(operation)) return stopIfCancelled()
-          setTurns((ts) =>
-            ts.map((t) =>
-              t.id === pendingTurn.id
-                ? { ...t, reply: reviserCall }
-                : t,
-            ),
-          )
-        } catch (reviserErr) {
-          if (controller.signal.aborted) throw reviserErr
-          // Reviser failed — show the narrator's draft instead of losing the turn.
-          setTurns((ts) =>
-            ts.map((t) =>
-              t.id === pendingTurn.id
-                ? {
-                    ...t,
-                    narrator: undefined,
-                    reply: {
-                      ...t.reply,
-                      text: result.text,
-                      trace: withReviserFailureNote(result.trace, reviserErr),
-                      reasoningTokens: result.reasoningTokens,
-                    },
-                  }
-                : t,
-            ),
-          )
-        }
-      } else {
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === pendingTurn.id
-              ? {
-                  ...t,
-                  narrator: undefined,
-                  plotter: plotterCall,
-                  reply: {
-                    ...t.reply,
-                    text: result.text,
-                    trace: result.trace,
-                    reasoningTokens: result.reasoningTokens,
-                  },
-                }
-              : t,
-          ),
-        )
-      }
+      updateTurn({ plotter: plotterCall })
       if (!operationCanCommit(operation)) return stopIfCancelled()
       commitState(result.data.state)
       commitPlot(result.data.plot)
@@ -524,9 +542,7 @@ export function useGameController(settings: GameSettings) {
         ),
       )
     } finally {
-      if (operations.finish(operation)) {
-        setThinking(false)
-      }
+      finishOperation(operation)
     }
   }
 
@@ -627,8 +643,7 @@ export function useGameController(settings: GameSettings) {
     ) {
       return
     }
-    setStatusText('Compacting chronicle…')
-    const operation = beginOperation()
+    const operation = beginOperation(false, 'Compacting chronicle…')
     if (!operation) return
     const { controller } = operation
     try {
@@ -661,9 +676,7 @@ export function useGameController(settings: GameSettings) {
         alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     } finally {
-      if (operations.finish(operation)) {
-        setThinking(false)
-      }
+      finishOperation(operation)
     }
   }
 
@@ -738,7 +751,9 @@ export function useGameController(settings: GameSettings) {
     input,
     setInput,
     thinking,
-    statusText,
+    statusText: status.text,
+    statusSince: status.since,
+    recording,
     canCompact,
     compactionError,
     dismissCompactionError: () => setCompactionError(null),

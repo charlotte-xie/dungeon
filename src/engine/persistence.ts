@@ -82,7 +82,8 @@ function isTraceLike(value: unknown): boolean {
       return (
         typeof event.label === 'string' &&
         (event.promptTokens === undefined || typeof event.promptTokens === 'number') &&
-        (event.cachedTokens === undefined || typeof event.cachedTokens === 'number')
+        (event.cachedTokens === undefined || typeof event.cachedTokens === 'number') &&
+        (event.durationMs === undefined || typeof event.durationMs === 'number')
       )
     }
     return (
@@ -105,7 +106,8 @@ function isModelCallLike(value: unknown): value is ModelCall {
       (typeof value.reasoningTokens === 'number' && Number.isFinite(value.reasoningTokens))) &&
     (value.durationMs === undefined ||
       (typeof value.durationMs === 'number' && Number.isFinite(value.durationMs))) &&
-    (value.error === undefined || typeof value.error === 'string')
+    (value.error === undefined || typeof value.error === 'string') &&
+    (value.stopped === undefined || typeof value.stopped === 'boolean')
   )
 }
 
