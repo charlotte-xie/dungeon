@@ -7,6 +7,8 @@ import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
 import { applyTurnReminder, buildModelMessages } from './engine/request'
 import { CONTEXT_SUBSYSTEMS } from './engine/request'
+import { replyStatus } from './engine/turnRecovery'
+import type { Turn } from './engine/types'
 import { useGameController } from './hooks/useGameController'
 import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
@@ -17,9 +19,21 @@ import { NewAdventurePrompt } from './ui/NewAdventurePrompt'
 import { SavesPanel } from './ui/SavesPanel'
 import { SettingsPanel } from './ui/SettingsPanel'
 import { StateViewer } from './ui/StateViewer'
-import { TraceView } from './ui/TraceView'
+import { TraceView, type ModelCallView } from './ui/TraceView'
 import { AdventureMenu } from './ui/AdventureMenu'
 import type { InspectView } from './ui/InspectSwitch'
+
+// The model calls behind a turn, as its trace shows them.
+function traceCalls(t: Turn): ModelCallView[] {
+  const plotter = t.plotter ? [{ label: 'plotter', call: t.plotter }] : []
+  return t.narrator
+    ? [
+        { label: 'narrator (draft)', call: t.narrator, hideText: true },
+        ...plotter,
+        { label: 'reviser', call: t.reply, diffAgainst: t.narrator.text ?? '' },
+      ]
+    : [{ label: 'narrator', call: t.reply, hideText: true }, ...plotter]
+}
 
 function App() {
   const systemPrompt = DEFAULT_SYSTEM_PROMPT
@@ -102,8 +116,19 @@ function App() {
     void game.retry({ guidance })
   }
 
+  // While a reply is being written, the thinking row joins the turn it
+  // belongs to: the one whose action is shown but whose reply isn't yet.
+  const lastTurn = turns[turns.length - 1]
+  const pendingTurn = thinking && lastTurn && !lastTurn.reply.text ? turns.length - 1 : -1
+  const thinkingRow = (
+    <div className="msg msg-dm thinking" role="status">
+      <span className="who">DM</span>
+      <div className="msg-body">{statusText}</div>
+    </div>
+  )
+
   return (
-    <main className="app">
+    <main className={`app ${showTrace ? 'app-wide' : ''}`}>
       <header>
         <h1>AI Dungeon Master</h1>
         <div className="header-actions">
@@ -126,7 +151,9 @@ function App() {
           </button>
         </div>
       </header>
-      <div className="log" ref={logRef}>
+      {/* The log reads as a table: speaker, text, and, with trace on, a
+          debug column on the right. */}
+      <div className={`log ${showTrace ? 'log-with-aside' : ''}`} ref={logRef}>
         {turns.length === 0 && !thinking && (
           <div className="empty-log">
             <p>No adventure in progress.</p>
@@ -142,11 +169,16 @@ function App() {
         {turns.map((t, i) => {
           const folded = i < compactCutoff
           const showInput = t.kind === 'player' && t.input !== undefined
-          const showReply = !!t.reply.text
+          // A turn without a reply in front of the player shows why instead.
+          const status = replyStatus(t)
+          const showReply = status === 'answered'
           // Fixing a reply happens at the reply: only the latest one can be
           // retried, rewritten, or undone, and Redo takes their place after an undo.
           const latest = i === turns.length - 1 && !thinking
           const replyActions = latest && (game.canRedo || game.canRetry || game.canUndo)
+          const traced = showTrace && (t.reply.trace !== undefined || !!t.narrator || !!t.plotter)
+          // The reply being written sits in its turn, under the player's action.
+          const pending = i === pendingTurn
           return (
             <Fragment key={t.id}>
               {i === compactCutoff && compactCutoff > 0 && (
@@ -154,121 +186,159 @@ function App() {
                   <span>earlier turns folded into chronicle — still shown, but model sees summary</span>
                 </div>
               )}
-              {showInput && (
-                <div className={`msg msg-player ${folded ? 'msg-folded' : ''}`}>
-                  <span className="who">You</span>
-                  <EditableMessage
-                    text={t.input ?? ''}
-                    onSave={(next) => game.editTurnInput(t.id, next)}
-                  />
-                </div>
-              )}
-              {showReply && (
-                <div className={`msg msg-dm ${folded ? 'msg-folded' : ''}`}>
-                  <span className="who">DM</span>
-                  <EditableMessage
-                    text={t.reply.text ?? ''}
-                    onSave={(next) => game.editTurnReply(t.id, next)}
-                  />
-                  {t.plotter?.error && (
-                    <div className="turn-notice" role="status">
-                      <p>
-                        Plotter failed — state, plot, memory and OOC weren't updated this turn:{' '}
-                        {describeModelError(t.plotter.error)}
-                      </p>
-                      <ErrorDetails error={t.plotter.error} />
+              <div className={`turn ${folded ? 'turn-folded' : ''}`}>
+                {showInput && (
+                  <div className="msg msg-player">
+                    <span className="who">You</span>
+                    <div className="msg-body">
+                      <EditableMessage
+                        text={t.input ?? ''}
+                        onSave={(next) => game.editTurnInput(t.id, next)}
+                      />
                     </div>
-                  )}
-                  {replyActions && (
-                    <div className="reply-actions">
-                      {game.canRedo ? (
-                        <button className="link" onClick={game.redo} title="Restore the turn you just undid">
-                          Redo
-                        </button>
-                      ) : (
-                        <>
-                          {game.canRetry && (
-                            <button
-                              className="link"
-                              onClick={retry}
-                              title="Discard this reply and write it again from the same action"
-                            >
-                              Retry
+                  </div>
+                )}
+                {showReply && (
+                  <div className="msg msg-dm">
+                    <span className="who">DM</span>
+                    <div className="msg-body">
+                      <EditableMessage
+                        text={t.reply.text ?? ''}
+                        onSave={(next) => game.editTurnReply(t.id, next)}
+                      />
+                      {t.plotter?.error && (
+                        <div className="turn-notice" role="status">
+                          <p>
+                            Plotter failed — state, plot, memory and OOC weren't updated this turn:{' '}
+                            {describeModelError(t.plotter.error)}
+                          </p>
+                          <ErrorDetails error={t.plotter.error} />
+                        </div>
+                      )}
+                      {replyActions && (
+                        <div className="reply-actions">
+                          {game.canRedo ? (
+                            <button className="link" onClick={game.redo} title="Restore the turn you just undid">
+                              Redo
                             </button>
+                          ) : (
+                            <>
+                              {game.canRetry && (
+                                <button
+                                  className="link"
+                                  onClick={retry}
+                                  title="Discard this reply and write it again from the same action"
+                                >
+                                  Retry
+                                </button>
+                              )}
+                              {game.canRetry && (
+                                <button
+                                  className="link"
+                                  onClick={openRewrite}
+                                  title="Discard this reply and write it again following your instruction"
+                                >
+                                  Rewrite
+                                </button>
+                              )}
+                              {game.canUndo && (
+                                <button
+                                  className="link"
+                                  onClick={undo}
+                                  title="Take back this turn and put your action back in the box"
+                                >
+                                  Undo
+                                </button>
+                              )}
+                            </>
                           )}
-                          {game.canRetry && (
-                            <button
-                              className="link"
-                              onClick={openRewrite}
-                              title="Discard this reply and write it again following your instruction"
-                            >
-                              Rewrite
-                            </button>
-                          )}
-                          {game.canUndo && (
-                            <button
-                              className="link"
-                              onClick={undo}
-                              title="Take back this turn and put your action back in the box"
-                            >
-                              Undo
-                            </button>
-                          )}
-                        </>
+                        </div>
+                      )}
+                      {latest && rewriting && (
+                        <form className="rewrite-form" onSubmit={submitRewrite}>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={rewriteText}
+                            onChange={(e) => {
+                              setRewriteText(e.target.value)
+                              setRewriteError(null)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') setRewriting(false)
+                            }}
+                            placeholder="Make the guard back down, and keep it shorter"
+                            aria-label="How should the reply change?"
+                          />
+                          <button type="submit">Rewrite</button>
+                          <button type="button" className="ghost" onClick={() => setRewriting(false)}>
+                            Cancel
+                          </button>
+                          {rewriteError && <p className="error-text" role="alert">{rewriteError}</p>}
+                        </form>
                       )}
                     </div>
-                  )}
-                  {latest && rewriting && (
-                    <form className="rewrite-form" onSubmit={submitRewrite}>
-                      <input
-                        type="text"
-                        autoFocus
-                        value={rewriteText}
-                        onChange={(e) => {
-                          setRewriteText(e.target.value)
-                          setRewriteError(null)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') setRewriting(false)
-                        }}
-                        placeholder="Make the guard back down, and keep it shorter"
-                        aria-label="How should the reply change?"
-                      />
-                      <button type="submit">Rewrite</button>
-                      <button type="button" className="ghost" onClick={() => setRewriting(false)}>
-                        Cancel
-                      </button>
-                      {rewriteError && <p className="error-text" role="alert">{rewriteError}</p>}
-                    </form>
-                  )}
-                  {showTrace && (t.reply.trace !== undefined || t.narrator || t.plotter) && (
-                    <TraceView
-                      calls={
-                        t.narrator
-                          ? [
-                              { label: 'narrator (draft)', call: t.narrator, hideText: true },
-                              ...(t.plotter ? [{ label: 'plotter', call: t.plotter }] : []),
-                              {
-                                label: 'reviser',
-                                call: t.reply,
-                                diffAgainst: t.narrator.text ?? '',
-                              },
-                            ]
-                          : [
-                              { label: 'narrator', call: t.reply, hideText: true },
-                              ...(t.plotter ? [{ label: 'plotter', call: t.plotter }] : []),
-                            ]
-                      }
-                      expanded={expandedTraces.has(t.id)}
-                      onToggle={() => toggleTrace(t.id)}
-                    />
-                  )}
-                </div>
-              )}
+                    {traced && (
+                      <div className="msg-aside">
+                        <TraceView
+                          calls={traceCalls(t)}
+                          expanded={expandedTraces.has(t.id)}
+                          onToggle={() => toggleTrace(t.id)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!showReply && !pending && (
+                  <div className="msg msg-dm">
+                    <span className="who">DM</span>
+                    <div className="msg-body">
+                      <p className={`msg-status msg-status-${status}`} role="status">
+                        {status === 'failed'
+                          ? `DM failed to reply: ${describeModelError(t.reply.error ?? '')}`
+                          : 'DM stopped by an app reload before replying.'}
+                      </p>
+                      {latest && game.unanswered && (
+                        <div className="reply-actions">
+                          <button
+                            className="link"
+                            onClick={continueStory}
+                            title="Have the DM reply to this turn"
+                          >
+                            Continue
+                          </button>
+                          <button
+                            className="link"
+                            onClick={undo}
+                            title="Take back this turn and put your action back in the box"
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {/* With trace on, the underlying error and any trace sit
+                        beside the reason. */}
+                    {showTrace && (status === 'failed' || traced) && (
+                      <div className="msg-aside">
+                        {status === 'failed' && <ErrorDetails error={t.reply.error ?? ''} />}
+                        {traced && (
+                          <TraceView
+                            calls={traceCalls(t)}
+                            expanded={expandedTraces.has(t.id)}
+                            onToggle={() => toggleTrace(t.id)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {pending && thinkingRow}
+              </div>
             </Fragment>
           )
         })}
-        {thinking && <div className="msg msg-dm thinking">{statusText}</div>}
+        {thinking && pendingTurn < 0 && <div className="turn">{thinkingRow}</div>}
       </div>
       {game.compactionError && (
         <div className="app-notice" role="status">
@@ -300,7 +370,12 @@ function App() {
               Stop
             </button>
           ) : (
-            <button className="primary" onClick={act} disabled={!input.trim()}>
+            <button
+              className="primary"
+              onClick={act}
+              disabled={!input.trim() || game.unanswered}
+              title={game.unanswered ? 'The DM has not replied yet: continue or undo the last turn first' : undefined}
+            >
               Act
             </button>
           )}
@@ -308,7 +383,11 @@ function App() {
             <button
               className="ghost"
               onClick={continueStory}
-              title="Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision"
+              title={
+                game.unanswered
+                  ? 'Have the DM reply to the last turn'
+                  : 'Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision'
+              }
             >
               Continue
             </button>

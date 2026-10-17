@@ -105,7 +105,7 @@ function promptCacheTotals(trace: TraceEvent[]): { prompt: number; cached: numbe
   }
 }
 
-function summarizeCall(view: ModelCallView): string {
+function callStats(view: ModelCallView): string[] {
   const trace = view.call.trace ?? []
   const calls = trace.filter((e) => e.kind === 'call').length
   const thoughts = trace.filter((e) => e.kind === 'thought').length
@@ -121,6 +121,11 @@ function summarizeCall(view: ModelCallView): string {
       `${totals.cached.toLocaleString()}/${totals.prompt.toLocaleString()} prompt tok cached`,
     )
   }
+  return parts
+}
+
+function summarizeCall(view: ModelCallView): string {
+  const parts = callStats(view)
   if (parts.length === 0) return view.label
   return `${view.label}: ${parts.join(' · ')}`
 }
@@ -183,7 +188,16 @@ export function TraceView({ calls, expanded, onToggle }: TraceViewProps) {
         aria-expanded={expanded}
         title="Open the trace pane in a modal — reasoning, tool calls, and the reviser diff for this turn"
       >
-        ▸ trace ({summary})
+        <span className="trace-toggle-title">▸ trace</span>
+        {calls.map((view, i) => {
+          const stats = callStats(view)
+          return (
+            <span key={i} className="trace-toggle-line">
+              <span className="trace-toggle-label">{view.label}</span>
+              {stats.length > 0 && ` ${stats.join(' · ')}`}
+            </span>
+          )
+        })}
       </button>
       {expanded && (
         <div

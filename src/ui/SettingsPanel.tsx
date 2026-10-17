@@ -482,7 +482,7 @@ export function SettingsPanel({
               checked={draftShowTrace}
               onChange={(e) => setDraftShowTrace(e.target.checked)}
             />
-            <strong>Show trace under DM messages</strong>
+            <strong>Show trace and error details beside DM messages</strong>
           </label>
         </div>
 

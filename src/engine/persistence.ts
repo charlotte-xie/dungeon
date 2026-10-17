@@ -17,6 +17,8 @@ import type {
   SavedGameV1,
   SavedGameV2,
   Turn,
+  TurnRecovery,
+  WorldSnapshot,
   WorldState,
 } from './types'
 
@@ -37,6 +39,8 @@ export const LS_CONTEXT = 'dm.context'
 export const LS_COMPACT_CUTOFF = 'dm.compactCutoff'
 export const LS_SAVES = 'dm.saves'
 export const LS_SHOW_TRACE = 'dm.showTrace'
+export const LS_RECOVERY = 'dm.recovery'
+export const LS_OOC_BASELINE = 'dm.oocBaseline'
 
 const LS_MESSAGES_V1 = 'dm.messages'
 
@@ -315,6 +319,111 @@ export function loadStoredTurnsAndCutoff(): { turns: Turn[]; cutoff: number } {
     return migrated
   } catch {
     return { turns: [], cutoff: 0 }
+  }
+}
+
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+}
+
+function isWorldSnapshotLike(value: unknown): value is WorldSnapshot {
+  return (
+    isRecord(value) &&
+    isWorldStateLike(value.state) &&
+    isStringList(value.plot) &&
+    isMemoryLike(value.memory) &&
+    isStringList(value.ooc) &&
+    isChronicleLike(value.chronicle) &&
+    typeof value.compactCutoff === 'number' &&
+    Number.isInteger(value.compactCutoff) &&
+    value.compactCutoff >= 0
+  )
+}
+
+// Known slot keys only, as strings; anything missing takes its default.
+function slotsFrom(value: Record<string, unknown>): AdventureSlots {
+  const slots = defaultSlots()
+  for (const def of ADVENTURE_SLOTS) {
+    const entry = value[def.key]
+    if (typeof entry === 'string') slots[def.key] = entry
+  }
+  return slots
+}
+
+function beforeFrom(value: unknown): TurnRecovery['before'] {
+  if (
+    !isRecord(value) ||
+    typeof value.turnId !== 'string' ||
+    !isWorldSnapshotLike(value.world) ||
+    !isRecord(value.slots)
+  ) {
+    return null
+  }
+  return { turnId: value.turnId, world: value.world, slots: slotsFrom(value.slots) }
+}
+
+function undoneFrom(value: unknown): TurnRecovery['undone'] {
+  if (
+    !isRecord(value) ||
+    (value.afterId !== null && typeof value.afterId !== 'string') ||
+    !isTurnLike(value.turn) ||
+    !isWorldSnapshotLike(value.world)
+  ) {
+    return null
+  }
+  return { afterId: value.afterId, turn: value.turn, world: value.world }
+}
+
+// Undo, Retry and Redo for the stored log. Shape-checked here; the controller
+// then keeps only what still fits the log.
+export function loadStoredRecovery(): TurnRecovery {
+  try {
+    const raw = localStorage.getItem(LS_RECOVERY)
+    if (!raw) return { before: null, undone: null }
+    const parsed = JSON.parse(raw) as unknown
+    if (!isRecord(parsed)) return { before: null, undone: null }
+    return { before: beforeFrom(parsed.before), undone: undoneFrom(parsed.undone) }
+  } catch {
+    return { before: null, undone: null }
+  }
+}
+
+export function persistRecovery(recovery: TurnRecovery) {
+  try {
+    if (recovery.before || recovery.undone) {
+      localStorage.setItem(LS_RECOVERY, JSON.stringify(recovery))
+    } else {
+      localStorage.removeItem(LS_RECOVERY)
+    }
+  } catch {
+    // Storage full or disabled: drop the old record rather than keep a stale
+    // one. Undo and Retry then last until the next reload, as before.
+    try {
+      localStorage.removeItem(LS_RECOVERY)
+    } catch {
+      // ignore
+    }
+  }
+}
+
+// The OOC list as the engine last set it. Null when never stored, so the
+// caller falls back to the stored OOC list.
+export function loadStoredOocBaseline(): string[] | null {
+  try {
+    const raw = localStorage.getItem(LS_OOC_BASELINE)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    return isStringList(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function persistOocBaseline(ooc: string[]) {
+  try {
+    localStorage.setItem(LS_OOC_BASELINE, JSON.stringify(ooc))
+  } catch {
+    // ignore quota / disabled storage
   }
 }
 

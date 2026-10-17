@@ -18,7 +18,7 @@ export function EditableMessage({
   if (!editing) {
     return (
       <div className="msg-editable">
-        <p title="Double-click to edit" onDoubleClick={startEditing}>
+        <p className="msg-text" title="Double-click to edit" onDoubleClick={startEditing}>
           {text}
         </p>
         <button

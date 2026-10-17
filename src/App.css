@@ -1,11 +1,16 @@
 .app {
-  max-width: 780px;
+  max-width: 820px;
   margin: 0 auto;
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
+}
+
+/* Room for the trace column beside the text. */
+.app-wide {
+  max-width: 1100px;
 }
 
 header {
@@ -140,18 +145,136 @@ header h1 {
   overflow-y: auto;
   border: 1px solid #3a3a3a;
   border-radius: 6px;
-  padding: 1rem;
+  padding: 0.25rem 1rem;
   background: #121212;
+  user-select: none;
 }
 
+/* A drag selects the story and nothing else: copying gives "DM / You" and
+   their words, without the controls, notices, or trace beside them. */
+.turn {
+  padding: 0.85rem 0;
+  user-select: text;
+}
+
+.msg-aside,
+.msg-status,
+.reply-actions,
+.rewrite-form,
+.turn-notice,
+.msg-edit-btn,
+.thinking {
+  user-select: none;
+}
+
+.rewrite-form input,
+.notice-details pre,
+.msg-aside .modal-backdrop {
+  user-select: text;
+}
+
+.turn + .turn {
+  border-top: 1px solid #1f1f1f;
+}
+
+.turn-folded {
+  opacity: 0.55;
+}
+
+/* Each message is a table row: speaker, text, and (with trace on) a debug
+   column. Columns are fixed so the rows line up. */
 .msg {
-  margin-bottom: 1rem;
-  line-height: 1.5;
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-areas: 'who body' '. aside';
+  column-gap: 1rem;
+  align-items: baseline;
+  line-height: 1.55;
 }
 
-.msg p {
-  margin: 0.2rem 0 0;
+.msg + .msg {
+  margin-top: 0.7rem;
+}
+
+.log-with-aside .msg {
+  grid-template-columns: 3rem minmax(0, 1fr) 15rem;
+  grid-template-areas: 'who body aside';
+  column-gap: 1.25rem;
+}
+
+.msg .who {
+  grid-area: who;
+}
+
+.msg-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.msg-aside {
+  grid-area: aside;
+  align-self: start;
+  min-width: 0;
+}
+
+.msg-dm .msg-body {
+  color: #e4ddcc;
+}
+
+.msg-player .msg-body {
+  color: #a9c4dc;
+}
+
+.msg-text {
+  margin: 0;
   white-space: pre-wrap;
+}
+
+/* In place of a reply the player never got: why it is missing. */
+.msg-status {
+  margin: 0;
+  font-style: italic;
+  color: #8a8a8a;
+  overflow-wrap: anywhere;
+}
+
+.msg-status-failed {
+  color: #d8a85a;
+}
+
+.msg-aside > * + * {
+  margin-top: 0.4rem;
+}
+
+.msg-aside .notice-details {
+  font-size: 0.72rem;
+  color: #8a8a8a;
+}
+
+.msg-aside .notice-details pre {
+  color: #a8a8a8;
+}
+
+/* Narrower windows: the trace drops under the text. */
+@media (max-width: 960px) {
+  .log-with-aside .msg {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    grid-template-areas: 'who body' '. aside';
+    column-gap: 1rem;
+  }
+
+  .msg-aside {
+    margin-top: 0.4rem;
+  }
+}
+
+/* Phones: the speaker sits above the text. */
+@media (max-width: 600px) {
+  .msg,
+  .log-with-aside .msg {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'who' 'body' 'aside';
+  }
 }
 
 .msg-editable {
@@ -198,7 +321,7 @@ header h1 {
 .msg-edit {
   display: block;
   width: 100%;
-  margin: 0.2rem 0 0;
+  margin: 0;
   padding: 0;
   background: transparent;
   border: 0;
@@ -219,10 +342,11 @@ header h1 {
 }
 
 .who {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .msg-dm .who {
@@ -236,10 +360,6 @@ header h1 {
 .thinking {
   opacity: 0.6;
   font-style: italic;
-}
-
-.msg-folded {
-  opacity: 0.55;
 }
 
 .compact-divider {
@@ -785,25 +905,47 @@ textarea.state-json-editor.tab-editor {
   color: #d6d6d6;
 }
 
-.trace {
-  margin-top: 0.4rem;
+.trace-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  max-width: 100%;
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: left;
+  background: transparent;
+  color: #777;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.trace-toggle {
-  padding: 0.15rem 0.5rem;
-  font: inherit;
-  font-size: 0.75rem;
-  background: transparent;
+@media (min-width: 961px) {
+  .log-with-aside .trace-toggle {
+    width: 100%;
+  }
+}
+
+.trace-toggle-title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   color: #8a8a8a;
-  border: 1px solid #2f2f2f;
-  border-radius: 3px;
-  cursor: pointer;
-  letter-spacing: 0.02em;
+}
+
+.trace-toggle-label {
+  color: #a8a8a8;
 }
 
 .trace-toggle:hover {
+  border-color: #c9a959;
+}
+
+.trace-toggle:hover .trace-toggle-title {
   color: #c9a959;
-  border-color: #3a3a3a;
 }
 
 .trace-pane {

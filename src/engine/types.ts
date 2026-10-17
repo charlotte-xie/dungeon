@@ -70,7 +70,7 @@ export type Memory = { [slug: string]: JsonValue }
 
 // The working data a turn threads through the narrator, plotter, and tool
 // executor as one unit: current-scene state, future plot plan, and the
-// long-term memory fact file. Persisted shapes (SavedGame, TurnCheckpoint)
+// long-term memory fact file. Persisted shapes (SavedGame, WorldSnapshot)
 // keep these as separate fields; StoryData is the in-engine carrier.
 export interface StoryData {
   state: WorldState
@@ -160,8 +160,10 @@ export interface SamplingParams {
   temperature: number
 }
 
-export interface TurnCheckpoint {
-  turns: Turn[]
+// Everything a turn can change apart from the log itself: the plotter
+// rewrites state, plot, memory and OOC, and compaction rewrites the chronicle.
+// None of it can be rebuilt from the log, so undoing a turn needs a copy.
+export interface WorldSnapshot {
   state: WorldState
   plot: string[]
   memory: Memory
@@ -170,12 +172,16 @@ export interface TurnCheckpoint {
   compactCutoff: number
 }
 
-export interface RetryAction {
-  checkpoint: TurnCheckpoint
-  input: string
-  restoreInput: string
-  kind: TurnKind
-  slots: AdventureSlots
+// The log only grows at its end, so Undo, Retry and Redo are moves on it:
+// remove the latest turn, run it again, or put it back. Recovery holds only
+// what the log can't give back. Persisted, and checked against the log on load.
+export interface TurnRecovery {
+  // The world the latest turn started from, and the adventure settings it ran
+  // with. Null when that turn can't be undone or retried.
+  before: { turnId: string; world: WorldSnapshot; slots: AdventureSlots } | null
+  // After an Undo: the removed turn, the world it left, and the turn it sat on
+  // (null for the opening), so Redo can put it back in the same place.
+  undone: { afterId: string | null; turn: Turn; world: WorldSnapshot } | null
 }
 
 export interface SavedGame {

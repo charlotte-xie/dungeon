@@ -12,8 +12,10 @@ import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
 import { carryOocEdits, withRetryGuidance } from '../engine/steering'
 import {
-  INITIAL_TURN_RECOVERY,
+  recoveryForLog,
   removeFromBox,
+  replyStatus,
+  restoreInputFor,
   restoreIntoBox,
   turnRecoveryReducer,
 } from '../engine/turnRecovery'
@@ -23,14 +25,18 @@ import {
   loadStoredChronicle,
   loadStoredMemory,
   loadStoredOoc,
+  loadStoredOocBaseline,
   loadStoredPlot,
+  loadStoredRecovery,
   loadStoredSlots,
   loadStoredState,
   loadStoredTurnsAndCutoff,
   persistChronicle,
   persistMemory,
   persistOoc,
+  persistOocBaseline,
   persistPlot,
+  persistRecovery,
   persistSlots,
   persistState,
 } from '../engine/persistence'
@@ -40,14 +46,13 @@ import {
   type ContextConfig,
   type Memory,
   type ModelCall,
-  type RetryAction,
   type SamplingParams,
   type SavedGame,
   type StoryData,
   type TraceEvent,
   type Turn,
   type TurnKind,
-  type TurnCheckpoint,
+  type WorldSnapshot,
   type WorldState,
 } from '../engine/types'
 
@@ -93,7 +98,9 @@ export function useGameController(settings: GameSettings) {
   const [ooc, setOoc] = useState<string[]>(() => loadStoredOoc())
   // The OOC list as the engine last set it (turn result, restore, load). Edits
   // made since then are the player's own and survive Retry, Undo and Redo.
-  const oocBaseline = useRef<string[]>(ooc)
+  // Stored, so a reload still knows which entries are the player's.
+  const [storedOocBaseline] = useState(() => loadStoredOocBaseline() ?? ooc)
+  const oocBaseline = useRef<string[]>(storedOocBaseline)
   const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
   const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
   const [turns, setTurns] = useState<Turn[]>(initialTurns)
@@ -102,7 +109,16 @@ export function useGameController(settings: GameSettings) {
   const [thinking, setThinking] = useState(false)
   const [statusText, setStatusText] = useState('DM is thinking…')
   const [compactionError, setCompactionError] = useState<string | null>(null)
-  const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, INITIAL_TURN_RECOVERY)
+  const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
+    recoveryForLog(loadStoredRecovery(), log),
+  )
+  // Only moves that still fit the log are offered or carried out.
+  const live = recoveryForLog(recovery, turns)
+  const lastTurn = turns.length > 0 ? turns[turns.length - 1] : undefined
+  // The latest turn has no reply in front of the player: the call failed, or
+  // the app reloaded before it finished. Act waits until the player continues
+  // or undoes it.
+  const unanswered = !thinking && !!lastTurn && replyStatus(lastTurn) !== 'answered'
   const [operations] = useState(() => new OperationCoordinator())
 
   const canCompact = chronicleNeedsCompaction(turns, compactCutoff, chronicle, {
@@ -118,6 +134,10 @@ export function useGameController(settings: GameSettings) {
       // ignore quota / disabled storage
     }
   }, [turns])
+
+  useEffect(() => {
+    persistRecovery(recovery)
+  }, [recovery])
 
   useEffect(
     () => () => {
@@ -166,8 +186,13 @@ export function useGameController(settings: GameSettings) {
     persistOoc(next)
   }
 
-  function commitEngineOoc(next: string[]) {
+  function setOocBaseline(next: string[]) {
     oocBaseline.current = next
+    persistOocBaseline(next)
+  }
+
+  function commitEngineOoc(next: string[]) {
+    setOocBaseline(next)
     commitOoc(next)
   }
 
@@ -196,31 +221,22 @@ export function useGameController(settings: GameSettings) {
     }
   }
 
-  function checkpoint(): TurnCheckpoint {
-    return { turns, state, plot, memory, ooc, chronicle, compactCutoff }
+  function worldSnapshot(): WorldSnapshot {
+    return { state, plot, memory, ooc, chronicle, compactCutoff }
   }
 
-  // Returns the restored OOC list: the checkpoint's, plus the player's own
+  // Returns the restored OOC list: the snapshot's, plus the player's own
   // edits since the engine last set it.
-  function restoreCheckpoint(saved: TurnCheckpoint, currentOoc: string[] = ooc): string[] {
+  function restoreWorld(saved: WorldSnapshot, currentOoc: string[] = ooc): string[] {
     const nextOoc = carryOocEdits(saved.ooc, oocBaseline.current, currentOoc)
-    setTurns(saved.turns)
     commitState(saved.state)
     commitPlot([...saved.plot])
     commitMemory(structuredClone(saved.memory))
     commitOoc(nextOoc)
-    oocBaseline.current = [...saved.ooc]
+    setOocBaseline([...saved.ooc])
     commitChronicle(saved.chronicle)
     commitCompactCutoff(saved.compactCutoff)
     return nextOoc
-  }
-
-  function restoreAbortedAction(action: RetryAction) {
-    // The in-flight checkpoint already carries the player's edits, so restore
-    // it exactly rather than against a list captured before the turn began.
-    restoreCheckpoint(action.checkpoint, action.checkpoint.ooc)
-    setInput((box) => restoreIntoBox(box, action.restoreInput))
-    dispatchRecovery({ type: 'abort', action })
   }
 
   function editTurnInput(id: string, next: string) {
@@ -238,29 +254,45 @@ export function useGameController(settings: GameSettings) {
     return { id: crypto.randomUUID(), kind, input: turnInput, reply }
   }
 
+  // Appends a turn to the log and runs it. Its starting world is kept for
+  // Undo, Retry and Stop.
   async function runTurn(args: {
     pendingTurn: Turn
-    // The recovery action for this turn. Its checkpoint is rebased in place
-    // when compaction commits mid-turn, so undo/retry/abort restore to the
-    // post-compaction world — the fold itself is never reverted or re-paid.
-    // (In-place mutation keeps the object identity the recovery reducer and
-    // abort closures rely on.)
-    action: RetryAction
+    // The log and world the turn starts from.
     baseTurns: Turn[]
-    baseData: StoryData
-    baseChronicle: Chronicle
-    baseCutoff: number
-    // Slots to narrate with — defaults to current slots; newAdventure passes
-    // the freshly-committed ones since React state hasn't re-rendered yet.
-    slotsForTurn?: AdventureSlots
+    world: WorldSnapshot
+    // Slots to narrate with. newAdventure and retry pass the ones they just
+    // committed, since React state hasn't re-rendered yet.
+    slots: AdventureSlots
     replaceExisting?: boolean
-    onAbortRestore: () => void
   }) {
-    const { pendingTurn, baseTurns, baseData, baseChronicle, baseCutoff } = args
-    const turnSlots = args.slotsForTurn ?? slots
+    const { pendingTurn, baseTurns, world } = args
+    const turnSlots = args.slots
+    const baseData: StoryData = {
+      state: world.state,
+      plot: world.plot,
+      memory: world.memory,
+      ooc: world.ooc,
+    }
+    const baseChronicle = world.chronicle
+    const baseCutoff = world.compactCutoff
+    // Reassigned if compaction commits at the start of the turn, so Undo,
+    // Retry and Stop restore the compacted world: the fold is never reverted
+    // or paid for twice.
+    let before = { turnId: pendingTurn.id, world, slots: turnSlots }
+    setTurns([...baseTurns, pendingTurn])
+    dispatchRecovery({ type: 'start', before })
+    // A cancelled turn puts back the world it started from, exactly, and the
+    // player's action goes back in the box.
+    const restoreCancelled = () => {
+      restoreWorld(before.world, before.world.ooc)
+      setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
+      setInput((box) => restoreIntoBox(box, restoreInputFor(pendingTurn)))
+      dispatchRecovery({ type: 'abort', turnId: pendingTurn.id })
+    }
     const operation = beginOperation(args.replaceExisting)
     if (!operation) {
-      args.onAbortRestore()
+      restoreCancelled()
       return
     }
     setStatusText('DM is thinking…')
@@ -268,7 +300,7 @@ export function useGameController(settings: GameSettings) {
     // A response can land just as the player presses Stop. A cancelled turn
     // must still be restored, while a superseded one belongs to its replacement.
     const stopIfCancelled = () => {
-      if (isCurrentOperation(operation)) args.onAbortRestore()
+      if (isCurrentOperation(operation)) restoreCancelled()
     }
     try {
       const settings = {
@@ -316,18 +348,18 @@ export function useGameController(settings: GameSettings) {
           commitChronicle(workingChronicle)
           commitCompactCutoff(workingCutoff)
           setTurns((ts) => stripTracesBefore(ts, workingCutoff))
-          // Compaction is story-invariant and already paid for: rebase the
-          // recovery checkpoint on the compacted world so undo reverts the
-          // in-flight turn but never the fold.
-          args.action.checkpoint = {
-            turns: stripTracesBefore(baseTurns, workingCutoff),
-            state: baseData.state,
-            plot: baseData.plot,
-            memory: baseData.memory,
-            ooc: baseData.ooc,
+          // Compaction is story-invariant and already paid for: the turn now
+          // starts from the compacted world.
+          before = {
+            ...before,
+            world: { ...before.world, chronicle: workingChronicle, compactCutoff: workingCutoff },
+          }
+          dispatchRecovery({
+            type: 'rebase',
+            turnId: pendingTurn.id,
             chronicle: workingChronicle,
             compactCutoff: workingCutoff,
-          }
+          })
         }
         setStatusText('DM is thinking…')
       }
@@ -460,7 +492,7 @@ export function useGameController(settings: GameSettings) {
       commitEngineOoc(result.data.ooc)
     } catch (err) {
       if (controller.signal.aborted || !isCurrentOperation(operation)) {
-        if (isCurrentOperation(operation)) args.onAbortRestore()
+        stopIfCancelled()
         return
       }
       const failureText = `(The dungeon master falters: ${err instanceof Error ? err.message : String(err)})`
@@ -494,100 +526,80 @@ export function useGameController(settings: GameSettings) {
 
   async function send() {
     const text = input.trim()
-    if (!text || operations.busy) return
+    if (!text || operations.busy || unanswered) return
     setInput('')
-    const action: RetryAction = {
-      checkpoint: checkpoint(),
-      input: text,
-      restoreInput: text,
-      kind: 'player',
-      slots,
-    }
-    dispatchRecovery({ type: 'start', action })
-    const pendingTurn = makePendingTurn('player', text)
-    setTurns([...turns, pendingTurn])
     await runTurn({
-      pendingTurn,
-      action,
+      pendingTurn: makePendingTurn('player', text),
       baseTurns: turns,
-      baseData: { state, plot, memory, ooc },
-      baseChronicle: chronicle,
-      baseCutoff: compactCutoff,
-      onAbortRestore: () => restoreAbortedAction(action),
+      world: worldSnapshot(),
+      slots,
     })
   }
 
+  // Keep the story going. While the latest turn has no reply, that means
+  // getting its reply rather than starting a new turn on top of it.
   async function continueStory() {
     if (operations.busy || turns.length === 0) return
-    const action: RetryAction = {
-      checkpoint: checkpoint(),
-      input: CONTINUE_DIRECTIVE,
-      restoreInput: '',
-      kind: 'continue',
-      slots,
-    }
-    dispatchRecovery({ type: 'start', action })
-    const pendingTurn = makePendingTurn('continue', CONTINUE_DIRECTIVE)
-    setTurns([...turns, pendingTurn])
+    if (unanswered) return retry()
     await runTurn({
-      pendingTurn,
-      action,
+      pendingTurn: makePendingTurn('continue', CONTINUE_DIRECTIVE),
       baseTurns: turns,
-      baseData: { state, plot, memory, ooc },
-      baseChronicle: chronicle,
-      baseCutoff: compactCutoff,
-      onAbortRestore: () => restoreAbortedAction(action),
+      world: worldSnapshot(),
+      slots,
     })
   }
 
+  // The world the latest turn started from, and the settings it ran with. A
+  // turn without a reply never changed the world, so when its stored record is
+  // missing (older data, or storage was full) the world as it stands will do.
+  function latestTurnStart() {
+    if (live.before) return live.before
+    if (!unanswered || !lastTurn) return null
+    return { turnId: lastTurn.id, world: worldSnapshot(), slots }
+  }
+
+  // Remove the latest turn and go back to the world it started from.
   function undo() {
-    if (operations.busy || !recovery.undo) return
-    const undone = recovery.undo
-    // Snapshot the world as it stands so the undo can be inverted by redo. The
-    // OOC list is recorded as the engine left it; the player's own edits are
-    // carried separately, so they survive both directions.
-    const current = { ...checkpoint(), ooc: oocBaseline.current }
-    restoreCheckpoint(undone.checkpoint)
-    setInput((box) => restoreIntoBox(box, undone.restoreInput))
-    dispatchRecovery({ type: 'undo', current })
+    const before = latestTurnStart()
+    const last = turns[turns.length - 1]
+    if (operations.busy || !before || !last) return
+    // Keep what the turn left so Redo can put it back. The OOC list is
+    // recorded as the engine left it; the player's own edits are carried
+    // separately, so they survive both directions.
+    const after = { ...worldSnapshot(), ooc: oocBaseline.current }
+    const afterId = turns.length > 1 ? turns[turns.length - 2].id : null
+    restoreWorld(before.world)
+    setTurns(turns.slice(0, -1))
+    setInput((box) => restoreIntoBox(box, restoreInputFor(last)))
+    dispatchRecovery({ type: 'undo', undone: { afterId, turn: last, world: after } })
   }
 
+  // Put the undone turn back, on top of the world as it stands now, so it can
+  // be undone again.
   function redo() {
-    if (operations.busy || !recovery.redo) return
-    const redone = recovery.redo
-    restoreCheckpoint(redone.checkpoint)
-    setInput((box) => removeFromBox(box, redone.action.restoreInput))
-    dispatchRecovery({ type: 'redo' })
+    const { undone } = live
+    if (operations.busy || !undone) return
+    const before = { turnId: undone.turn.id, world: worldSnapshot(), slots }
+    restoreWorld(undone.world)
+    setTurns([...turns, undone.turn])
+    setInput((box) => removeFromBox(box, restoreInputFor(undone.turn)))
+    dispatchRecovery({ type: 'redo', before })
   }
 
-  // Re-run the last turn, leaving the action box alone. Retry with guidance
-  // attaches one-reply guidance to that turn's input; `preferences` is the
-  // player's OOC list when the Steer story panel saves edits in the same step.
-  async function retry(options: { guidance?: string; preferences?: string[] } = {}) {
-    if (operations.busy || !recovery.retry) return
-    const previous = recovery.retry
-    const restoredOoc = restoreCheckpoint(previous.checkpoint, options.preferences)
-    const input = withRetryGuidance(previous.input, options.guidance ?? '')
-    const action: RetryAction = {
-      ...previous,
-      checkpoint: { ...previous.checkpoint, ooc: restoredOoc },
-      input,
-      restoreInput: previous.kind === 'player' ? input : previous.restoreInput,
-    }
-    const base = action.checkpoint
-    commitSlots(action.slots)
-    dispatchRecovery({ type: 'start', action })
-    const pendingTurn = makePendingTurn(action.kind, action.input)
-    setTurns([...base.turns, pendingTurn])
+  // Run the latest turn again from the world it started in, leaving the action
+  // box alone. Rewrite passes guidance for that one reply.
+  async function retry(options: { guidance?: string } = {}) {
+    const before = latestTurnStart()
+    const last = turns[turns.length - 1]
+    if (operations.busy || !before || !last) return
+    const restoredOoc = restoreWorld(before.world)
+    commitSlots(before.slots)
+    const input = withRetryGuidance(last.input ?? '', options.guidance ?? '')
     await runTurn({
-      pendingTurn,
-      action,
-      baseTurns: base.turns,
-      baseData: { state: base.state, plot: base.plot, memory: base.memory, ooc: base.ooc },
-      baseChronicle: base.chronicle,
-      baseCutoff: base.compactCutoff,
-      slotsForTurn: action.slots,
-      onAbortRestore: () => restoreAbortedAction(action),
+      pendingTurn: makePendingTurn(last.kind, input),
+      baseTurns: turns.slice(0, -1),
+      world: { ...before.world, ooc: restoredOoc },
+      slots: before.slots,
     })
   }
 
@@ -662,34 +674,12 @@ export function useGameController(settings: GameSettings) {
     commitChronicle([])
     commitCompactCutoff(0)
     setCompactionError(null)
-    const action: RetryAction = {
-      checkpoint: {
-        turns: [],
-        state: freshState,
-        plot: [],
-        memory: {},
-        ooc: [],
-        chronicle: [],
-        compactCutoff: 0,
-      },
-      input: buildNewAdventureBootstrap(),
-      restoreInput: '',
-      kind: 'bootstrap',
-      slots: nextSlots,
-    }
-    dispatchRecovery({ type: 'start', action })
-    const pendingTurn = makePendingTurn(action.kind, action.input)
-    setTurns([pendingTurn])
     await runTurn({
-      pendingTurn,
-      action,
+      pendingTurn: makePendingTurn('bootstrap', buildNewAdventureBootstrap()),
       baseTurns: [],
-      baseData: { state: freshState, plot: [], memory: {}, ooc: [] },
-      baseChronicle: [],
-      baseCutoff: 0,
-      slotsForTurn: nextSlots,
+      world: { state: freshState, plot: [], memory: {}, ooc: [], chronicle: [], compactCutoff: 0 },
+      slots: nextSlots,
       replaceExisting: true,
-      onAbortRestore: () => restoreAbortedAction(action),
     })
   }
 
@@ -733,9 +723,10 @@ export function useGameController(settings: GameSettings) {
     chronicle,
     turns,
     compactCutoff,
-    canUndo: recovery.undo !== null,
-    canRedo: recovery.redo !== null,
-    canRetry: recovery.retry !== null,
+    canUndo: live.before !== null || unanswered,
+    canRedo: live.undone !== null,
+    canRetry: live.before !== null || unanswered,
+    unanswered,
     // engine status
     input,
     setInput,

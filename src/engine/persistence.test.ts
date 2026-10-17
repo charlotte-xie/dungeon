@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONTEXT } from './config'
-import { isSavedGameLike, isTurnLike, loadStoredContext, normalizeSavedGame } from './persistence'
+import {
+  isSavedGameLike,
+  isTurnLike,
+  loadStoredContext,
+  loadStoredOocBaseline,
+  loadStoredRecovery,
+  normalizeSavedGame,
+} from './persistence'
 
 function validSave() {
   return {
@@ -199,5 +206,63 @@ describe('turn validation', () => {
         },
       }),
     ).toBe(true)
+  })
+})
+
+describe('stored undo and redo', () => {
+  const world = { state: {}, plot: ['A beat.'], memory: {}, ooc: [], chronicle: [], compactCutoff: 0 }
+  const turn = {
+    id: 'turn-2',
+    kind: 'player' as const,
+    input: 'Enter.',
+    reply: { id: 'reply-2', model: 'test', text: 'The door opens.' },
+  }
+
+  function stored(value: unknown) {
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(value) })
+  }
+
+  it('loads a well-formed record, filling missing adventure settings', () => {
+    stored({
+      before: { turnId: 'turn-1', world, slots: { scenario: 'A vault.', extra: 1 } },
+      undone: { afterId: 'turn-1', turn, world },
+    })
+    const recovery = loadStoredRecovery()
+    expect(recovery.before).toEqual({
+      turnId: 'turn-1',
+      world,
+      slots: { scenario: 'A vault.', styleGuide: expect.any(String) },
+    })
+    expect(recovery.undone).toEqual({ afterId: 'turn-1', turn, world })
+  })
+
+  it('drops malformed parts and keeps the rest', () => {
+    stored({
+      before: { turnId: 'turn-1', world: { ...world, compactCutoff: -1 }, slots: {} },
+      undone: { afterId: null, turn, world },
+    })
+    expect(loadStoredRecovery()).toEqual({ before: null, undone: { afterId: null, turn, world } })
+
+    stored({ before: { turnId: 'turn-1', world, slots: {} }, undone: { afterId: 3, turn, world } })
+    expect(loadStoredRecovery().undone).toBeNull()
+
+    stored({ before: { turnId: 'turn-1', world: { ...world, state: [] }, slots: {} }, undone: null })
+    expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
+  })
+
+  it('treats missing or unreadable storage as nothing to undo', () => {
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
+    vi.stubGlobal('localStorage', { getItem: () => '{not json' })
+    expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
+  })
+
+  it('loads the OOC baseline only when it is a list of strings', () => {
+    stored(['Keep it short.'])
+    expect(loadStoredOocBaseline()).toEqual(['Keep it short.'])
+    stored([1])
+    expect(loadStoredOocBaseline()).toBeNull()
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    expect(loadStoredOocBaseline()).toBeNull()
   })
 })

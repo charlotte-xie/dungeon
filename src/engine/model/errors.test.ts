@@ -7,6 +7,12 @@ describe('describeModelError', () => {
     expect(describeModelError(raw)).toBe('The model `grok-4.3` does not exist. (HTTP 404)')
   })
 
+  it('says when the provider could not be reached', () => {
+    for (const raw of ['Failed to fetch', 'NetworkError when attempting to fetch resource.', 'Load failed']) {
+      expect(describeModelError(raw)).toBe("Couldn't reach the provider. Check the base URL and your connection.")
+    }
+  })
+
   it('reads validation details and top-level messages', () => {
     expect(describeModelError('summarizer API 422: {"detail":[{"loc":["body","model"],"msg":"Field required"}]}'))
       .toBe('Field required (HTTP 422)')

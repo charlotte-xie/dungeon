@@ -4,7 +4,11 @@
 
 const API_ERROR = /^\S+ API (\d{3}): ([\s\S]*)$/
 
+// What each browser's fetch says when the endpoint can't be reached at all.
+const NETWORK_ERROR = /^(Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed)$/
+
 export function describeModelError(raw: string): string {
+  if (NETWORK_ERROR.test(raw.trim())) return "Couldn't reach the provider. Check the base URL and your connection."
   const match = API_ERROR.exec(raw.trim())
   if (!match) return raw
   const [, status, body] = match
