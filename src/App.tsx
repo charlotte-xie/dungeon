@@ -231,11 +231,16 @@ function App() {
           preferences={game.ooc}
           enabled={context.includeOoc}
           busy={thinking}
+          canRetry={game.canRetry}
           onClose={() => setShowSteering(false)}
           onApply={(next) => {
             if (thinking) return
             game.commitOoc(next.preferences)
             game.setInput(next.input)
+          }}
+          onRetry={(next) => {
+            if (thinking) return
+            void game.retry(next)
           }}
         />
       )}

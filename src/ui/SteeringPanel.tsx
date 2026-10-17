@@ -7,8 +7,10 @@ interface SteeringPanelProps {
   preferences: string[]
   enabled: boolean
   busy: boolean
+  canRetry: boolean
   onClose: () => void
   onApply: (next: { input: string; preferences: string[] }) => void
+  onRetry: (next: { guidance: string; preferences: string[] }) => void
 }
 
 const SUGGESTIONS = [
@@ -18,16 +20,35 @@ const SUGGESTIONS = [
   'Keep this scene quiet.',
 ]
 
-export function SteeringPanel({ input, preferences, enabled, busy, onClose, onApply }: SteeringPanelProps) {
+export function SteeringPanel({
+  input, preferences, enabled, busy, canRetry, onClose, onApply, onRetry,
+}: SteeringPanelProps) {
   const [guidance, setGuidance] = useState('')
   const [scope, setScope] = useState<SteeringScope>('once')
   const [draftPreferences, setDraftPreferences] = useState([...preferences])
   const [error, setError] = useState<string | null>(null)
+  const preferencesChanged =
+    JSON.stringify(draftPreferences.map((entry) => entry.trim()).filter(Boolean)) !== JSON.stringify(preferences)
+  const retryReady = canRetry && !busy && (guidance.trim() !== '' || preferencesChanged)
 
   function apply() {
     if (busy) return
     try {
       onApply(prepareSteering(input, guidance, scope, draftPreferences))
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // Rewrite the last reply instead of waiting for the next action: one-reply
+  // guidance rides on the retried turn, and standing preferences are saved first.
+  function retryWithGuidance() {
+    if (!retryReady) return
+    try {
+      const text = guidance.trim()
+      const next = prepareSteering('', scope === 'standing' ? text : '', scope, draftPreferences)
+      onRetry({ guidance: scope === 'once' ? text : '', preferences: next.preferences })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -75,6 +96,13 @@ export function SteeringPanel({ input, preferences, enabled, busy, onClose, onAp
             ? 'Adds guidance to your action box. Edit or add your action, then press Act when ready. No reply is generated yet.'
             : 'Saves a preference for this adventure, starting with the next reply. No reply is generated yet.'}
         </p>
+        {canRetry && (
+          <p className="hint">
+            {scope === 'once'
+              ? 'Or use Retry with guidance to rewrite the last reply with this direction. Your action stays the same.'
+              : 'Or use Retry with guidance to save, then rewrite the last reply with your preferences.'}
+          </p>
+        )}
         <h3 className="saves-subhead">Standing preferences</h3>
         {!enabled && <p className="hint">Standing preferences are paused. Enable “Include OOC instructions” in Settings to use them.</p>}
         {!draftPreferences.length && <p className="hint">No standing preferences yet.</p>}
@@ -105,6 +133,11 @@ export function SteeringPanel({ input, preferences, enabled, busy, onClose, onAp
         <div className="modal-actions">
           <button className="ghost" onClick={onClose}>Cancel</button>
           <span className="spacer" />
+          {canRetry && (
+            <button className="ghost" disabled={!retryReady} onClick={retryWithGuidance}>
+              Retry with guidance
+            </button>
+          )}
           <button disabled={busy} onClick={apply}>
             {scope === 'once' && guidance.trim() ? 'Add to next turn & save' : 'Save preferences'}
           </button>

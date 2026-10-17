@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
 import { EmptyNarrativeError, runNarrator } from '../engine/agents/narrator'
 import { runReviser } from '../engine/agents/reviser'
@@ -10,7 +10,13 @@ import {
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
-import { INITIAL_TURN_RECOVERY, turnRecoveryReducer } from '../engine/turnRecovery'
+import { carryOocEdits, withRetryGuidance } from '../engine/steering'
+import {
+  INITIAL_TURN_RECOVERY,
+  removeFromBox,
+  restoreIntoBox,
+  turnRecoveryReducer,
+} from '../engine/turnRecovery'
 import {
   LS_COMPACT_CUTOFF,
   LS_TURNS,
@@ -85,6 +91,9 @@ export function useGameController(settings: GameSettings) {
   const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
   const [memory, setMemory] = useState<Memory>(() => loadStoredMemory())
   const [ooc, setOoc] = useState<string[]>(() => loadStoredOoc())
+  // The OOC list as the engine last set it (turn result, restore, load). Edits
+  // made since then are the player's own and survive Retry, Undo and Redo.
+  const oocBaseline = useRef<string[]>(ooc)
   const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
   const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
   const [turns, setTurns] = useState<Turn[]>(initialTurns)
@@ -156,6 +165,11 @@ export function useGameController(settings: GameSettings) {
     persistOoc(next)
   }
 
+  function commitEngineOoc(next: string[]) {
+    oocBaseline.current = next
+    commitOoc(next)
+  }
+
   function commitMemory(next: Memory) {
     setMemory(next)
     persistMemory(next)
@@ -185,19 +199,24 @@ export function useGameController(settings: GameSettings) {
     return { turns, state, plot, memory, ooc, chronicle, compactCutoff }
   }
 
-  function restoreCheckpoint(saved: TurnCheckpoint) {
+  // Returns the restored OOC list: the checkpoint's, plus the player's own
+  // edits since the engine last set it.
+  function restoreCheckpoint(saved: TurnCheckpoint, currentOoc: string[] = ooc): string[] {
+    const nextOoc = carryOocEdits(saved.ooc, oocBaseline.current, currentOoc)
     setTurns(saved.turns)
     commitState(saved.state)
     commitPlot([...saved.plot])
     commitMemory(structuredClone(saved.memory))
-    commitOoc([...saved.ooc])
+    commitOoc(nextOoc)
+    oocBaseline.current = [...saved.ooc]
     commitChronicle(saved.chronicle)
     commitCompactCutoff(saved.compactCutoff)
+    return nextOoc
   }
 
   function restoreAbortedAction(action: RetryAction) {
     restoreCheckpoint(action.checkpoint)
-    setInput(action.restoreInput)
+    setInput((box) => restoreIntoBox(box, action.restoreInput))
     dispatchRecovery({ type: 'abort', action })
   }
 
@@ -416,7 +435,7 @@ export function useGameController(settings: GameSettings) {
       commitState(result.data.state)
       commitPlot(result.data.plot)
       commitMemory(result.data.memory)
-      commitOoc(result.data.ooc)
+      commitEngineOoc(result.data.ooc)
     } catch (err) {
       if (controller.signal.aborted || !isCurrentOperation(operation)) {
         if (isCurrentOperation(operation)) args.onAbortRestore()
@@ -501,27 +520,40 @@ export function useGameController(settings: GameSettings) {
 
   function undo() {
     if (operations.busy || !recovery.undo) return
-    // Snapshot the world as it stands so the undo can be inverted by redo.
-    const current = checkpoint()
-    restoreCheckpoint(recovery.undo.checkpoint)
-    setInput(recovery.undo.restoreInput)
+    const undone = recovery.undo
+    // Snapshot the world as it stands so the undo can be inverted by redo. The
+    // OOC list is recorded as the engine left it; the player's own edits are
+    // carried separately, so they survive both directions.
+    const current = { ...checkpoint(), ooc: oocBaseline.current }
+    restoreCheckpoint(undone.checkpoint)
+    setInput((box) => restoreIntoBox(box, undone.restoreInput))
     dispatchRecovery({ type: 'undo', current })
   }
 
   function redo() {
     if (operations.busy || !recovery.redo) return
-    restoreCheckpoint(recovery.redo.checkpoint)
-    setInput('')
+    const redone = recovery.redo
+    restoreCheckpoint(redone.checkpoint)
+    setInput((box) => removeFromBox(box, redone.action.restoreInput))
     dispatchRecovery({ type: 'redo' })
   }
 
-  async function retry() {
+  // Re-run the last turn, leaving the action box alone. Retry with guidance
+  // attaches one-reply guidance to that turn's input; `preferences` is the
+  // player's OOC list when the Steer story panel saves edits in the same step.
+  async function retry(options: { guidance?: string; preferences?: string[] } = {}) {
     if (operations.busy || !recovery.retry) return
-    const action = recovery.retry
+    const previous = recovery.retry
+    const restoredOoc = restoreCheckpoint(previous.checkpoint, options.preferences)
+    const input = withRetryGuidance(previous.input, options.guidance ?? '')
+    const action: RetryAction = {
+      ...previous,
+      checkpoint: { ...previous.checkpoint, ooc: restoredOoc },
+      input,
+      restoreInput: previous.kind === 'player' ? input : previous.restoreInput,
+    }
     const base = action.checkpoint
-    restoreCheckpoint(base)
     commitSlots(action.slots)
-    setInput('')
     dispatchRecovery({ type: 'start', action })
     const pendingTurn = makePendingTurn(action.kind, action.input)
     setTurns([...base.turns, pendingTurn])
@@ -603,7 +635,7 @@ export function useGameController(settings: GameSettings) {
     commitState(freshState)
     commitPlot([])
     commitMemory({})
-    commitOoc([])
+    commitEngineOoc([])
     commitChronicle([])
     commitCompactCutoff(0)
     const action: RetryAction = {
@@ -660,7 +692,7 @@ export function useGameController(settings: GameSettings) {
     commitState(structuredClone(save.state))
     commitPlot([...(save.plot ?? [])])
     commitMemory(structuredClone(save.memory ?? {}))
-    commitOoc([...(save.ooc ?? [])])
+    commitEngineOoc([...(save.ooc ?? [])])
     commitChronicle(save.chronicle ?? [])
     setTurns(save.turns)
     commitCompactCutoff(save.compactCutoff)

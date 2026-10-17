@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_STATE, defaultSlots } from './config'
 import type { RetryAction } from './types'
-import { INITIAL_TURN_RECOVERY, turnRecoveryReducer } from './turnRecovery'
+import { INITIAL_TURN_RECOVERY, removeFromBox, restoreIntoBox, turnRecoveryReducer } from './turnRecovery'
 
 function action(kind: RetryAction['kind'] = 'player'): RetryAction {
   return {
@@ -95,5 +95,21 @@ describe('turnRecoveryReducer', () => {
     const undone = turnRecoveryReducer(recovery, { type: 'undo', current: snapshot() })
     expect(undone.retry).toBe(started)
     expect(turnRecoveryReducer(undone, { type: 'reset' })).toEqual(INITIAL_TURN_RECOVERY)
+  })
+})
+
+describe('action box across undo and redo', () => {
+  it('puts undone input above a draft instead of replacing it', () => {
+    const guidance = '(OOC: NEXT REPLY ONLY — Slow down.)'
+    expect(restoreIntoBox('', 'I open the door.')).toBe('I open the door.')
+    expect(restoreIntoBox(guidance, 'I open the door.')).toBe(`I open the door.\n\n${guidance}`)
+    expect(restoreIntoBox('Draft', '')).toBe('Draft')
+  })
+
+  it('removes only what undo put back', () => {
+    const guidance = '(OOC: NEXT REPLY ONLY — Slow down.)'
+    expect(removeFromBox('I open the door.', 'I open the door.')).toBe('')
+    expect(removeFromBox(`I open the door.\n\n${guidance}`, 'I open the door.')).toBe(guidance)
+    expect(removeFromBox('Something else', 'I open the door.')).toBe('Something else')
   })
 })

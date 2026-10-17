@@ -17,6 +17,24 @@ export type TurnRecoveryEvent =
 
 export const INITIAL_TURN_RECOVERY: TurnRecovery = { undo: null, retry: null, redo: null }
 
+// The action box may hold a draft or pending one-reply guidance when the
+// player undoes, redoes, or cancels. Restored input goes above it rather than
+// replacing it, and redo removes only what undo put back.
+export function restoreIntoBox(box: string, restored: string): string {
+  const text = restored.trim()
+  if (!text) return box
+  return box.trim() ? `${text}\n\n${box.trim()}` : text
+}
+
+export function removeFromBox(box: string, restored: string): string {
+  const text = restored.trim()
+  const current = box.trim()
+  if (!text) return box
+  if (current === text) return ''
+  if (current.startsWith(`${text}\n\n`)) return current.slice(text.length).trim()
+  return box
+}
+
 export function turnRecoveryReducer(
   recovery: TurnRecovery,
   event: TurnRecoveryEvent,
