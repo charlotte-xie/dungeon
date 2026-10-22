@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT } from './prompts'
+import { buildPlotterInstruction, plotterTools } from './engine/agents/narrator'
 import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
-import { applyTurnReminder, buildModelMessages } from './engine/request'
-import { CONTEXT_SUBSYSTEMS } from './engine/request'
+import { buildNarratorSections, buildPlotterSections } from './engine/request'
 import { replyStatus } from './engine/turnRecovery'
 import type { Turn } from './engine/types'
 import { useGameController } from './hooks/useGameController'
@@ -473,36 +473,40 @@ function App() {
               note: lastTurn ? `Draft from turn #${turns.indexOf(lastTurn) + 1}.` : '',
             }
           : undefined
+        const data = {
+          state: game.state,
+          plot: game.plot,
+          memory: game.memory,
+          ooc: game.ooc,
+        }
+        const story = {
+          systemPrompt,
+          slots: game.slots,
+          chronicle: game.chronicle,
+          history: turns.slice(compactCutoff),
+          data,
+          includePriorPlayerTurns: context.includePriorPlayerTurns,
+          flags: context,
+          nsfw: context.nsfw,
+          reminderAsSystem: context.reminderAsSystem,
+        }
+        const tools = plotterTools(context)
         return (
           <ContextViewer
-            messages={applyTurnReminder(
-              buildModelMessages({
-                systemPrompt,
-                slots: game.slots,
-                chronicle: game.chronicle,
-                history: turns.slice(compactCutoff),
-                data: {
-                  state: game.state,
-                  plot: game.plot,
-                  memory: game.memory,
-                  ooc: game.ooc,
-                },
-                includePriorPlayerTurns: context.includePriorPlayerTurns,
-                flags: context,
-                nsfw: context.nsfw,
-              }),
-              context.reminderAsSystem,
-              {
-                worldState: context.includeWorldState,
-                plotOutline: context.includePlotOutline,
-                memory: context.includeMemory,
-                ooc: context.includeOoc,
-              },
-            )}
-            tools={CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(context)).flatMap((s) => [
-              s.updateTool,
-              s.checkTool,
-            ])}
+            narrator={buildNarratorSections(story)}
+            plotter={
+              tools.length
+                ? {
+                    sections: buildPlotterSections({
+                      ...story,
+                      prose: '(the narrator’s reply to the next input)',
+                      pivot: buildPlotterInstruction(context, data, context.stateCleanupChars),
+                    }),
+                    tools,
+                    model: context.plotterModel.trim() || model,
+                  }
+                : undefined
+            }
             sampling={sampling}
             reviser={reviserPreview}
             onClose={() => setInspect(null)}

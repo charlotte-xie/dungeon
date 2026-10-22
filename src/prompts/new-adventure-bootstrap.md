@@ -1,1 +1,1 @@
-(OOC: Begin a new adventure from the scenario brief already provided. Use only the available story-management tools, and only for information that is useful beyond the opening prose. Then narrate the opening scene in 2-4 short paragraphs, in character. Do not reference this directive; just begin.)
+(OOC: Begin the story.)

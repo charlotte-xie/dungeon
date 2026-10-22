@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { ModelMessage } from '../engine/model/types'
+import type { ModelMessage, ModelToolDefinition } from '../engine/model/types'
+import type { RequestSections } from '../engine/request'
 import type { SamplingParams } from '../engine/types'
 import { InspectSwitch, type InspectView } from './InspectSwitch'
 
@@ -12,16 +13,23 @@ export interface ReviserPreview {
   note: string
 }
 
+export interface PlotterPreview {
+  sections: RequestSections
+  tools: ModelToolDefinition[]
+  model: string
+}
+
 interface ContextViewerProps {
-  messages: ModelMessage[]
-  tools: unknown[]
+  narrator: RequestSections
+  // Absent when every record is switched off: there is no Plotter request.
+  plotter?: PlotterPreview
   sampling: SamplingParams
   reviser?: ReviserPreview
   onClose: () => void
   onInspect: (view: InspectView) => void
 }
 
-type Tab = 'system' | 'chronicle' | 'history' | 'notes' | 'tools' | 'reviser'
+type Tab = 'system' | 'chronicle' | 'history' | 'notes' | 'plotter' | 'reviser'
 
 function chars(items: ModelMessage[]): number {
   return items.reduce((n, m) => n + (m.content?.length ?? 0), 0)
@@ -59,29 +67,24 @@ function MessageList({ items }: { items: ModelMessage[] }) {
   )
 }
 
-export function ContextViewer({ messages, tools, sampling, reviser, onClose, onInspect }: ContextViewerProps) {
+export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, onInspect }: ContextViewerProps) {
   const [tab, setTab] = useState<Tab>('history')
 
-  // Segment the request into its architectural sections. The seeded
-  // check-notes exchange is identified by its fixed ctx-* call ids; the
-  // chronicle system message by its heading.
-  const injStart = messages.findIndex((m) => m.toolCalls?.some((c) => c.id.startsWith('ctx-')))
-  const tailStart = injStart === -1 ? messages.length : injStart
-  let historyStart = messages.findIndex((m, i) => i < tailStart && m.role !== 'system')
-  if (historyStart === -1 || historyStart > tailStart) historyStart = tailStart
-  const prefix = messages.slice(0, historyStart)
-  const chronicle = prefix.filter((m) => m.content.startsWith('# Story so far'))
-  const system = prefix.filter((m) => !m.content.startsWith('# Story so far'))
-  const history = messages.slice(historyStart, tailStart)
-  const notes = messages.slice(tailStart)
-  const toolsJson = JSON.stringify(tools, null, 2)
+  const { system, chronicle, history, tail: notes } = narrator
+  // What the Plotter's request holds beyond the story both roles share: its
+  // rules in place of the narrator's reading notes, and its own tail.
+  const plotterPrefix = plotter
+    ? plotter.sections.system.filter((m) => !system.some((n) => n.content === m.content))
+    : []
+  const plotterMessages = plotter ? [...plotterPrefix, ...plotter.sections.tail] : []
+  const toolsJson = plotter ? JSON.stringify(plotter.tools, null, 2) : ''
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'system', label: `System (${system.length})` },
     { id: 'chronicle', label: `Chronicle (${chronicle.length})` },
     { id: 'history', label: `History (${history.length})` },
     { id: 'notes', label: `Notes (${notes.length})` },
-    { id: 'tools', label: `Tools (${tools.length})` },
+    ...(plotter ? [{ id: 'plotter' as Tab, label: 'Plotter' }] : []),
     ...(reviser ? [{ id: 'reviser' as Tab, label: 'Reviser' }] : []),
   ]
 
@@ -93,7 +96,9 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose, onI
             <h2>
               {tab === 'reviser'
                 ? 'Context for reviser request (preview)'
-                : 'Context for next DM request'}
+                : tab === 'plotter'
+                  ? 'Context for Plotter request (preview)'
+                  : 'Context for next narrator request'}
             </h2>
             <InspectSwitch view="context" onChange={onInspect} />
             <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
@@ -114,8 +119,9 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose, onI
           <>
             <p className="hint">
               The stable, cacheable prefix: system prompt, content stance, adventure
-              slots, and the enabled subsystems&apos; rules. Changes only when settings
-              change. {sizeNote(system)}
+              slots, and a short note on reading each enabled record. Changes only
+              when settings change. The narrator is offered no tools; sampling
+              temperature {sampling.temperature}. {sizeNote(system)}
             </p>
             <MessageList items={system} />
           </>
@@ -142,26 +148,28 @@ export function ContextViewer({ messages, tools, sampling, reviser, onClose, onI
         {tab === 'notes' && (
           <>
             <p className="hint">
-              The per-turn tail: the DM &quot;checking its notes&quot; — the seeded
-              check_* tool exchange carrying current memory, plan, state, and OOC
-              instructions — plus the turn reminder. Rebuilt fresh every turn.{' '}
-              {sizeNote(notes)}
+              The per-turn tail: the current memory, plan, state, and OOC
+              instructions as plain text, then the turn reminder. Rebuilt fresh
+              every turn. {sizeNote(notes)}
             </p>
             <MessageList items={notes} />
           </>
         )}
-        {tab === 'tools' && (
+        {tab === 'plotter' && plotter && (
           <>
             <p className="hint">
-              Advertised tool schemas and sampling parameters for the request —{' '}
-              {tools.length} schema{tools.length === 1 ? '' : 's'} ·{' '}
-              {toolsJson.length.toLocaleString()} chars.
+              Sent after the narrator replies (model: {plotter.model}). It shares the
+              system prompt, slots, chronicle, and history with the narrator&apos;s
+              request; shown here is what differs: the full rules for each record in
+              place of the reading notes, then its tail — the records as check_* tool
+              results, the narrator&apos;s reply (a placeholder here), and the pivot.{' '}
+              {sizeNote(plotterMessages)}
             </p>
-            <pre className="state-json ctx-section-json">{JSON.stringify(
-              { model: '(see Settings)', temperature: sampling.temperature },
-              null,
-              2,
-            )}</pre>
+            <MessageList items={plotterMessages} />
+            <p className="hint">
+              Tools offered to the Plotter — {plotter.tools.length} schema
+              {plotter.tools.length === 1 ? '' : 's'} · {toolsJson.length.toLocaleString()} chars.
+            </p>
             <pre className="state-json ctx-section-json">{toolsJson}</pre>
           </>
         )}

@@ -4,44 +4,19 @@ import {
   buildPlotRules,
   buildSummarizerLengthNote,
   buildTurnReminder,
+  CONTINUE_DIRECTIVE,
   DEFAULT_SYSTEM_PROMPT,
   SUMMARIZER_SYSTEM_PROMPT,
 } from './prompts'
 
 describe('capability-aware prompts', () => {
-  it('steers the narrator away from tools when any subsystem is enabled', () => {
-    const reminder = buildTurnReminder({
-      worldState: false,
-      plotOutline: true,
-      memory: false,
-      ooc: false,
-    })
-    expect(reminder).toContain('Do not call tools while narrating')
-    expect(reminder).toContain('Plotter pass')
-
-    const bare = buildTurnReminder({
-      worldState: false,
-      plotOutline: false,
-      memory: false,
-      ooc: false,
-    })
-    expect(bare).not.toContain('Plotter pass')
-  })
-
   it('keeps the turn reminder to a pointer at the latest input', () => {
-    const bare = buildTurnReminder({ worldState: false, plotOutline: false, memory: false, ooc: false })
-    expect(bare).toBe("Reply to the player's latest input.")
-
-    const withTools = buildTurnReminder({ worldState: true, plotOutline: true, memory: true, ooc: true })
-    expect(withTools.startsWith("Reply to the player's latest input.")).toBe(true)
-    expect(withTools).not.toContain('{{')
+    expect(buildTurnReminder()).toBe("Reply to the player's latest input.")
   })
 
-  it('does not demand a specific tool during bootstrap', () => {
-    const bootstrap = buildNewAdventureBootstrap()
-
-    expect(bootstrap).toContain('available story-management tools')
-    expect(bootstrap).not.toMatch(/update_state|future_plot_plan|update_memory/)
+  it('keeps the opening and Continue directives to the player’s short request', () => {
+    expect(buildNewAdventureBootstrap()).toBe('(OOC: Begin the story.)')
+    expect(CONTINUE_DIRECTIVE).toBe('(OOC: Continue the story.)')
   })
 
   it('describes progression as causal change without random escalation', () => {

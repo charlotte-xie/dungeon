@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  MAX_NARRATOR_ITERATIONS,
+  EmptyNarrativeError,
   MAX_PLOTTER_ITERATIONS,
   buildPlotterInstruction,
   runNarrator,
@@ -60,7 +60,7 @@ describe('runNarrator two-phase flow', () => {
     mockedModel.mockReset()
   })
 
-  it('narrates first, then the plotter phase records updates on the same conversation', async () => {
+  it('narrates without tools, then the Plotter records updates in its own request', async () => {
     mockedModel.mockResolvedValueOnce(completion({ text: 'The door creaks open.' }))
     mockedModel.mockResolvedValueOnce(
       completion({
@@ -88,16 +88,30 @@ describe('runNarrator two-phase flow', () => {
 
     const narratorReq = mockedModel.mock.calls[0][0]
     const plotterReq = mockedModel.mock.calls[1][0]
-    // Same tool set both phases — required for provider prefix-cache sharing.
-    expect(plotterReq.tools).toEqual(narratorReq.tools)
+    // The narrator is offered no tools and reads no record-keeping rules;
+    // the records reach it as plain text.
+    expect(narratorReq.tools ?? []).toEqual([])
+    expect(narratorReq.messages.some((m) => m.role === 'tool' || m.toolCalls?.length)).toBe(false)
+    expect(narratorReq.messages.some((m) => m.content.includes('# Live State'))).toBe(false)
+    expect(narratorReq.messages.some((m) => m.content.includes('**Live state**'))).toBe(true)
+    // The Plotter gets the tools, the rules, and the records as tool results.
     expect(plotterReq.label).toBe('plotter:0')
-    // The plotter request extends the narrator conversation: the prose is
-    // committed as an assistant message before the pivot instruction.
+    expect(plotterReq.tools?.map((t) => t.name)).toContain('update_state')
+    expect(plotterReq.messages.some((m) => m.content.includes('# Live State'))).toBe(true)
+    expect(plotterReq.messages.some((m) => m.toolCalls?.some((c) => c.id === 'ctx-check-state'))).toBe(
+      true,
+    )
+    // The prose follows the records and precedes the pivot instruction, and
+    // the request carries no narrator turn reminder. (The mock holds the live
+    // list, which the loop has since extended with the tool exchange.)
     const proseIdx = plotterReq.messages.findIndex(
       (m) => m.role === 'assistant' && m.content === 'The door creaks open.',
     )
-    expect(proseIdx).toBeGreaterThanOrEqual(0)
+    expect(plotterReq.messages[proseIdx - 1].role).toBe('tool')
     expect(plotterReq.messages[proseIdx + 1].content).toContain('Plotter')
+    expect(
+      plotterReq.messages.some((m) => m.content.startsWith("Reply to the player's latest input")),
+    ).toBe(false)
   })
 
   it('ends the plotter phase on a DONE reply with no tool calls', async () => {
@@ -263,54 +277,54 @@ describe('runNarrator two-phase flow', () => {
     expect(all).toContain('Memory: ')
   })
 
-  it('keeps every request of the turn an extension of the previous one', async () => {
+  it('keeps each role’s requests append-only within a turn', async () => {
     const snapshots: ModelMessage[][] = []
     mockedModel.mockImplementation(async (req) => {
       snapshots.push(req.messages.map((m) => ({ ...m })))
-      if (snapshots.length === 1) {
-        // A stray narrator-phase read: the loop must append, not rebuild.
-        return completion({ toolCalls: [{ id: 'r0', name: 'check_state', arguments: '{}' }] })
-      }
+      // An empty narrator reply, then prose; a rejected plotter call, then DONE.
+      if (snapshots.length === 1) return completion({})
       if (snapshots.length === 2) return completion({ text: 'Prose.' })
+      if (snapshots.length === 3) {
+        return completion({ toolCalls: [{ id: 'bad', name: 'update_memory', arguments: '{"set":{}}' }] })
+      }
       return completion({ text: 'DONE' })
     })
 
     await runNarrator(CTX, new AbortController().signal)
 
-    expect(snapshots).toHaveLength(3)
-    for (let i = 1; i < snapshots.length; i++) {
-      expect(snapshots[i].slice(0, snapshots[i - 1].length)).toEqual(snapshots[i - 1])
-    }
-    // The turn reminder is appended once, ahead of any tool exchange, and is
-    // still present (never removed) when the plotter request goes out.
-    const reminders = snapshots[2].filter(
-      (m) => m.role === 'system' && m.content.startsWith("Reply to the player's latest input"),
-    )
-    expect(reminders).toHaveLength(1)
-    const reminderIdx = snapshots[2].findIndex((m) => m.content.startsWith("Reply to the player's latest input"))
-    const strayIdx = snapshots[2].findIndex((m) => m.toolCalls?.some((c) => c.id === 'r0'))
-    expect(reminderIdx).toBeLessThan(strayIdx)
+    expect(snapshots).toHaveLength(4)
+    const [narrator0, narrator1, plotter0, plotter1] = snapshots
+    expect(narrator1.slice(0, narrator0.length)).toEqual(narrator0)
+    expect(plotter1.slice(0, plotter0.length)).toEqual(plotter0)
+    // The nudge repeats the turn reminder after the empty reply.
+    expect(narrator1).toHaveLength(narrator0.length + 1)
+    expect(narrator1[narrator1.length - 1]).toEqual(narrator0[narrator0.length - 1])
   })
 
-  it('keeps the tool schemas on the final narrative attempt and forbids calls instead', async () => {
-    let n = 0
-    mockedModel.mockImplementation(async () => {
-      n++
-      return n < MAX_NARRATOR_ITERATIONS
-        ? completion({ toolCalls: [{ id: `s${n}`, name: 'check_state', arguments: '{}' }] })
-        : completion({ text: 'Prose at last.' })
-    })
+  it('never executes a call the narrator returns, and nudges it for prose', async () => {
+    mockedModel.mockResolvedValueOnce(
+      completion({
+        toolCalls: [{ id: 's1', name: 'update_state', arguments: '{"keep":[],"set":{"x":1}}' }],
+      }),
+    )
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
-    expect(result.text).toBe('Prose at last.')
-    const requests = mockedModel.mock.calls.map(([req]) => req)
-    const last = requests[MAX_NARRATOR_ITERATIONS - 1]
-    expect(last.tools).toEqual(requests[0].tools)
-    expect(last.toolChoice).toBe('none')
-    expect(requests.slice(0, MAX_NARRATOR_ITERATIONS - 1).every((r) => r.toolChoice === undefined)).toBe(
-      true,
+    expect(result.text).toBe('Prose.')
+    expect(result.data.state).toEqual({})
+    expect(result.trace.some((e) => e.kind === 'call')).toBe(false)
+    expect(result.trace.some((e) => e.kind === 'thought' && e.text.includes('nudge'))).toBe(true)
+  })
+
+  it('gives up when the narrator is still empty after one nudge', async () => {
+    mockedModel.mockResolvedValue(completion({}))
+
+    await expect(runNarrator(CTX, new AbortController().signal)).rejects.toBeInstanceOf(
+      EmptyNarrativeError,
     )
+    expect(mockedModel).toHaveBeenCalledTimes(2)
   })
 
   it('records the provider’s prompt and cached token counts per request', async () => {

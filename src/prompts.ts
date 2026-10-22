@@ -23,27 +23,12 @@ export const REVISER_SYSTEM_PROMPT = reviserSystem.trim()
 // Synthetic user input sent when the player presses Continue (skips their turn).
 export const CONTINUE_DIRECTIVE = continueDirective.trim()
 
-export interface TurnReminderCapabilities {
-  worldState: boolean
-  plotOutline: boolean
-  memory: boolean
-  ooc: boolean
-}
-
 // The last thing the narrator reads before writing, so it points at the
 // player's input and nothing more: the system prompt carries the story's
 // guidance. Restating it here would invite a rule-by-rule check every turn,
 // and this tail is never cached.
-export function buildTurnReminder(capabilities: TurnReminderCapabilities): string {
-  const anyTools =
-    capabilities.worldState ||
-    capabilities.plotOutline ||
-    capabilities.memory ||
-    capabilities.ooc
-  const toolReminder = anyTools
-    ? ' Do not call tools while narrating: write the prose only. A separate Plotter pass records the bookkeeping after your reply.'
-    : ''
-  return fill(turnReminder, { toolReminder }).trim()
+export function buildTurnReminder(): string {
+  return turnReminder.trim()
 }
 
 export const NSFW_ON_PROMPT =
