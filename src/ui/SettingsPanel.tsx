@@ -219,7 +219,7 @@ export function SettingsPanel({
               type="button"
               className="ghost"
               onClick={() => applyProvider('xai')}
-              title="Use the default xAI API endpoint with the Grok preset: Grok 4.7 narrator, Grok 4.3 plotter and summariser, Responses protocol"
+              title="Use the default xAI API endpoint with the Grok preset: Grok 4.7 narrator and plotter, Grok 4.3 summariser, Responses protocol"
             >
               xAI
             </button>
@@ -355,7 +355,7 @@ export function SettingsPanel({
           )
         })}
         <p className="hint">
-          The xAI button above applies the Grok preset: narrator 4.7 low, plotter 4.3 low,
+          The xAI button above applies the Grok preset: narrator 4.7 low, plotter 4.7 low,
           summariser 4.3 off; Responses API, reviser off. Keeps your adventure and API key. For other providers, choose
           a supported reasoning level or Provider default. Grok 4.7 requires reasoning;
           choose Low or higher.

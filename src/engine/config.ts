@@ -93,7 +93,7 @@ export const DEFAULT_MEMORY: Memory = {}
 
 export const DEFAULT_CONTEXT: ContextConfig = {
   narratorReasoning: 'low',
-  plotterModel: 'grok-4.3',
+  plotterModel: 'grok-4.7',
   plotterReasoning: 'low',
   summarizerModel: 'grok-4.3',
   summarizerReasoning: 'none',
@@ -154,7 +154,7 @@ export const PROVIDER_SETUPS: Record<ProviderId, ProviderSetup> = {
     context: {
       apiProtocol: 'responses',
       narratorReasoning: 'low',
-      plotterModel: 'grok-4.3',
+      plotterModel: 'grok-4.7',
       plotterReasoning: 'low',
       summarizerModel: 'grok-4.3',
       summarizerReasoning: 'none',

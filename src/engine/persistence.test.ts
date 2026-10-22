@@ -161,7 +161,7 @@ describe('role settings', () => {
   it('loads the recommended defaults for a new installation', () => {
     vi.stubGlobal('localStorage', { getItem: () => null })
     expect(loadStoredContext()).toMatchObject({
-      narratorReasoning: 'low', plotterModel: 'grok-4.3', plotterReasoning: 'low',
+      narratorReasoning: 'low', plotterModel: 'grok-4.7', plotterReasoning: 'low',
       summarizerModel: 'grok-4.3', summarizerReasoning: 'none', apiProtocol: 'responses', useReviser: false,
     })
   })

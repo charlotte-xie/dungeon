@@ -65,7 +65,7 @@ In **Settings**:
 - **API key** — required by hosted providers; local servers may accept a placeholder.
 - **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
 - **Narrator model / reasoning** — defaults to `grok-4.7` with low reasoning.
-- **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
+- **Plotter model / reasoning** — defaults to `grok-4.7` with low reasoning.
 - **Summariser model / reasoning** — defaults to `grok-4.3` with reasoning off.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
 - The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
