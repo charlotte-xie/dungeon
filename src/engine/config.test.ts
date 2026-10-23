@@ -38,7 +38,12 @@ describe('Grok 4.7 reasoning check', () => {
   })
 
   it('treats a whitespace-only role model as following the narrator', () => {
-    const context = { ...DEFAULT_CONTEXT, plotterModel: '   ', plotterReasoning: 'none' as const }
+    const context = {
+      ...DEFAULT_CONTEXT,
+      narratorReasoning: 'low' as const,
+      plotterModel: '   ',
+      plotterReasoning: 'none' as const,
+    }
     expect(reasoningOffConflict(' grok-4.7 ', context)).toBe('plotter')
   })
 })

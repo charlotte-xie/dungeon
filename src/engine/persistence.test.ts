@@ -161,7 +161,7 @@ describe('role settings', () => {
   it('loads the recommended defaults for a new installation', () => {
     vi.stubGlobal('localStorage', { getItem: () => null })
     expect(loadStoredContext()).toMatchObject({
-      narratorReasoning: 'low', plotterModel: 'grok-4.7', plotterReasoning: 'low',
+      narratorReasoning: 'none', plotterModel: 'grok-4.3', plotterReasoning: 'low',
       summarizerModel: 'grok-4.3', summarizerReasoning: 'none', apiProtocol: 'responses', useReviser: false,
     })
   })
@@ -206,6 +206,21 @@ describe('turn validation', () => {
         },
       }),
     ).toBe(true)
+  })
+
+  it('accepts a briefing and checks its shape, and the Plotter call’s', () => {
+    const turn = {
+      id: 't',
+      kind: 'player',
+      input: 'x',
+      reply: { id: 'r', model: 'm', text: 'Prose.' },
+      plotter: { id: 'p', model: 'm' },
+      briefing: [{ name: 'steer', arguments: '{"text":"Quiet."}', result: 'ok' }],
+    }
+    expect(isTurnLike(turn)).toBe(true)
+    expect(isTurnLike({ ...turn, briefing: [{ name: 'steer', arguments: {}, result: 'ok' }] })).toBe(false)
+    expect(isTurnLike({ ...turn, briefing: 'steer' })).toBe(false)
+    expect(isTurnLike({ ...turn, plotter: { id: 'p' } })).toBe(false)
   })
 })
 

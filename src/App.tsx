@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT } from './prompts'
-import { buildPlotterInstruction, plotterTools } from './engine/agents/narrator'
+import { buildPlotterInstruction } from './engine/agents/narrator'
 import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
-import { buildNarratorSections, buildPlotterSections } from './engine/request'
+import { buildNarratorSections, buildPlotterSections, buildPlotterTools } from './engine/request'
 import { replyStatus } from './engine/turnRecovery'
 import type { Turn } from './engine/types'
 import { useGameController } from './hooks/useGameController'
@@ -24,16 +24,17 @@ import { TraceView, type ModelCallView } from './ui/TraceView'
 import { AdventureMenu } from './ui/AdventureMenu'
 import type { InspectView } from './ui/InspectSwitch'
 
-// The model calls behind a turn, as its trace shows them.
+// The model calls behind a turn, in the order they ran, as its trace shows
+// them. Turns played before the Plotter went first list it in the same place.
 function traceCalls(t: Turn): ModelCallView[] {
   const plotter = t.plotter ? [{ label: 'plotter', call: t.plotter }] : []
   return t.narrator
     ? [
-        { label: 'narrator (draft)', call: t.narrator, hideText: true },
         ...plotter,
+        { label: 'narrator (draft)', call: t.narrator, hideText: true },
         { label: 'reviser', call: t.reply, diffAgainst: t.narrator.text ?? '' },
       ]
-    : [{ label: 'narrator', call: t.reply, hideText: true }, ...plotter]
+    : [...plotter, { label: 'narrator', call: t.reply, hideText: true }]
 }
 
 function App() {
@@ -226,7 +227,8 @@ function App() {
                       {t.plotter?.error && (
                         <div className="turn-notice" role="status">
                           <p>
-                            Plotter failed — state, plot, memory and OOC weren't updated this turn:{' '}
+                            Plotter failed — this reply was written without a full plan, and the
+                            records may be incomplete:{' '}
                             {describeModelError(t.plotter.error)}
                           </p>
                           <ErrorDetails error={t.plotter.error} />
@@ -382,11 +384,7 @@ function App() {
             <button
               className="primary"
               onClick={game.cancelOperation}
-              title={
-                game.recording
-                  ? 'Stop recording this turn: keep the reply and skip its bookkeeping'
-                  : 'Stop the DM and put your action back in the box'
-              }
+              title="Stop the DM and put your action back in the box"
             >
               Stop
             </button>
@@ -479,18 +477,25 @@ function App() {
           memory: game.memory,
           ooc: game.ooc,
         }
+        // Both previews show the next turn, with a placeholder for its input.
+        const nextTurn: Turn = {
+          id: 'next-turn',
+          kind: 'player',
+          input: '(the player’s next input)',
+          reply: { id: 'next-reply', model, text: '' },
+        }
         const story = {
           systemPrompt,
           slots: game.slots,
           chronicle: game.chronicle,
-          history: turns.slice(compactCutoff),
+          history: [...turns.slice(compactCutoff), nextTurn],
           data,
           includePriorPlayerTurns: context.includePriorPlayerTurns,
           flags: context,
           nsfw: context.nsfw,
           reminderAsSystem: context.reminderAsSystem,
         }
-        const tools = plotterTools(context)
+        const tools = buildPlotterTools(context)
         return (
           <ContextViewer
             narrator={buildNarratorSections(story)}
@@ -499,7 +504,6 @@ function App() {
                 ? {
                     sections: buildPlotterSections({
                       ...story,
-                      prose: '(the narrator’s reply to the next input)',
                       pivot: buildPlotterInstruction(context, data, context.stateCleanupChars),
                     }),
                     tools,

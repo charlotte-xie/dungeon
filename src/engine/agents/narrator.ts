@@ -1,20 +1,20 @@
-// Narrator orchestration: two requests per turn, one per role, each its own
-// append-only conversation:
+// Turn orchestration: two requests per turn, one per role, each its own
+// append-only conversation. The Plotter goes first:
 //
-//   1. Narrate — the narrator writes the turn's prose from the story so far,
-//      the current records, and a one-line note on each. It is offered no
-//      tools and never sees the record-keeping rules.
-//   2. Plot — the Plotter gets its own request: the same story, the full
-//      rules, the records as tool results, then the prose and a pivot
-//      instruction. It compares the narration against the records and
-//      records every material change via the update tools, looping until it
-//      makes no calls.
+//   1. Plot — the Plotter reads the story up to the player's latest input,
+//      the full rules, and the records as tool results. It records what the
+//      last reply established, decides how the world answers the player,
+//      recalls the memories the reply needs, and may steer it, looping until
+//      it makes no calls.
+//   2. Narrate — the narrator, with no tools, writes the reply from the story
+//      and its briefing: the Plotter's world updates, recalled memories, and
+//      steer, shown as the DM's own tool calls ahead of the reply. The plan,
+//      the OOC edits, and the Plotter's reads stay the Plotter's.
 //
-// Each request extends the same role's request from the previous turn up to
-// the latest input, and within a turn a nudge or a plotter iteration only
-// appends, so each role keeps its own provider prefix cache. Updates reflect
-// what was actually narrated rather than what the model intended to write.
-// Provider transport and response-format quirks live under ../model.
+// Each request extends the same role's request from the previous turn, and
+// within a turn a nudge or a plotter iteration only appends, so each role
+// keeps its own provider prefix cache. Provider transport and response-format
+// quirks live under ../model.
 
 import { buildTurnReminder } from '../../prompts'
 import {
@@ -22,20 +22,21 @@ import {
   buildNarratorMessages,
   buildPlotterGuidance,
   buildPlotterMessages,
+  buildPlotterTools,
   type ContextFlags,
 } from '../request'
-import { executeEnabledTool } from '../tools'
+import { NARRATOR_VISIBLE_TOOLS, RECALL_MEMORY_TOOL, STEER_TOOL, executeEnabledTool } from '../tools'
 import { completeModel } from '../model/client'
 import type {
   ApiProtocol,
   ModelCompletion,
   ModelMessage,
   ModelToolCall,
-  ModelToolDefinition,
   ReasoningEffort,
 } from '../model/types'
 import type {
   AdventureSlots,
+  BriefingCall,
   Chronicle,
   SamplingParams,
   StoryData,
@@ -56,6 +57,7 @@ export interface NarratorContext {
   cacheKey?: string
   slots: AdventureSlots
   chronicle: Chronicle
+  // The story so far, ending with the turn being played (input, no reply).
   history: Turn[]
   initialData: StoryData
   sampling: SamplingParams
@@ -66,39 +68,38 @@ export interface NarratorContext {
   nsfw: boolean
 }
 
+// What the Plotter did, as soon as it's done, so the turn can show its trace
+// while the narrator writes.
+export interface Plotting {
+  briefing: BriefingCall[]
+  trace: TraceEvent[]
+  reasoningTokens?: number
+  // Set when the Plotter failed; the narrator still writes, from whatever
+  // was recorded before the failure.
+  error?: string
+}
+
 export interface NarratorResult {
   text: string
   data: StoryData
   // Narrate-phase events only; the plotter phase records separately so the
   // trace UI can present the two phases as distinct sections.
   trace: TraceEvent[]
-  plotterTrace?: TraceEvent[]
-  plotterReasoningTokens?: number
-  // Set when the plotter phase failed; the prose and any updates recorded
-  // before the failure are still returned.
-  plotterError?: string
   reasoningTokens?: number
-}
-
-// The narration as soon as it's written, before the Plotter phase records the
-// turn, so the reply can be shown while the bookkeeping runs.
-export interface Narration {
-  text: string
-  trace: TraceEvent[]
-  reasoningTokens?: number
+  plotting?: Plotting
 }
 
 export interface NarratorHooks {
-  onNarrated?: (narration: Narration) => void
+  onPlotted?: (plotting: Plotting) => void
 }
 
 export const MAX_PLOTTER_ITERATIONS = 4
 
-// The plotter pivot names only the subsystems that are actually enabled —
-// a static text would point the model at injections that don't exist and
-// tools that aren't advertised whenever a subsystem is switched off. It also
-// carries each enabled subsystem's bookkeeping guidance and size-pressure
-// hints, computed from the data as it stands at the pivot.
+// The Plotter's instruction names only the subsystems that are actually
+// enabled — a static text would point the model at injections that don't
+// exist and tools that aren't advertised whenever a subsystem is switched
+// off. It also carries each enabled subsystem's bookkeeping guidance and
+// size-pressure hints, computed from the data at the start of the turn.
 export function buildPlotterInstruction(
   flags: ContextFlags,
   data: StoryData,
@@ -110,24 +111,39 @@ export function buildPlotterInstruction(
   const distinctions = enabled.map((s) => s.pivotDistinction)
   const distinctLine =
     distinctions.length > 1 ? ` Keep the subsystems distinct: ${distinctions.join('; ')}.` : ''
+  const steps = [
+    `Record what the last reply established that the working data (see the ${reads.join(' / ')} results) doesn’t yet hold.`,
+    'Decide how the world answers the player’s latest input, and record the changes that follow.',
+    ...(flags.includeMemory
+      ? [
+          `Recall with \`${RECALL_MEMORY_TOOL.name}\` every remembered person, place, or thing the reply will involve: the narrator sees only the story, what you record, and what you recall.`,
+        ]
+      : []),
+    ...(flags.includePlotOutline
+      ? [
+          `If it helps, steer the reply with \`${STEER_TOOL.name}\`: what happens and where it ends, in a sentence or two, without prose.`,
+        ]
+      : []),
+  ]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
-    'The narration for this turn is complete. You are now acting as the Plotter: ' +
-    `compare the player’s input and the narration above against the current working data (see the ${reads.join(' / ')} results). ` +
-    `Record every material change by calling ${updates.join(', ')}, following each subsystem’s rules — batch every needed call into this single response.` +
+    'The player has acted. Before the narrator writes the reply, you are acting as the Plotter:\n' +
+    steps.map((step, i) => `${i + 1}. ${step}`).join('\n') +
+    `\n\nRecord changes by calling ${updates.join(', ')}, following each subsystem’s rules, and batch every call into this single response, updates before recalls.` +
     distinctLine +
-    ' If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to record at all, reply with only the word DONE.' +
+    ' If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to do at all, reply with only the word DONE.' +
     (guidance ? `\n\n${guidance}` : '')
   )
 }
 
-// The tools the Plotter is offered: each enabled subsystem's update and read
-// tools.
-export function plotterTools(flags: ContextFlags): ModelToolDefinition[] {
-  return CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags)).flatMap((s) => [
-    s.updateTool,
-    s.checkTool,
-  ])
+// Endpoints and models found to reject a request that replays tool calls
+// without offering any tools, for this browser session. The narrator then
+// sends the briefing tools' schemas with calls forbidden.
+const toolsRequiredForBriefing = new Set<string>()
+
+function rejectsToolsWithoutSchemas(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /\bAPI (400|422):/.test(message) && /tool/i.test(message)
 }
 
 /**
@@ -174,12 +190,12 @@ export async function runNarrator(
     reminderAsSystem: ctx.reminderAsSystem,
   }
 
-  const narratorTrace: TraceEvent[] = []
   const plotterTrace: TraceEvent[] = []
+  const narratorTrace: TraceEvent[] = []
   // Events land in the trace of whichever phase is active; the helpers below
-  // capture this binding, so reassigning it pivots them to the plotter trace.
-  let trace: TraceEvent[] = narratorTrace
-  let totalReasoningTokens = 0
+  // capture this binding, so reassigning it pivots them to the narrator trace.
+  let trace: TraceEvent[] = plotterTrace
+  let reasoningTokens = 0
   // Re-prompt the model after a reply with no usable output. Honours
   // ctx.reminderAsSystem (same convention as the turn reminder): a true system
   // message when asSystem, otherwise an in-channel (OOC: ...) user message.
@@ -211,70 +227,22 @@ export async function runNarrator(
     for (const anomaly of completion.anomalies) {
       trace.push({ kind: 'thought', text: `(model protocol: ${anomaly.detail})` })
     }
-    const iterReasoningTokens = completion.reasoningTokens ?? 0
-    if (iterReasoningTokens > 0) totalReasoningTokens += iterReasoningTokens
+    reasoningTokens += completion.reasoningTokens ?? 0
   }
 
-  // --- Phase 1: narrate ---
-  // No tools are offered, so the reply is prose or nothing; a call-shaped
-  // reply is quarantined by the model boundary and shows up as an anomaly.
-  // An empty reply gets one nudge: the turn reminder again.
-  const narratorMessages = buildNarratorMessages(story)
-  console.debug('[dm] narrator request — records at the tail as plain text', {
-    initialData: ctx.initialData,
-  })
-  let proseText = ''
-  for (let attempt = 0; ; attempt++) {
-    const label = `narrator:${attempt}`
-    const startedAt = Date.now()
-    const completion = await completeModel(
-      {
-        model: ctx.model,
-        reasoningEffort: ctx.reasoningEffort,
-        messages: narratorMessages,
-        temperature: ctx.sampling.temperature,
-        label,
-      },
-      connection,
-      signal,
-    )
-    recordCompletion(label, completion, Date.now() - startedAt)
-    if (completion.text) {
-      proseText = completion.text
-      break
-    }
-    console.warn('[dm] empty model message', { attempt, completion })
-    if (attempt > 0) {
-      throw new EmptyNarrativeError(
-        completion.finishReason,
-        trace,
-        totalReasoningTokens || undefined,
-      )
-    }
-    pushNudge(narratorMessages, buildTurnReminder())
-  }
-  hooks.onNarrated?.({
-    text: proseText,
-    trace: [...narratorTrace],
-    reasoningTokens: totalReasoningTokens || undefined,
-  })
-
-  // --- Phase 2: plot ---
-  // The Plotter's own conversation ends with the prose and the pivot; it
-  // loops until it records nothing further. A plotter failure never loses the
-  // turn: the prose and any updates recorded so far are kept, and the rest of
-  // the state simply carries forward.
-  const narratorReasoningTokens = totalReasoningTokens
-  let plotterError: string | undefined
-  const tools = plotterTools(ctx.flags)
+  // --- Phase 1: plot ---
+  // The Plotter loops until it records nothing further. A plotter failure
+  // never sinks the turn: what it recorded so far stands, and the narrator
+  // writes from that.
+  const briefing: BriefingCall[] = []
+  const tools = buildPlotterTools(ctx.flags)
+  let plotting: Plotting | undefined
   if (tools.length) {
     const enabledToolNames = new Set(tools.map((t) => t.name))
     const messages = buildPlotterMessages({
       ...story,
-      prose: proseText,
       pivot: buildPlotterInstruction(ctx.flags, data, ctx.stateCleanupThreshold),
     })
-    trace = plotterTrace
     const pushToolResult = (call: ModelToolCall, content: string) => {
       messages.push({ role: 'tool', toolCallId: call.id, content })
       trace.push({
@@ -284,10 +252,12 @@ export async function runNarrator(
         result: content,
       })
     }
-    // Append the model's tool-call turn and execute each call, serving
-    // context reads from the live data and mutations through the game-state
-    // executor. Reports whether the batch contained context reads or rejected
-    // calls so the loop can decide whether another iteration has a purpose.
+    // Append the model's tool-call turn and execute each call in order,
+    // serving context reads from the live data and everything else through
+    // the game-state executor. The calls the narrator sees join the briefing
+    // unless they were rejected. Reports whether the batch contained context
+    // reads or rejected calls so the loop can decide whether another
+    // iteration has a purpose.
     const handleToolCalls = (completion: { text: string; toolCalls: ModelToolCall[] }) => {
       messages.push({
         role: 'assistant',
@@ -305,11 +275,16 @@ export async function runNarrator(
         }
         const exec = executeEnabledTool(enabledToolNames, call.name, call.arguments, data)
         data = exec.data
-        if (/^(error|partial)\b/i.test(exec.result)) sawError = true
+        const rejected = /^error\b/i.test(exec.result)
+        if (rejected || /^partial\b/i.test(exec.result)) sawError = true
+        if (!rejected && NARRATOR_VISIBLE_TOOLS.has(call.name)) {
+          briefing.push({ name: call.name, arguments: call.arguments, result: exec.result })
+        }
         pushToolResult(call, exec.result)
       }
       return { sawError, sawRead }
     }
+    let error: string | undefined
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
         const label = `plotter:${iter}`
@@ -332,12 +307,9 @@ export async function runNarrator(
         }
         if (!completion.toolCalls.length) break
         const batch = handleToolCalls(completion)
-        // A clean batch of updates is the normal end of the phase. Stop here:
-        // a confirmation round-trip ends the request on bare tool results
-        // with no fresh directive, which makes models waffle about whether
-        // they should be waiting for player input. Iterate only when there is
-        // something concrete left to do — repair a rejected call, or act on a
-        // context read the model chose to make.
+        // A clean batch is the normal end of the phase. Iterate only when
+        // there is something concrete left to do — repair a rejected call, or
+        // act on a context read the model chose to make.
         if (!batch.sawError && !batch.sawRead) break
         if (batch.sawError) {
           pushNudge(
@@ -348,22 +320,91 @@ export async function runNarrator(
       }
     } catch (err) {
       if (signal.aborted) throw err
-      const msg = err instanceof Error ? err.message : String(err)
-      plotterError = msg
+      error = err instanceof Error ? err.message : String(err)
       trace.push({
         kind: 'thought',
-        text: `(plotter failed: ${msg} — updates recorded so far are kept; anything else carries forward unchanged)`,
+        text: `(plotter failed: ${error} — what was recorded so far stands, and the narrator writes from it)`,
       })
     }
+    plotting = {
+      briefing: [...briefing],
+      trace: [...plotterTrace],
+      reasoningTokens: reasoningTokens || undefined,
+      error,
+    }
+    hooks.onPlotted?.(plotting)
+  }
+
+  // --- Phase 2: narrate ---
+  // No tools are offered, so the reply is prose or nothing; a call-shaped
+  // reply is quarantined by the model boundary and shows up as an anomaly.
+  // An empty reply gets one nudge: the turn reminder again.
+  trace = narratorTrace
+  const plotterReasoningTokens = reasoningTokens
+  const latest = ctx.history.length - 1
+  const narratorMessages = buildNarratorMessages({
+    ...story,
+    history: ctx.history.map((t, i) => (i === latest ? { ...t, briefing } : t)),
+    data,
+  })
+  // A provider that won't take replayed tool calls without schemas gets the
+  // briefing tools' schemas, with calls forbidden.
+  const capabilityKey = `${ctx.baseUrl}\u0000${ctx.model}`
+  const briefingSchemas = tools.filter((t) => NARRATOR_VISIBLE_TOOLS.has(t.name))
+  const narrate = async (label: string): Promise<ModelCompletion> => {
+    const attempt = (withSchemas: boolean) =>
+      completeModel(
+        {
+          model: ctx.model,
+          reasoningEffort: ctx.reasoningEffort,
+          messages: narratorMessages,
+          ...(withSchemas ? { tools: briefingSchemas, toolChoice: 'none' as const } : {}),
+          temperature: ctx.sampling.temperature,
+          label,
+        },
+        connection,
+        signal,
+      )
+    const replaysCalls = narratorMessages.some((m) => m.toolCalls?.length)
+    const withSchemas = replaysCalls && toolsRequiredForBriefing.has(capabilityKey)
+    try {
+      return await attempt(withSchemas)
+    } catch (err) {
+      if (withSchemas || !replaysCalls || signal.aborted || !rejectsToolsWithoutSchemas(err)) throw err
+      toolsRequiredForBriefing.add(capabilityKey)
+      trace.push({
+        kind: 'thought',
+        text: '(the provider rejected replayed tool calls without tools; resent with the briefing tools offered and calls forbidden)',
+      })
+      return attempt(true)
+    }
+  }
+  let proseText = ''
+  for (let attempt = 0; ; attempt++) {
+    const label = `narrator:${attempt}`
+    const startedAt = Date.now()
+    const completion = await narrate(label)
+    recordCompletion(label, completion, Date.now() - startedAt)
+    if (completion.text) {
+      proseText = completion.text
+      break
+    }
+    console.warn('[dm] empty model message', { attempt, completion })
+    if (attempt > 0) {
+      throw new EmptyNarrativeError(
+        completion.finishReason,
+        trace,
+        reasoningTokens - plotterReasoningTokens || undefined,
+      )
+    }
+    pushNudge(narratorMessages, buildTurnReminder())
   }
 
   return {
     text: proseText,
     data,
     trace: narratorTrace,
-    plotterTrace: plotterTrace.length ? plotterTrace : undefined,
-    reasoningTokens: narratorReasoningTokens || undefined,
-    plotterReasoningTokens: (totalReasoningTokens - narratorReasoningTokens) || undefined,
-    plotterError,
+    reasoningTokens: reasoningTokens - plotterReasoningTokens || undefined,
+    plotting,
   }
 }

@@ -18,7 +18,7 @@ export const MISTRAL_BASE_URL = 'https://api.mistral.ai/v1'
 // works for other local OpenAI-compat servers — change the port to match.
 export const LMSTUDIO_BASE_URL = 'http://localhost:1234/v1'
 export const DEFAULT_BASE_URL = XAI_BASE_URL
-export const DEFAULT_MODEL = 'grok-4.7'
+export const DEFAULT_MODEL = 'grok-4.3'
 export const DEFAULT_REVISER_MODEL = 'grok-4-1-fast-non-reasoning'
 
 // Single source of truth for the model preset dropdown(s). Free-text input
@@ -92,8 +92,8 @@ export const DEFAULT_STATE: WorldState = {
 export const DEFAULT_MEMORY: Memory = {}
 
 export const DEFAULT_CONTEXT: ContextConfig = {
-  narratorReasoning: 'low',
-  plotterModel: 'grok-4.7',
+  narratorReasoning: 'none',
+  plotterModel: 'grok-4.3',
   plotterReasoning: 'low',
   summarizerModel: 'grok-4.3',
   summarizerReasoning: 'none',
@@ -150,11 +150,11 @@ const FOLLOW_NARRATOR: ProviderRouting = {
 export const PROVIDER_SETUPS: Record<ProviderId, ProviderSetup> = {
   xai: {
     baseUrl: XAI_BASE_URL,
-    model: 'grok-4.7',
+    model: 'grok-4.3',
     context: {
       apiProtocol: 'responses',
-      narratorReasoning: 'low',
-      plotterModel: 'grok-4.7',
+      narratorReasoning: 'none',
+      plotterModel: 'grok-4.3',
       plotterReasoning: 'low',
       summarizerModel: 'grok-4.3',
       summarizerReasoning: 'none',

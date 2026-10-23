@@ -97,14 +97,14 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     },
 }
 
-// Context read tools. Each request seeds one "fake" assistant call to the
-// enabled read tools right before generation, delivering the current memory /
-// plot plan / state as tool results (see ../request.ts). The framing is the
-// DM checking its own private notes after the player acts and before
-// narrating — "check", not "get", so the data reads as notes consulted for
-// consistency rather than retrieved material to work into the reply. The
-// tools are also advertised live, so the model can legitimately re-issue
-// them to re-check a value mid-turn; they never mutate anything.
+// Context read tools. Each Plotter request seeds one "fake" assistant call to
+// the enabled read tools right before its instruction, delivering the current
+// memory / plot plan / state as tool results (see ../request.ts). The framing
+// is the DM checking its own private notes after the player acts — "check",
+// not "get", so the data reads as notes consulted for consistency rather than
+// retrieved material. The tools are also advertised live, so the model can
+// legitimately re-issue them to re-check a value mid-turn; they never mutate
+// anything.
 
 export const CHECK_STATE_TOOL: ModelToolDefinition = {
     name: 'check_state',
@@ -160,6 +160,52 @@ export const CHECK_OOC_TOOL: ModelToolDefinition = {
       "Check your private notes: the player's standing out-of-character instructions. The latest list is already in this conversation as a check_ooc result; call again only to re-check it after updates.",
     parameters: { type: 'object', properties: {} },
 }
+
+// Plotter tools whose calls the narrator sees. The narrator holds no memory or
+// plan of its own: before each reply it gets the Plotter's updates, the
+// memories it recalls, and its steer, as tool calls it appears to have made.
+
+export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
+    name: 'recall_memory',
+    description:
+      'Bring remembered entries into the narrator’s view for this reply. The narrator sees only the story so far, the updates you make, and what you recall, so recall every remembered person, place, or thing the reply will involve. Call it after your updates, so the recalled entries are current.',
+    parameters: {
+      type: 'object',
+      properties: {
+        names: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Entry names to recall, as keyed in memory.',
+        },
+      },
+      required: ['names'],
+    },
+}
+
+export const STEER_TOOL: ModelToolDefinition = {
+    name: 'steer',
+    description:
+      'Steer the narrator’s reply: what happens in it and where it ends, in a sentence or two. Leave the telling to the narrator; write no prose. Skip it when the player’s input and the records already make the reply clear.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'The steer, in one or two sentences.',
+        },
+      },
+      required: ['text'],
+    },
+}
+
+// The tools whose calls are replayed to the narrator. The plan, the OOC list
+// edits, and the read tools stay the Plotter's own.
+export const NARRATOR_VISIBLE_TOOLS: ReadonlySet<string> = new Set([
+  UPDATE_STATE_TOOL.name,
+  UPDATE_MEMORY_TOOL.name,
+  RECALL_MEMORY_TOOL.name,
+  STEER_TOOL.name,
+])
 
 export interface ToolExecResult {
   data: StoryData
@@ -498,6 +544,37 @@ export function executeTool(
     return edit.list
       ? { data: { state, plot: edit.list, memory, ooc }, result: edit.result }
       : unchanged(edit.result)
+  }
+  if (name === 'recall_memory') {
+    try {
+      const args = JSON.parse(rawArgs) as { names?: unknown }
+      if (!Array.isArray(args.names) || !args.names.every((n) => typeof n === 'string')) {
+        return unchanged('error: recall_memory requires `names` (array of memory entry names).')
+      }
+      const names = args.names as string[]
+      const found = names.filter((n) => Object.hasOwn(memory, n))
+      const missing = names.filter((n) => !Object.hasOwn(memory, n))
+      if (!found.length) {
+        return unchanged(`error: no memory entries named ${missing.join(', ') || '(none given)'}.`)
+      }
+      // fromEntries defines own properties, so no name can reach a prototype.
+      const entries = Object.fromEntries(found.map((n) => [n, memory[n]]))
+      const body = `\`\`\`json\n${JSON.stringify(entries, null, 2)}\n\`\`\``
+      return unchanged(missing.length ? `${body}\n(no entries named: ${missing.join(', ')})` : body)
+    } catch (err) {
+      return unchanged(`error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  if (name === 'steer') {
+    try {
+      const args = JSON.parse(rawArgs) as { text?: unknown }
+      if (typeof args.text !== 'string' || !args.text.trim()) {
+        return unchanged('error: steer requires non-empty `text`.')
+      }
+      return unchanged('ok')
+    } catch (err) {
+      return unchanged(`error: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
   if (name === 'update_ooc') {
     const edit = executeListEdit(rawArgs, ooc, {

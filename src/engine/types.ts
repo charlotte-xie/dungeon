@@ -33,6 +33,15 @@ export interface ModelCall {
   stopped?: boolean
 }
 
+// One call the Plotter made before the reply that the narrator sees — a world
+// update, a recalled memory, or a steer — with its result. Replayed in the
+// narrator's history as the DM's own tool call ahead of that turn's reply.
+export interface BriefingCall {
+  name: string
+  arguments: string
+  result: string
+}
+
 export interface Turn {
   id: string
   kind: TurnKind
@@ -42,10 +51,14 @@ export interface Turn {
   // separate so the trace can show draft → revised side by side.
   narrator?: ModelCall
   reply: ModelCall
-  // The Plotter phase's activity (tool calls recording state/memory/plan
-  // updates after the narration). No text — kept separate so the trace pane
-  // can show the narrate and plot phases as distinct sections.
+  // The Plotter phase's activity (tool calls planning the turn and recording
+  // state/memory/plan updates before the narration). No text — kept separate
+  // so the trace pane can show the plot and narrate phases as distinct
+  // sections.
   plotter?: ModelCall
+  // The Plotter's calls the narrator saw before writing this turn's reply.
+  // Absent on turns played before the Plotter ran first.
+  briefing?: BriefingCall[]
 }
 
 // Legacy shape — kept only so v1 saves and v1 localStorage can be migrated.

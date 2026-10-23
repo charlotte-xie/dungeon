@@ -214,3 +214,34 @@ describe('tool execution boundaries', () => {
     expect(result.result).toContain('OOC list unchanged')
   })
 })
+
+describe('briefing tools', () => {
+  const data = {
+    state: {},
+    plot: [],
+    memory: { Hesta: { is: 'The baker.' }, Tam: { is: 'Her son.' } },
+    ooc: [],
+  }
+
+  it('recalls the named memory entries without changing anything', () => {
+    const result = executeTool('recall_memory', JSON.stringify({ names: ['Hesta', 'Nobody'] }), data)
+    expect(result.data).toBe(data)
+    expect(result.result).toContain('"Hesta"')
+    expect(result.result).toContain('The baker.')
+    expect(result.result).not.toContain('Her son.')
+    expect(result.result).toContain('(no entries named: Nobody)')
+  })
+
+  it('rejects a recall that finds nothing, or has no names', () => {
+    expect(executeTool('recall_memory', JSON.stringify({ names: ['Nobody'] }), data).result).toMatch(/^error/)
+    expect(executeTool('recall_memory', JSON.stringify({ names: 'Hesta' }), data).result).toMatch(/^error/)
+    // A name can never reach the object prototype.
+    expect(executeTool('recall_memory', JSON.stringify({ names: ['__proto__'] }), data).result).toMatch(/^error/)
+  })
+
+  it('accepts a steer without changing anything, and rejects an empty one', () => {
+    const steer = executeTool('steer', JSON.stringify({ text: 'The miller returns.' }), data)
+    expect(steer).toEqual({ data, result: 'ok' })
+    expect(executeTool('steer', JSON.stringify({ text: '  ' }), data).result).toMatch(/^error/)
+  })
+})

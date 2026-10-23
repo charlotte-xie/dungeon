@@ -64,22 +64,22 @@ In **Settings**:
 
 - **API key** — required by hosted providers; local servers may accept a placeholder.
 - **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
-- **Narrator model / reasoning** — defaults to `grok-4.7` with low reasoning.
-- **Plotter model / reasoning** — defaults to `grok-4.7` with low reasoning.
+- **Narrator model / reasoning** — defaults to `grok-4.3` with reasoning off: the narrator writes from the plotter's briefing without thinking first.
+- **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
 - **Summariser model / reasoning** — defaults to `grok-4.3` with reasoning off.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
 - The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - System prompt, scenario, style guide, sampling params, context limits.
 
-New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The narrator and plotter send separate requests, and each reuses its own cached prefix from the previous turn, so the plotter model can differ from the narrator model without losing caching.
+New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The plotter runs first: it updates the records, recalls memories and steers the reply, and the narrator then writes from that briefing. The two send separate requests, and each reuses its own cached prefix from the previous turn, so the plotter model can differ from the narrator model without losing caching.
 
 ## Layout
 
 - `src/engine/`: the game engine, free of React and unit-tested.
   - `model/`: the provider boundary. `client.ts` is the entry point, `openaiCompatible.ts` the transport, and `normalize.ts` repairs malformed tool calls and refuses tools that weren't advertised. Provider quirks stay in here.
-  - `agents/`: `narrator.ts` (a narrate phase with no tools, then a plotter phase in its own request), `reviser.ts`, `summarizer.ts`.
-  - `request.ts`: composes the narrator and plotter requests, each as a stable prefix, append-only history, and volatile records at the tail (plain text for the narrator, a seeded tool exchange for the plotter). Only the plotter gets the record-keeping rules and tools.
+  - `agents/`: `narrator.ts` (a plotter phase that plans the turn with tools, then a narrate phase with no tools that writes the reply), `reviser.ts`, `summarizer.ts`.
+  - `request.ts`: composes the plotter and narrator requests, each as a stable prefix, append-only history, and a volatile tail. The plotter gets the record-keeping rules, the tools, and the records as a seeded tool exchange. The narrator sees each turn's briefing (the plotter's updates, recalled memories and steer) as tool calls saved with the turn.
   - `tools.ts`: tool schemas and the game-state executor. `state.ts`: path operations on world state.
   - `chronicle.ts`: recursive compaction of older turns into summaries.
   - `persistence.ts`: all `localStorage` IO, the save-file format, and its migrations.
@@ -94,7 +94,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
 - **Prompts guide; executors guard safety only.** Behaviour is shaped by prompts. Executors enforce only safety, such as state path safety. Size pressure is a soft advisory hint, not a structural cap, and the shape of stored context is the model's call.
 - **The maintainer owns vocabulary.** Names for memory facets, plot labels, and similar are the maintainer's decision. Propose, don't impose.
 - **Story, not life sim.** Aim for dramatic story. A turn ends on a situation that presses for a response, never on a decision point or a list of options.
-- **Never bust the prefix cache.** Requests are append-only. Within a turn, each role's requests are byte-for-byte extensions of one another, and each request extends that role's request from the previous turn up to the latest input: the turn reminder is appended once, the plotter's tool schemas are never dropped mid-turn, bootstrap and Continue directives stay in history, and volatile data enters only at the tail. Chronicle compaction is the one planned rewrite, and it's kept rare. The trace view shows prompt and cached token counts for each request, so you can check that the cache is being reused.
+- **Never bust the prefix cache.** Requests are append-only. Within a turn, each role's requests are byte-for-byte extensions of one another, and each request extends that role's request from the previous turn up to the latest input: the turn reminder is appended once, the plotter's tool schemas are never dropped mid-turn, bootstrap and Continue directives stay in history, each turn's briefing is saved with the turn so the narrator replays it byte for byte, and volatile data enters only at the tail. Chronicle compaction is the one planned rewrite, and it's kept rare. The trace view shows prompt and cached token counts for each request, so you can check that the cache is being reused.
 - **Old saves keep loading.** Change the save format through the migrations in `persistence.ts`.
 - **Keep the engine testable.** Engine logic stays out of React, with tests beside each module.
 - **British spelling.** Docs, prompts, comments, and UI text use British spelling (behaviour, colour, analyse, normalise). Identifiers, file names, and external names such as CSS properties and HTTP headers keep their own spelling.

@@ -119,8 +119,8 @@ export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, o
           <>
             <p className="hint">
               The stable, cacheable prefix: system prompt, content stance, adventure
-              slots, and a short note on reading each enabled record. Changes only
-              when settings change. The narrator is offered no tools; sampling
+              slots, and a short note on reading the Plotter&apos;s briefing. Changes
+              only when settings change. The narrator is offered no tools; sampling
               temperature {sampling.temperature}. {sizeNote(system)}
             </p>
             <MessageList items={system} />
@@ -139,8 +139,9 @@ export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, o
         {tab === 'history' && (
           <>
             <p className="hint">
-              The recent live transcript: player inputs and DM narration replayed
-              verbatim, up to the compaction cutoff. {sizeNote(history)}
+              The recent live transcript: player inputs, the Plotter&apos;s briefing for
+              each turn, and DM narration replayed verbatim, up to the compaction
+              cutoff. The last input is a placeholder for the player&apos;s next one. {sizeNote(history)}
             </p>
             <MessageList items={history} />
           </>
@@ -148,9 +149,10 @@ export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, o
         {tab === 'notes' && (
           <>
             <p className="hint">
-              The per-turn tail: the current memory, plan, state, and OOC
-              instructions as plain text, then the turn reminder. Rebuilt fresh
-              every turn. {sizeNote(notes)}
+              The per-turn tail: the player&apos;s standing OOC instructions, then the
+              turn reminder. Rebuilt fresh every turn. The Plotter&apos;s briefing for
+              the turn — updates, recalled memories, and steer — sits in the history
+              just before it, as tool calls. {sizeNote(notes)}
             </p>
             <MessageList items={notes} />
           </>
@@ -158,11 +160,12 @@ export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, o
         {tab === 'plotter' && plotter && (
           <>
             <p className="hint">
-              Sent after the narrator replies (model: {plotter.model}). It shares the
-              system prompt, slots, chronicle, and history with the narrator&apos;s
-              request; shown here is what differs: the full rules for each record in
-              place of the reading notes, then its tail — the records as check_* tool
-              results, the narrator&apos;s reply (a placeholder here), and the pivot.{' '}
+              Sent first, when the player acts (model: {plotter.model}). It shares the
+              system prompt, slots, and chronicle with the narrator&apos;s request, and
+              its history without the briefings; shown here is what differs: the full
+              rules for each record in place of the narrator&apos;s note, then its tail —
+              the records as check_* tool results and its instruction. The player&apos;s
+              next input is a placeholder here.{' '}
               {sizeNote(plotterMessages)}
             </p>
             <MessageList items={plotterMessages} />

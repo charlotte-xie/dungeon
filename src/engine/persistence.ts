@@ -5,6 +5,7 @@ import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEF
 import type { ReasoningEffort } from './model/types'
 import type {
   AdventureSlots,
+  BriefingCall,
   Chronicle,
   ChronicleEntry,
   ContextConfig,
@@ -111,6 +112,19 @@ function isModelCallLike(value: unknown): value is ModelCall {
   )
 }
 
+function isBriefingLike(value: unknown): value is BriefingCall[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (call) =>
+        isRecord(call) &&
+        typeof call.name === 'string' &&
+        typeof call.arguments === 'string' &&
+        typeof call.result === 'string',
+    )
+  )
+}
+
 export function isTurnLike(value: unknown): value is Turn {
   if (!isRecord(value)) return false
   return (
@@ -118,7 +132,9 @@ export function isTurnLike(value: unknown): value is Turn {
     (value.kind === 'bootstrap' || value.kind === 'player' || value.kind === 'continue') &&
     (value.input === undefined || typeof value.input === 'string') &&
     (value.narrator === undefined || isModelCallLike(value.narrator)) &&
-    isModelCallLike(value.reply)
+    isModelCallLike(value.reply) &&
+    (value.plotter === undefined || isModelCallLike(value.plotter)) &&
+    (value.briefing === undefined || isBriefingLike(value.briefing))
   )
 }
 

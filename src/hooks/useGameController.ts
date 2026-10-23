@@ -1,6 +1,11 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
-import { EmptyNarrativeError, runNarrator, type Narration } from '../engine/agents/narrator'
+import {
+  EmptyNarrativeError,
+  runNarrator,
+  type NarratorResult,
+  type Plotting,
+} from '../engine/agents/narrator'
 import { runReviser } from '../engine/agents/reviser'
 import {
   chronicleNeedsCompaction,
@@ -110,8 +115,6 @@ export function useGameController(settings: GameSettings) {
   // What the running operation is doing, and since when, so the player can
   // see which phase is taking the time.
   const [status, setStatus] = useState({ text: 'DM is thinking…', since: Date.now() })
-  // Set while the reply is on screen but its turn is still being recorded.
-  const [recording, setRecording] = useState(false)
   const [compactionError, setCompactionError] = useState<string | null>(null)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
     recoveryForLog(loadStoredRecovery(), log),
@@ -172,16 +175,12 @@ export function useGameController(settings: GameSettings) {
   }
 
   function finishOperation(operation: ActiveOperation) {
-    if (operations.finish(operation)) {
-      setThinking(false)
-      setRecording(false)
-    }
+    if (operations.finish(operation)) setThinking(false)
   }
 
   function supersedeCurrentOperation() {
     operations.supersede()
     setThinking(false)
-    setRecording(false)
   }
 
   function cancelOperation() {
@@ -311,49 +310,57 @@ export function useGameController(settings: GameSettings) {
       setInput((box) => restoreIntoBox(box, restoreInputFor(pendingTurn)))
       dispatchRecovery({ type: 'abort', turnId: pendingTurn.id })
     }
-    const operation = beginOperation(args.replaceExisting)
+    // The Plotter plans the turn first, then the narrator writes it; with
+    // every record switched off there is nothing to plan.
+    const plans =
+      context.includeWorldState ||
+      context.includePlotOutline ||
+      context.includeMemory ||
+      context.includeOoc
+    const firstStatus = plans ? 'DM is planning…' : 'DM is writing…'
+    const operation = beginOperation(args.replaceExisting, firstStatus)
     if (!operation) {
       restoreCancelled()
       return
     }
     const { controller } = operation
-    // The reply appears as soon as the prose is written, while the Plotter
-    // records the turn. From then on the reply is the player's: Stop keeps it
-    // and skips the turn's bookkeeping, leaving the world as the turn found
-    // it. Before that, Stop undoes the turn.
-    let narration: Narration | undefined
+    // The turn is the player's once its reply is written, and nothing runs
+    // after that. Until then, Stop undoes it.
     const plotterModel = context.plotterModel.trim() || model
     const updateTurn = (patch: Partial<Turn>) => {
       setTurns((ts) => ts.map((t) => (t.id === pendingTurn.id ? { ...t, ...patch } : t)))
     }
-    const draftReply = (n: Narration, trace = n.trace): Partial<Turn> => ({
-      narrator: undefined,
-      reply: { ...pendingTurn.reply, text: n.text, trace, reasoningTokens: n.reasoningTokens },
-    })
-    const keepNarration = (n: Narration) => {
-      setTurns((ts) =>
-        ts.map((t) =>
-          t.id === pendingTurn.id
-            ? {
-                ...t,
-                ...(t.reply.text ? {} : draftReply(n)),
-                plotter: { id: crypto.randomUUID(), model: plotterModel, stopped: true },
-              }
-            : t,
-        ),
-      )
-    }
     // A response can land just as the player presses Stop. A cancelled turn
     // must still be settled, while a superseded one belongs to its replacement.
     const stopIfCancelled = () => {
-      if (!isCurrentOperation(operation)) return
-      if (narration) keepNarration(narration)
-      else restoreCancelled()
+      if (isCurrentOperation(operation)) restoreCancelled()
     }
-    // With the reviser on, the polish runs alongside the Plotter and the reply
-    // appears once it's ready; a failed polish shows the draft instead.
-    const revise = async (n: Narration) => {
-      let patch: Partial<Turn>
+    // The Plotter's work shows on the turn as soon as it's done, while the
+    // narrator writes. A plotter error rides on the plotter call, not the
+    // reply: the turn itself can still succeed.
+    const recordPlotting = (p: Plotting) => {
+      updateTurn({
+        plotter: {
+          id: crypto.randomUUID(),
+          model: plotterModel,
+          trace: p.trace,
+          reasoningTokens: p.reasoningTokens,
+          error: p.error,
+        },
+        briefing: p.briefing.length ? p.briefing : undefined,
+      })
+    }
+    // The reply, polished by the reviser when it's on; a failed polish shows
+    // the draft instead.
+    const replyFor = async (result: NarratorResult): Promise<Partial<Turn>> => {
+      const draft: ModelCall = {
+        ...pendingTurn.reply,
+        text: result.text,
+        trace: result.trace,
+        reasoningTokens: result.reasoningTokens,
+      }
+      if (!context.useReviser) return { narrator: undefined, reply: draft }
+      setStatusText('Reviser polishing…')
       try {
         const reviserCall = await runReviser(
           {
@@ -363,29 +370,19 @@ export function useGameController(settings: GameSettings) {
             protocol: context.apiProtocol,
             cacheKey,
             slots: turnSlots,
-            draft: n.text,
+            draft: result.text,
             sampling,
           },
           controller.signal,
         )
-        patch = {
-          narrator: {
-            id: crypto.randomUUID(),
-            model,
-            text: n.text,
-            trace: n.trace,
-            reasoningTokens: n.reasoningTokens,
-          },
-          reply: reviserCall,
-        }
+        return { narrator: { ...draft, id: crypto.randomUUID(), model }, reply: reviserCall }
       } catch (reviserErr) {
-        if (controller.signal.aborted) return
-        patch = draftReply(n, withReviserFailureNote(n.trace, reviserErr))
+        if (controller.signal.aborted) throw reviserErr
+        return {
+          narrator: undefined,
+          reply: { ...draft, trace: withReviserFailureNote(result.trace, reviserErr) },
+        }
       }
-      if (!operationCanCommit(operation)) return
-      updateTurn(patch)
-      setRecording(true)
-      setStatusText('Recording the turn…')
     }
     try {
       const settings = {
@@ -447,10 +444,9 @@ export function useGameController(settings: GameSettings) {
             compactCutoff: workingCutoff,
           })
         }
-        setStatusText('DM is thinking…')
+        setStatusText(firstStatus)
       }
 
-      let revision: Promise<void> | undefined
       const result = await runNarrator(
         {
           systemPrompt,
@@ -480,36 +476,17 @@ export function useGameController(settings: GameSettings) {
         },
         controller.signal,
         {
-          onNarrated: (n) => {
+          onPlotted: (p) => {
             if (!operationCanCommit(operation)) return
-            narration = n
-            if (context.useReviser) {
-              setStatusText('Reviser polishing…')
-              revision = revise(n)
-            } else {
-              updateTurn(draftReply(n))
-              setRecording(true)
-              setStatusText('Recording the turn…')
-            }
+            recordPlotting(p)
+            setStatusText('DM is writing…')
           },
         },
       )
-      await revision
       if (!operationCanCommit(operation)) return stopIfCancelled()
-
-      // A plotter error rides on the plotter call, not the reply: the turn
-      // itself succeeded and is replayed and summarised as normal.
-      const plotterCall: ModelCall | undefined = result.plotterTrace || result.plotterError
-        ? {
-            id: crypto.randomUUID(),
-            model: plotterModel,
-            trace: result.plotterTrace,
-            reasoningTokens: result.plotterReasoningTokens,
-            error: result.plotterError,
-          }
-        : undefined
-      updateTurn({ plotter: plotterCall })
+      const reply = await replyFor(result)
       if (!operationCanCommit(operation)) return stopIfCancelled()
+      updateTurn(reply)
       commitState(result.data.state)
       commitPlot(result.data.plot)
       commitMemory(result.data.memory)
@@ -753,7 +730,6 @@ export function useGameController(settings: GameSettings) {
     thinking,
     statusText: status.text,
     statusSince: status.since,
-    recording,
     canCompact,
     compactionError,
     dismissCompactionError: () => setCompactionError(null),
