@@ -58,6 +58,9 @@ const CTX: NarratorContext = {
 
 const isPlotter = (req: ModelCompletionRequest) => req.label?.startsWith('plotter') ?? false
 
+// With the plot plan on, a Plotter turn ends cleanly once it has steered.
+const STEER = { id: 'st', name: 'steer', arguments: '{"text":"The story moves on."}' }
+
 function requests() {
   return mockedModel.mock.calls.map(([req]) => req)
 }
@@ -139,16 +142,17 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
         ],
       }),
     )
-    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
     expect(result.data.plot).toEqual(['Next: the miller returns.'])
     expect(result.data.ooc).toEqual(['Keep replies short.'])
-    expect(result.plotting?.briefing).toEqual([])
+    expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
     const narratorReq = requests()[2]
-    expect(narratorReq.messages.some((m) => m.toolCalls?.length || m.role === 'tool')).toBe(false)
+    const shown = narratorReq.messages.flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
+    expect(shown).toEqual(['steer'])
     // The OOC list the Plotter left reaches the narrator in its tail.
     expect(narratorReq.messages.some((m) => m.content.includes('1. Keep replies short.'))).toBe(true)
   })
@@ -156,7 +160,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
   it('recalls memory entries into the narrator’s view', async () => {
     mockedModel.mockResolvedValueOnce(
       completion({
-        toolCalls: [{ id: 'm1', name: 'recall_memory', arguments: '{"names":["Hesta","Nobody"]}' }],
+        toolCalls: [{ id: 'm1', name: 'recall_memory', arguments: '{"names":["Hesta","Nobody"]}' }, STEER],
       }),
     )
     mockedModel.mockResolvedValueOnce(completion({ text: 'Hesta looks up.' }))
@@ -177,7 +181,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     mockedModel.mockImplementation(async (req) => {
       order.push(`${req.label} request`)
       return isPlotter(req)
-        ? completion({ text: 'DONE', reasoningTokens: 5 })
+        ? completion({ toolCalls: [STEER], reasoningTokens: 5 })
         : completion({ text: 'The door creaks open.' })
     })
 
@@ -190,11 +194,12 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     })
 
     expect(order).toEqual(['plotter:0 request', 'plotted', 'narrator:0 request'])
-    expect(plotting).toMatchObject({ briefing: [], reasoningTokens: 5 })
+    expect(plotting).toMatchObject({ reasoningTokens: 5 })
+    expect(plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
   })
 
   it('routes plotting and narration independently and attributes reasoning to each', async () => {
-    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE', reasoningTokens: 5 }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER], reasoningTokens: 5 }))
     mockedModel.mockResolvedValueOnce(completion({ text: 'The door opens.', reasoningTokens: 12 }))
     const result = await runNarrator(
       {
@@ -213,7 +218,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
   })
 
   it('gives the Plotter and the narrator their own prompt-cache keys', async () => {
-    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
     await runNarrator({ ...CTX, cacheKey: 'adventure-1' }, new AbortController().signal)
     const keys = mockedModel.mock.calls.map(([, connection]) => connection.cacheKey)
@@ -221,7 +226,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
   })
 
   it('uses the narrator model for the Plotter when the plotter model is blank', async () => {
-    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
     await runNarrator({ ...CTX, plotterModel: '  ', plotterReasoning: 'low' }, new AbortController().signal)
     expect(requests()[0]).toMatchObject({ model: CTX.model, reasoningEffort: 'low' })
@@ -233,7 +238,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
     mockedModel.mockResolvedValueOnce(
       completion({
-        toolCalls: [{ id: 'c1', name: 'update_state', arguments: '{"keep":[],"set":{"scene.mood":"tense"}}' }],
+        toolCalls: [{ id: 'c1', name: 'update_state', arguments: '{"keep":[],"set":{"scene.mood":"tense"}}' }, STEER],
       }),
     )
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
@@ -250,7 +255,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
     mockedModel.mockResolvedValueOnce(
       completion({
-        toolCalls: [{ id: 'ok', name: 'update_memory', arguments: '{"set":{"the_mill":"An old mill."}}' }],
+        toolCalls: [{ id: 'ok', name: 'update_memory', arguments: '{"set":{"the_mill":"An old mill."}}' }, STEER],
       }),
     )
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
@@ -263,9 +268,39 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
       true,
     )
     // Only the repaired call reaches the narrator.
-    expect(result.plotting?.briefing.map((c) => c.arguments)).toEqual([
-      '{"set":{"the_mill":"An old mill."}}',
-    ])
+    expect(
+      result.plotting?.briefing.filter((c) => c.name === 'update_memory').map((c) => c.arguments),
+    ).toEqual(['{"set":{"the_mill":"An old mill."}}'])
+  })
+
+  it('reminds the Plotter once to steer when it writes prose instead', async () => {
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Hesta opens the door.' }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+
+    const result = await runNarrator(CTX, new AbortController().signal)
+
+    expect(mockedModel).toHaveBeenCalledTimes(3)
+    expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
+    // Its prose stays in its own conversation, ahead of the reminder. (The
+    // mock holds the live list, which has grown since.)
+    const messages = requests()[1].messages
+    const prose = messages.findIndex((m) => m.role === 'assistant' && m.content === 'Hesta opens the door.')
+    expect(prose).toBeGreaterThan(0)
+    expect(messages[prose + 1].content).toContain('Steer the reply now')
+  })
+
+  it('reminds the Plotter once to steer after a batch without one, and only once', async () => {
+    const update = { id: 'u', name: 'update_state', arguments: '{"keep":[],"set":{"scene.mood":"still"}}' }
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [update] }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+
+    const result = await runNarrator(CTX, new AbortController().signal)
+
+    expect(mockedModel).toHaveBeenCalledTimes(3)
+    expect(result.text).toBe('Prose.')
+    expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['update_state'])
   })
 
   it('still writes the reply when the Plotter fails', async () => {
@@ -302,7 +337,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
       if (n === 1) {
         return completion({ toolCalls: [{ id: 'bad', name: 'update_memory', arguments: '{"set":{}}' }] })
       }
-      if (n === 2) return completion({ text: 'DONE' })
+      if (n === 2) return completion({ toolCalls: [STEER] })
       if (n === 3) return completion({})
       return completion({ text: 'Prose.' })
     })
@@ -355,7 +390,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
   })
 
   it('never executes a call the narrator returns, and nudges it for prose', async () => {
-    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
     mockedModel.mockResolvedValueOnce(
       completion({
         toolCalls: [{ id: 's1', name: 'update_state', arguments: '{"keep":[],"set":{"x":1}}' }],
@@ -373,7 +408,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
 
   it('gives up when the narrator is still empty after one nudge', async () => {
     mockedModel.mockImplementation(async (req) =>
-      isPlotter(req) ? completion({ text: 'DONE' }) : completion({}),
+      isPlotter(req) ? completion({ toolCalls: [STEER] }) : completion({}),
     )
 
     await expect(runNarrator(CTX, new AbortController().signal)).rejects.toBeInstanceOf(
@@ -417,7 +452,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
   })
 
   it('records the provider’s prompt and cached token counts per request', async () => {
-    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE', promptTokens: 1200, cachedTokens: 1100 }))
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER], promptTokens: 1200, cachedTokens: 1100 }))
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.', promptTokens: 1000, cachedTokens: 900 }))
 
     const result = await runNarrator(CTX, new AbortController().signal)
@@ -479,22 +514,24 @@ describe('buildPlotterInstruction', () => {
     expect(memoryOnly).not.toContain('check_state')
     expect(memoryOnly).not.toContain('future_plot_plan')
     expect(memoryOnly).not.toContain('update_ooc')
-    // A single subsystem needs no distinction clause.
-    expect(memoryOnly).not.toContain('Keep the subsystems distinct')
     // Without the plan there is no steer, so doing nothing is allowed.
     expect(memoryOnly).toContain('reply with only the word DONE')
 
     const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
     expect(all).toContain('Before the narrator writes the reply')
-    expect(all).toContain('`steer`')
-    // With it, the Plotter directs every reply.
-    expect(all).toContain('Steer every reply')
-    expect(all).not.toContain('reply with only the word DONE')
-    expect(all).toContain('updates, then recalls, then the steer')
     expect(all).toContain('`update_ooc`')
-    expect(all).toContain('Keep the subsystems distinct')
-    // The per-subsystem guidance and size status ride in the instruction.
+    // With the plan on, the Plotter delivers a development and steers every
+    // reply, after its updates and recalls.
+    expect(all).toContain('Deliver what earlier turns set up')
+    expect(all).toContain('Steer every reply')
+    expect(all).toContain('then `recall_memory`, then `steer`')
+    expect(all).not.toContain('reply with only the word DONE')
+    // Choice wording pulls models towards ending on a choice.
+    expect(all).not.toMatch(/decision|choice|decide|choose/i)
+    // Size status rides along; memory's only once it grows long.
     expect(all).toContain('STATUS: state size')
-    expect(all).toContain('Memory: ')
+    expect(all).not.toContain('Memory: STATUS')
+    const bigMemory = { ...CTX.initialData, memory: { notes: { is: 'x'.repeat(9000) } } }
+    expect(buildPlotterInstruction(CTX.flags, bigMemory, 4000)).toContain('Memory: STATUS')
   })
 })

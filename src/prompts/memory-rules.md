@@ -1,134 +1,43 @@
 # Long-Term Memory
 
-Memory is a **fact file about the story's nouns** — the people, places, and things the narration must stay consistent about across scenes. For your eyes only — never read it aloud or list it for the player. Each entry is a small JSON object of **facets** about one entity, keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators).
+Memory is the story's fact file: what is true about its recurring people, places and things. It keeps the story consistent across scenes, and it is what you recall for the narrator.
 
-Every value must make sense **read on its own, long after this scene** — complete standalone sentences, not telegraphic fragments. A facet is short by holding fewer facts, not by stripping grammar: "wary; helps if cheap; son upstairs" decays into noise, while "She is wary of the player and will help only if it costs her nothing" stays readable forever. Write each value for a reader who has seen none of the story: never allude to an event, place, or coined term the sentence does not itself explain — "She knows about the arrangement" is noise unless the facet spells out what the arrangement is, or the term has its own entry that does.
+Each entry is a small JSON object of facets about one entity, keyed by its most natural short name ("Hesta", "Mill Lane"). Write each value as one or two complete present-tense sentences that make sense on their own, long after the scene, to a reader who has seen none of the story. An entry stays short by holding fewer facts.
 
-Memory holds **durable facts about entities**. The chronicle records the story's full past automatically; an entity's `history` facet keeps only the few notable events that still shape the present. What will happen belongs to the plot plan; what is true only of the current scene belongs to live state. Update a facet only when something durable *about that entity* is established or changed — the story reveals Hesta keeps a dog called Benny, the smithy has burned down, a secret comes to light.
+Memory holds durable facts. The chronicle keeps the full past, the plot plan holds where the story is going, and the current scene (who is present, where everyone stands, the mood of the moment) lives in the story itself. An entity's `history` facet keeps only the few past events that still shape the present.
 
-## Entry shape
+## Facets
 
-Prefer these facet names — avoid inventing a synonym for an existing facet. Include a facet only while it is relevant or important to the story, and delete it when it stops mattering.
+- Any entry: `is` (what it is), `notes`, `history`, `secret` (true but not yet revealed in the story, and who knows).
+- Characters: `wants`, `facts`, `knowledge` (what they have witnessed or been told, including about the player), `bond` (how they regard the player), `relationships`.
+- Places: `npcs`, `layout`.
+- Things: `significance`, `location`.
+- The player (key `player`): `background`, `skills`, `possessions` (a map of item to description), `oaths`, `reputation`. The player's intentions and feelings are their own, so their entry has no `wants` or `bond`; each NPC's attitude to the player lives on that NPC's `bond`.
 
-Shape beyond the suggested facets is your discretion: values are one or two complete sentences; itemise into a map when content is naturally keyed (`player.possessions.money`, `mark.relationships.phil`); nest deeper only when it genuinely helps. Keep the file tight by deleting what stopped mattering — never by clipping sentences into fragments.
-
-Any entry:
-
-- **`is`** — definition and description
-- **`notes`** — miscellaneous info worth keeping that fits no other facet.
-- **`history`** — notable past events involving this entity that still shape the present. Curated highlights, not a log — the chronicle records everything else.
-- **`secret`** — what is true but not yet revealed in the narrative, and who knows.
-
-Characters add:
-
-- **`wants`** — specific goals and intentions of the character.
-- **`facts`** — important established facts about the character.
-- **`knowledge`** — what the character knows: things they have witnessed or been told, including about the player.
-- **`bond`** — current relationship and attitude towards the player.
-- **`relationships`** — ties to other characters; itemise by character name when there are several.
-
-Places add:
-
-- **`npcs`** — regulars and characters connected to the place; itemise by character name when there are several.
-- **`layout`** — physical arrangement and notable features.
-
-Things add:
-
-- **`significance`** — why it matters to the story.
-- **`location`** — who holds it or where it sits.
-
-The player (key `player`) adds these instead of the character facets — never `wants`, `bond`, or `relationships`: the player's intent belongs to the player, and NPCs' attitudes live on their own `bond` facets:
-
-- **`background`** — pre-story origin and circumstances established in fiction.
-- **`skills`** — competencies and talents demonstrated or declared.
-- **`possessions`** — durable belongings and resources, as an itemised map of item → short description (`"money": "30 pounds"`). What is carried or worn right now is live state. (Other characters may carry a `possessions` facet too.)
-- **`oaths`** — standing commitments: promises, debts, and deals made in fiction.
-- **`reputation`** — how the player is generally known and regarded.
+Use these names, add a facet while it matters, and itemise into a map where content is naturally keyed (`player.possessions.money`).
 
 ## Example
 
 ```json
 {
   "Hesta": {
-    "is": "Hesta is the town baker, a stout woman with a flour-dusted apron and grey hair tied back; she owns the bakery on Mill Lane.",
-    "wants": "Hesta wants to be left alone and to keep the shop open.",
-    "knowledge": "Hesta saw the player argue with a constable, and knows the player is new in town.",
-    "bond": "Hesta is wary of the player and will help only if it costs her nothing.",
-    "relationships": {"Tam":"Hesta is Tam's mother"},
-    "secret": "Hesta is hiding Tam upstairs after a robbery gone wrong; only she and Tam know.",
-    "history": "Hesta's husband drowned in the river flood two winters back."
-  },
-  "Mill Lane": {
-    "is": "Mill Lane is a narrow cobbled street on the south side of town, two streets back from the river.",
-    "layout": "It holds the bakery, a smithy, and a boarded-up tannery; it is quiet by day and unpatrolled after dusk.",
-    "npcs": "Hesta runs the bakery, and the smithy brothers work the forge."
-  },
-  "courier_ledger": {
-    "is": "A slim leather ledger recording smuggling accounts.",
-    "significance": "It names half the town's gentry — whoever holds it holds leverage over them.",
-    "location": "It is locked in constabulary custody."
+    "is": "Hesta is the town baker, a stout woman with grey hair tied back; she owns the bakery on Mill Lane.",
+    "wants": "Hesta wants to keep the shop open and her son out of the constabulary's hands.",
+    "knowledge": "Hesta saw the player argue with a constable and knows they are new in town.",
+    "bond": "Hesta is wary of the player and helps only when it costs her nothing.",
+    "secret": "Hesta is hiding her son Tam upstairs after a robbery went wrong; only she and Tam know."
   },
   "player": {
     "is": "The player is lean and weathered and walks with a slight limp.",
     "background": "A veteran of the border wars, drifting since discharge.",
-    "skills": "Skilled with a sword and at reading people; can sleep anywhere.",
     "possessions": {
       "money": "30 pounds",
-      "sabre": "A chipped but serviceable sabre.",
-      "lodging": "A rented room above the tannery, paid up to the month's end."
-    },
-    "oaths": "Sworn to repay the woman who hid them in Greyford last winter.",
-    "reputation": "Known on the road as quiet trouble best left alone."
+      "sabre": "A chipped but serviceable sabre."
+    }
   }
 }
 ```
 
-## What belongs here
+## Keeping it current
 
-- Recurring characters: who they are, what they want, how they regard the player, what they know.
-- Revisitable or referenced places, and significant objects.
-- Secrets — a facet on the entity that carries them.
-- The player's established facts (key `player`): background, traits or injuries declared in fiction, oaths sworn.
-
-## What does NOT belong here
-
-- **A running log**: `history` keeps only the few notable events that still shape the present — curated, never appended to every scene; the chronicle records everything else. Other facets never carry narrative ("…let Amy sing one number after the first set and approved after she delivered") — keep the standing fact (`bond: "He approves of Amy's singing and will give her a number on band nights."`) and reserve events for `history`. Narrative connectives ("after", "then", "last Friday") outside `history` are the warning sign.
-- **Temporary state of any kind**: where someone is standing right now, who is present, a mood of the moment, what's held or worn, the weather. That is current-scene data.
-- Planned beats, plot directions — planning data, not memory.
-- Irrelevant details and re-derivable flavour: every door, every meal, a cloak's colour, a tavern's name when it won't recur.
-- Incidental hooks the player passed over, explicitly rejected future directions, and speculative significance attached to minor details. Remove notes whose only purpose is to revive an abandoned idea, but retain established facts and consequential relationships. A short reply, silence, or Continue is not grounds to erase the established story. Repeated narrator mentions do not establish player interest.
-
-## The durability test
-
-Before setting a facet, ask: *will this still be true and matter after the scene ends?* If it is only true right now, it belongs in live state or the prose. State facts, not chronologies.
-
-## Tool: `update_memory`
-
-Edits are **additive by dotted path — only the paths you name change; nothing else is touched, and omission never deletes.** Paths are `name` (whole entry) or `name.facet`. Operations, applied in this order:
-
-1. **`move`** — map of `fromPath` → `toPath`. Rename an entity (`"dark_haired_boy": "Dan"`) once its real name is learned, or relocate a facet. Never duplicate an entity under a new name — rename it. Moving onto a target that already exists **merges** the entries with mv semantics: the moved facets replace the target's on conflict, and facets only the target had are kept — so move the entry whose facts should prevail (use this to fold a duplicate into the canonical entry).
-2. **`delete`** — array of paths. Delete a facet that is no longer true, or a whole entry that is genuinely no longer relevant.
-3. **`set`** — map of path → value. `name.facet` sets one facet; `name` with an object replaces the whole entry (use sparingly — facet edits are safer).
-
-```json
-{
-  "move": { "dark_haired_boy": "Dan" },
-  "set": {
-    "Dan.is": "Dan is a dark-haired sixth-former with easy charm and connections across the school.",
-    "Hesta.bond": "She blames the player for the constabulary raid on her bakery and will not help them again."
-  },
-  "delete": ["Hesta.secret", "minor_courier_npc"]
-}
-```
-
-Above: the placeholder is renamed now the name is known; two facets are updated in place; a secret that came out is deleted along with an entity that stopped mattering. Every other entry and facet survives untouched.
-
-## When to write, update, delete
-
-- Read before writing about a recurring entity — don't contradict an existing facet without an in-fiction reason.
-- **Set** a new entry (with at least `is`) when a person, place, or thing has entered the story and will recur.
-- **Set** an existing facet by rewriting that facet's whole value as present-tense truth — never append the story of the change.
-- **Move** to rename when an entity's real name is learned; never create a duplicate entry.
-- **Delete** facets that stopped being true, and entries that are genuinely no longer relevant.
-
-Recent fiction outranks memory; when they conflict, the memory is stale and should be repaired, not obeyed
+Record a person, place or thing once it has entered the story and will recur. When something durable about it changes (a secret comes out, a bond sours, a possession is lost), rewrite that facet as the present truth. When an entity's real name is learned, rename its entry with `move`. Delete facets that are no longer true and entries that no longer matter, so the file stays lean. When recent story and memory disagree, the story is right: repair the memory.

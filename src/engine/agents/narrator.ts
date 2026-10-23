@@ -100,8 +100,8 @@ export const MAX_PLOTTER_ITERATIONS = 4
 // The Plotter's instruction names only the subsystems that are actually
 // enabled — a static text would point the model at injections that don't
 // exist and tools that aren't advertised whenever a subsystem is switched
-// off. It also carries each enabled subsystem's bookkeeping guidance and
-// size-pressure hints, computed from the data at the start of the turn.
+// off. What to record lives in the rules; the instruction carries the turn's
+// steps and any size hints, computed from the data at the start of the turn.
 export function buildPlotterInstruction(
   flags: ContextFlags,
   data: StoryData,
@@ -110,39 +110,37 @@ export function buildPlotterInstruction(
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
   const reads = enabled.map((s) => s.checkTool.name)
   const updates = enabled.map((s) => `\`${s.updateTool.name}\``)
-  const distinctions = enabled.map((s) => s.pivotDistinction)
-  const distinctLine =
-    distinctions.length > 1 ? ` Keep the subsystems distinct: ${distinctions.join('; ')}.` : ''
   // With the plot plan on, the Plotter directs every reply through a steer;
   // the plan itself stays private.
   const steers = flags.includePlotOutline
+  const recalls = flags.includeMemory
   const steps = [
-    `Record what the last reply established that the working data (see the ${reads.join(' / ')} results) doesn’t yet hold.`,
-    'Decide how the world answers the player’s latest input, and record the changes that follow.',
-    ...(steers
+    `Record what the last reply established that the records (the ${reads.join(' / ')} results) don’t yet hold.`,
+    steers
+      ? 'Pick the reply’s development: what the world does in answer to the player — an NPC acts on what they want, a consequence lands, a secret surfaces, a thread from earlier returns — taken from the plan’s Next where it fits. Deliver what earlier turns set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings, and update the plan.'
+      : 'Work out how the world answers the player, and record the changes that follow.',
+    ...(recalls
       ? [
-          'Choose this reply’s development: something that changes the situation — an NPC acts on what they want, a consequence lands, a secret surfaces, a thread from earlier returns — big enough that the story is somewhere new by the end of the reply. When the player hesitates, the world moves on without them. Take the development from the plan’s Next where it fits, and update the plan to match.',
-          `Steer the reply with \`${STEER_TOOL.name}\`: the development, who drives it, and how far the reply carries it: let consequences play out, up to a natural point for the player to take their next turn. Leave what the player’s character does, says, and feels to the player.`,
+          `Recall with \`${RECALL_MEMORY_TOOL.name}\` the remembered people, places and things the reply involves, so the narrator keeps them consistent.`,
         ]
       : []),
-    ...(flags.includeMemory
+    ...(steers
       ? [
-          `Recall with \`${RECALL_MEMORY_TOOL.name}\` every remembered person, place, or thing the reply involves, and any the development calls back to: the narrator sees only the story, what you record, and what you recall.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what happens, who makes it happen, and the story development the reply ends on for the player to respond to. When recent replies have circled one moment or one image, steer somewhere fresh.`,
         ]
       : []),
   ]
-  const order = ['updates', ...(flags.includeMemory ? ['recalls'] : []), ...(steers ? ['the steer'] : [])]
+  const order = [
+    `${updates.join(', ')} for the records`,
+    ...(recalls ? [`\`${RECALL_MEMORY_TOOL.name}\``] : []),
+    ...(steers ? [`\`${STEER_TOOL.name}\``] : []),
+  ]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
-    'The player has acted. Before the narrator writes the reply, you are acting as the Plotter:\n' +
+    'The player has taken their turn. Before the narrator writes the reply, you are acting as the Plotter: you direct the story and keep its records, and the narrator writes from your briefing.\n' +
     steps.map((step, i) => `${i + 1}. ${step}`).join('\n') +
-    `\n\nRecord changes by calling ${updates.join(', ')}, following each subsystem’s rules, and batch every call into this single response` +
-    (order.length > 1 ? `: ${order.join(', then ')}.` : '.') +
-    distinctLine +
-    ' Call only for subsystems that materially changed, and reply with tool calls alone.' +
-    (steers
-      ? ' Steer every reply, even when nothing needs recording.'
-      : ' If there is nothing to do at all, reply with only the word DONE.') +
+    `\n\nReply with tool calls alone: ${order.join(', then ')}. Update a record only where something changed.` +
+    (steers ? '' : ' If there is nothing to record, reply with only the word DONE.') +
     (guidance ? `\n\n${guidance}` : '')
   )
 }
@@ -293,6 +291,18 @@ export async function runNarrator(
       return { sawError, sawRead }
     }
     let error: string | undefined
+    // With the plot plan on, every reply is steered. A Plotter that stops
+    // without a steer — after a batch of updates, or by writing prose in
+    // the narrator's place — is reminded once.
+    let steerNudged = false
+    const needsSteerNudge = () =>
+      ctx.flags.includePlotOutline &&
+      !steerNudged &&
+      !briefing.some((c) => c.name === STEER_TOOL.name)
+    const nudgeForSteer = () => {
+      steerNudged = true
+      pushNudge(messages, `Steer the reply now with \`${STEER_TOOL.name}\`, using tool calls alone.`)
+    }
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
         const label = `plotter:${iter}`
@@ -313,12 +323,22 @@ export async function runNarrator(
         if (completion.text && completion.text.trim().toUpperCase() !== 'DONE') {
           trace.push({ kind: 'thought', text: completion.text })
         }
-        if (!completion.toolCalls.length) break
+        if (!completion.toolCalls.length) {
+          if (!needsSteerNudge()) break
+          if (completion.text) messages.push({ role: 'assistant', content: completion.text })
+          nudgeForSteer()
+          continue
+        }
         const batch = handleToolCalls(completion)
         // A clean batch is the normal end of the phase. Iterate only when
-        // there is something concrete left to do — repair a rejected call, or
-        // act on a context read the model chose to make.
-        if (!batch.sawError && !batch.sawRead) break
+        // there is something concrete left to do — repair a rejected call,
+        // act on a context read the model chose to make, or add a missing
+        // steer.
+        if (!batch.sawError && !batch.sawRead) {
+          if (!needsSteerNudge()) break
+          nudgeForSteer()
+          continue
+        }
         if (batch.sawError) {
           pushNudge(
             messages,

@@ -21,7 +21,7 @@ export const OOC_RULES = buildOocRules(MAX_OOC_ITEMS, MAX_OOC_ITEM_CHARS)
 export const UPDATE_STATE_TOOL: ModelToolDefinition = {
     name: 'update_state',
     description:
-      `Replace the current-scene consistency state, but only when that state materially changed. Always pass both \`keep\` and \`set\`. The previous state is cleared; paths in \`keep\` retain their current values; then dotted paths in \`set\` are added or overwritten. Anything omitted from both is deleted, and setting a path to null also deletes it. Use short, complete English phrases for string values. Empty \`keep\` and \`set\` clears the state.`,
+      `Rebuild the live scene state. Paths in \`keep\` carry their current values forward; then dotted paths in \`set\` are added or overwritten. Anything in neither is dropped, and setting a path to null removes it. Pass both (either may be empty); string values are short, complete phrases.`,
     parameters: {
       type: 'object',
       properties: {
@@ -44,7 +44,7 @@ export const UPDATE_STATE_TOOL: ModelToolDefinition = {
 export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
     name: 'future_plot_plan',
     description:
-      `Edit the private director's notebook: six labelled entries Promise, Question, Stakes, Intentions, Next, and Payoff. Plan NPC actions and changing circumstances, never the player's choices. Use one operation per call: \`append\` or \`insert\` a missing entry, \`update\` one that materially changed, or \`delete\` an obsolete or duplicate entry. Keep a stable Promise; refresh Next and Payoff as developments land. Convert legacy hook lists using these labels. Positions are 1-indexed. Maximum ${MAX_PLOT_ITEMS} entries and ${MAX_PLOT_ITEM_CHARS} characters per entry.`,
+      `Edit the private plot plan, one operation per call: \`append\` or \`insert\` an entry, \`update\` one, or \`delete\` one. Positions are 1-indexed. At most ${MAX_PLOT_ITEMS} entries of ${MAX_PLOT_ITEM_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {
@@ -71,26 +71,25 @@ export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `Maintain the fact file about the story's recurring people, places, and things — a JSON object of entries keyed by whatever short name is most natural ("Hesta", "Dan", "Mill Lane" — avoid periods, which are path separators). Edits are additive by dotted path at any depth: only the paths you name change; omission never deletes; setting a path to null deletes it. The rules suggest facet names (is / notes / history / secret; characters: wants / facts / knowledge / bond / relationships; places: npcs / layout; things: significance / location; player: background / skills / possessions / oaths / reputation) — the shape beyond that is your discretion: values are one or two complete standalone sentences (readable alone, long after the scene, by a reader who has seen none of the story — never telegraphic fragments, never allusions to events or terms the sentence does not itself explain), with nested maps where content is naturally keyed (e.g. \`player.possessions.money\`). Update only when something durable about an entity is established or changed; \`history\` holds curated notable events that still shape the present (the chronicle records everything else); never store temporary scene data (positions, present company, moods, held or worn items). Operations apply in order move → delete → set. Keep entries tight — condense and delete as the story moves on.`,
+      `Edit memory by dotted path at any depth: only the paths you name change, and leaving a path out never deletes it. Operations apply in order: \`move\`, then \`delete\`, then \`set\`. Periods separate path parts, so entry names have none.`,
     parameters: {
       type: 'object',
       properties: {
         move: {
           type: 'object',
           description:
-            'Map of fromPath → toPath. Rename an entity once its real name is learned (e.g. {"dark_haired_boy": "Dan"}) — never create a duplicate entry — or relocate any value. Moving onto an existing object merges shallowly with mv semantics: moved keys replace the target\'s; keys only the target had are kept. Use it to fold a duplicate into the canonical entry.',
+            'Map of fromPath → toPath: renames an entry (e.g. {"dark_haired_boy": "Dan"}) or relocates a value. Moving onto an existing object merges the two, the moved keys winning; use it to fold a duplicate into the main entry.',
           additionalProperties: { type: 'string' },
         },
         delete: {
           type: 'array',
           items: { type: 'string' },
-          description:
-            'Paths to remove: a facet or item that stopped being true, or a whole entry for an entity genuinely no longer relevant.',
+          description: 'Paths to remove: a facet, an item, or a whole entry.',
         },
         set: {
           type: 'object',
           description:
-            'Map of dotted path → value. Prefer surgical paths (`name.facet`, `name.facet.item`) over whole-entry replacement. String values are complete standalone present-tense sentences; null deletes the path.',
+            'Map of dotted path → value (`name.facet`, `name.facet.item`, or a whole entry); null deletes the path.',
           additionalProperties: true,
         },
       },
@@ -130,7 +129,7 @@ export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_OOC_TOOL: ModelToolDefinition = {
     name: 'update_ooc',
     description:
-      `Edit the numbered list of the player's standing out-of-character instructions. Call only when the player's input adds, changes, or withdraws a standing directive, or when an entry is completed or no longer relevant (delete it). One-shot commands fulfilled this turn are not recorded. Use one operation per call: \`append\` or \`insert\` a new directive, \`update\` one the player superseded, or \`delete\` one that no longer applies. Positions are 1-indexed. Maximum ${MAX_OOC_ITEMS} entries and ${MAX_OOC_ITEM_CHARS} characters per entry.`,
+      `Edit the list of the player's standing OOC instructions, one operation per call: \`append\` or \`insert\` an entry, \`update\` one, or \`delete\` one. Positions are 1-indexed. At most ${MAX_OOC_ITEMS} entries of ${MAX_OOC_ITEM_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {
@@ -168,7 +167,7 @@ export const CHECK_OOC_TOOL: ModelToolDefinition = {
 export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
     name: 'recall_memory',
     description:
-      'Bring remembered entries into the narrator’s view for this reply. The narrator sees only the story so far, the updates you make, and what you recall, so recall every remembered person, place, or thing the reply will involve. Call it after your updates, so the recalled entries are current.',
+      'Bring memory entries into the narrator’s view for this reply, by name. Call it after your updates, so the entries are current.',
     parameters: {
       type: 'object',
       properties: {
@@ -185,13 +184,13 @@ export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
 export const STEER_TOOL: ModelToolDefinition = {
     name: 'steer',
     description:
-      'Steer the narrator’s reply: the development it delivers, who drives it, and how far the reply carries it, in two or three plain sentences. The narrator does the telling.',
+      'Steer the narrator’s reply: what happens, who makes it happen, and the story development it ends on for the player to respond to. Two or three plain sentences; the narrator does the telling.',
     parameters: {
       type: 'object',
       properties: {
         text: {
           type: 'string',
-          description: 'The steer, in one or two sentences.',
+          description: 'The steer, in two or three plain sentences.',
         },
       },
       required: ['text'],

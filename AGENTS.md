@@ -6,7 +6,7 @@ Guidance for contributors and AI coding agents working in this repository. `CLAU
 
 AI Dungeon Master: a React 19 + Vite + TypeScript single-page app that turns an LLM into a tabletop RPG narrator. The browser calls an OpenAI-compatible endpoint (Chat Completions or Responses API) directly. It deploys to GitHub Pages under `/dungeon/`.
 
-The goal is interactive fiction: immersive stories without complex mechanics.
+The goal is interactive fiction: immersive stories without complex mechanics. [docs/storytelling.md](docs/storytelling.md) lists the requirements for the narrator, the plotter and the story.
 
 ## Security and privacy
 
@@ -90,6 +90,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
 
 ## Working on this project
 
+- **Prompts follow the storytelling design.** Check prompt changes against [docs/storytelling.md](docs/storytelling.md), and update it first when the design changes.
 - **Analyse before patching.** When play goes wrong, explain the mechanism first and let the maintainer choose the fix. Don't jump straight to prompt tweaks.
 - **Prompts guide; executors guard safety only.** Behaviour is shaped by prompts. Executors enforce only safety, such as state path safety. Size pressure is a soft advisory hint, not a structural cap, and the shape of stored context is the model's call.
 - **The maintainer owns vocabulary.** Names for memory facets, plot labels, and similar are the maintainer's decision. Propose, don't impose.

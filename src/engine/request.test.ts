@@ -348,20 +348,18 @@ describe('buildContextInjectionMessages', () => {
     ])
   })
 
-  it('serves payloads as pure data — the bookkeeping guidance rides in the pivot', () => {
+  it('serves payloads as pure data, and per-turn guidance only as size status', () => {
     expect(buildStatePayload({ a: 1 })).not.toMatch(/update_state|STATUS|Plotter/)
     expect(buildMemoryPayload({})).toBe('(no memory yet)')
     const emptyData = { state: {}, plot: [], memory: {}, ooc: [] }
     for (const m of buildContextInjectionMessages(emptyData, ALL_FLAGS)) {
       expect(m.content).not.toMatch(/update_|Plotter/)
     }
-    const guidance = buildPlotterGuidance(emptyData, 4000, ALL_FLAGS)
-    expect(guidance).toContain('`update_memory`')
-    expect(guidance).toContain('`update_state`')
-    expect(guidance).toContain('`update_ooc`')
-    expect(buildPlotterGuidance(emptyData, 4000, { ...ALL_FLAGS, includeMemory: false })).not.toContain(
-      'update_memory',
-    )
+    // What to record lives in the cached rules; the tail carries only status.
+    expect(buildPlotterGuidance(emptyData, 4000, ALL_FLAGS)).toMatch(/^Live state: STATUS: state size/)
+    expect(buildPlotterGuidance(emptyData, 4000, { ...ALL_FLAGS, includeWorldState: false })).toBe('')
+    const bigMemory = { ...emptyData, memory: { notes: { is: 'x'.repeat(9000) } } }
+    expect(buildPlotterGuidance(bigMemory, 4000, ALL_FLAGS)).toContain('Memory: STATUS: memory is')
   })
 })
 

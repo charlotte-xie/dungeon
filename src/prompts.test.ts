@@ -16,19 +16,33 @@ describe('capability-aware prompts', () => {
 
   it('keeps the opening and Continue directives to the player’s short request', () => {
     expect(buildNewAdventureBootstrap()).toBe('(OOC: Begin the story.)')
-    expect(CONTINUE_DIRECTIVE).toBe('(OOC: Continue the story.)')
+    expect(CONTINUE_DIRECTIVE).toBe(
+      '(OOC: Continue: move the story on to its next meaningful development, in a full turn.)',
+    )
   })
 
-  it('describes progression as causal change without random escalation', () => {
+  it('keeps the story moving through consequences grown from what is in play', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('Developments grow out of what is already in play')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('rather than new threats from nowhere')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('makes way for the next instead of being restated')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('what is set up pays off')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('the story moves on to its consequences')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('ends on a story development for the player to respond to')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('What they do next is up to them.')
+  })
+
+  it('measures length preferences against a full reply', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('any length preference is measured against that')
+  })
+
+  it('keeps choice framing out of the prompts', () => {
+    // Choice and decision wording pulls models towards ending on a choice.
+    const texts = [DEFAULT_SYSTEM_PROMPT, buildPlotRules(10, 500), CONTINUE_DIRECTIVE]
+    for (const text of texts) expect(text).not.toMatch(/decision|choice|decide|choose/i)
   })
 
   it('prevents semantically duplicate future plot beats', () => {
     const rules = buildPlotRules(10, 500)
-    expect(rules).toContain('same dramatic function')
-    expect(rules).toContain('never preserve and replay it')
+    expect(rules).toContain('one entry per dramatic function')
+    expect(rules).toContain('replace it with its consequence')
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {
