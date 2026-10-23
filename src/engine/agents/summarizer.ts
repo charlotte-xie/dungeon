@@ -7,6 +7,7 @@
 // the agent just renders the inputs and calls the model.
 
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerLengthNote } from '../../prompts'
+import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type { ApiProtocol, ModelMessage, ReasoningEffort } from '../model/types'
 import type { Memory } from '../types'
@@ -17,7 +18,8 @@ export interface SummarizerInput {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
-  // The adventure's prompt-cache key; see ModelConnection.
+  // The adventure's prompt-cache key; the summariser uses its own key derived
+  // from it (see roleCacheKey).
   cacheKey?: string
   // Long-term memory at the time of the fold, passed as grounding canon so
   // summaries keep entity names and established facts consistent across folds
@@ -115,7 +117,12 @@ export async function runSummarizer(
       messages,
       label: 'summarizer',
     },
-    { baseUrl: input.baseUrl, apiKey: input.apiKey, protocol: input.protocol, cacheKey: input.cacheKey },
+    {
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      protocol: input.protocol,
+      cacheKey: roleCacheKey(input.cacheKey, 'summarizer'),
+    },
     signal,
   )
   const content = completion.text

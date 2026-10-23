@@ -7,6 +7,7 @@
 // plot, or memory — it only rewrites prose.
 
 import { REVISER_SYSTEM_PROMPT } from '../../prompts'
+import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type { ApiProtocol, ModelMessage } from '../model/types'
 import type {
@@ -21,7 +22,8 @@ export interface ReviserContext {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
-  // The adventure's prompt-cache key; see ModelConnection.
+  // The adventure's prompt-cache key; the reviser uses its own key derived
+  // from it (see roleCacheKey).
   cacheKey?: string
   slots: AdventureSlots
   draft: string
@@ -74,7 +76,12 @@ export async function runReviser(
       temperature: ctx.sampling.temperature,
       label: 'reviser',
     },
-    { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol, cacheKey: ctx.cacheKey },
+    {
+      baseUrl: ctx.baseUrl,
+      apiKey: ctx.apiKey,
+      protocol: ctx.protocol,
+      cacheKey: roleCacheKey(ctx.cacheKey, 'reviser'),
+    },
     signal,
   )
   if (completion.promptTokens !== undefined || completion.cachedTokens !== undefined) {

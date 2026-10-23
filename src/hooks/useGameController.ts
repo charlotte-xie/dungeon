@@ -293,8 +293,8 @@ export function useGameController(settings: GameSettings) {
     }
     const baseChronicle = world.chronicle
     const baseCutoff = world.compactCutoff
-    // The adventure's first turn names its prompt cache, so every request in
-    // one adventure is routed to the same provider cache.
+    // The adventure's first turn names its prompt caches: each role's requests
+    // go to their own provider cache, under a key derived from this one.
     const cacheKey = baseTurns[0]?.id ?? pendingTurn.id
     // Reassigned if compaction commits at the start of the turn, so Undo,
     // Retry and Stop restore the compacted world: the fold is never reverted

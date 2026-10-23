@@ -212,6 +212,14 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.reasoningTokens).toBe(12)
   })
 
+  it('gives the Plotter and the narrator their own prompt-cache keys', async () => {
+    mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+    await runNarrator({ ...CTX, cacheKey: 'adventure-1' }, new AbortController().signal)
+    const keys = mockedModel.mock.calls.map(([, connection]) => connection.cacheKey)
+    expect(keys).toEqual(['adventure-1-plotter', 'adventure-1-narrator'])
+  })
+
   it('uses the narrator model for the Plotter when the plotter model is blank', async () => {
     mockedModel.mockResolvedValueOnce(completion({ text: 'DONE' }))
     mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))

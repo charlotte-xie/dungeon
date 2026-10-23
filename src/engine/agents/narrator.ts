@@ -26,6 +26,7 @@ import {
   type ContextFlags,
 } from '../request'
 import { NARRATOR_VISIBLE_TOOLS, RECALL_MEMORY_TOOL, STEER_TOOL, executeEnabledTool } from '../tools'
+import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type {
   ApiProtocol,
@@ -53,7 +54,8 @@ export interface NarratorContext {
   apiKey: string
   baseUrl: string
   protocol: ApiProtocol
-  // The adventure's prompt-cache key; see ModelConnection.
+  // The adventure's prompt-cache key; the Plotter and the narrator each use
+  // their own key derived from it (see roleCacheKey).
   cacheKey?: string
   slots: AdventureSlots
   chronicle: Chronicle
@@ -172,12 +174,9 @@ export async function runNarrator(
   hooks: NarratorHooks = {},
 ): Promise<NarratorResult> {
   let data = ctx.initialData
-  const connection = {
-    baseUrl: ctx.baseUrl,
-    apiKey: ctx.apiKey,
-    protocol: ctx.protocol,
-    cacheKey: ctx.cacheKey,
-  }
+  const connection = { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol }
+  const plotterConnection = { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'plotter') }
+  const narratorConnection = { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'narrator') }
   const story = {
     systemPrompt: ctx.systemPrompt,
     slots: ctx.slots,
@@ -298,7 +297,7 @@ export async function runNarrator(
             temperature: ctx.sampling.temperature,
             label,
           },
-          connection,
+          plotterConnection,
           signal,
         )
         recordCompletion(label, completion, Date.now() - startedAt)
@@ -362,7 +361,7 @@ export async function runNarrator(
           temperature: ctx.sampling.temperature,
           label,
         },
-        connection,
+        narratorConnection,
         signal,
       )
     const replaysCalls = narratorMessages.some((m) => m.toolCalls?.length)

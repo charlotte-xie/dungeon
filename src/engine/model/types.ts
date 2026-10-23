@@ -34,8 +34,9 @@ export interface ModelConnection {
   apiKey: string
   // Defaults to 'chat-completions' when omitted.
   protocol?: ApiProtocol
-  // Names one adventure's requests, which share a prompt prefix, so providers
-  // that route by key (xAI, OpenAI) send them to the server holding its cache.
+  // Names one role's requests in one adventure, which share a prompt prefix,
+  // so providers that route by key (xAI, OpenAI) send them to the server
+  // holding its cache. See roleCacheKey.
   cacheKey?: string
 }
 
