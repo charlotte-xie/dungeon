@@ -113,27 +113,36 @@ export function buildPlotterInstruction(
   const distinctions = enabled.map((s) => s.pivotDistinction)
   const distinctLine =
     distinctions.length > 1 ? ` Keep the subsystems distinct: ${distinctions.join('; ')}.` : ''
+  // With the plot plan on, the Plotter directs every reply through a steer;
+  // the plan itself stays private.
+  const steers = flags.includePlotOutline
   const steps = [
     `Record what the last reply established that the working data (see the ${reads.join(' / ')} results) doesn’t yet hold.`,
     'Decide how the world answers the player’s latest input, and record the changes that follow.',
-    ...(flags.includeMemory
+    ...(steers
       ? [
-          `Recall with \`${RECALL_MEMORY_TOOL.name}\` every remembered person, place, or thing the reply will involve: the narrator sees only the story, what you record, and what you recall.`,
+          'Choose this reply’s development: something that changes the situation — an NPC acts on what they want, a consequence lands, a secret surfaces, a thread from earlier returns — big enough that the story is somewhere new by the end of the reply. When the player hesitates, the world moves on without them. Take the development from the plan’s Next where it fits, and update the plan to match.',
+          `Steer the reply with \`${STEER_TOOL.name}\`: the development, who drives it, and how far the reply carries it: let consequences play out, up to a natural point for the player to take their next turn. Leave what the player’s character does, says, and feels to the player.`,
         ]
       : []),
-    ...(flags.includePlotOutline
+    ...(flags.includeMemory
       ? [
-          `If it helps, steer the reply with \`${STEER_TOOL.name}\`: what happens and where it ends, in a sentence or two, without prose.`,
+          `Recall with \`${RECALL_MEMORY_TOOL.name}\` every remembered person, place, or thing the reply involves, and any the development calls back to: the narrator sees only the story, what you record, and what you recall.`,
         ]
       : []),
   ]
+  const order = ['updates', ...(flags.includeMemory ? ['recalls'] : []), ...(steers ? ['the steer'] : [])]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
     'The player has acted. Before the narrator writes the reply, you are acting as the Plotter:\n' +
     steps.map((step, i) => `${i + 1}. ${step}`).join('\n') +
-    `\n\nRecord changes by calling ${updates.join(', ')}, following each subsystem’s rules, and batch every call into this single response, updates before recalls.` +
+    `\n\nRecord changes by calling ${updates.join(', ')}, following each subsystem’s rules, and batch every call into this single response` +
+    (order.length > 1 ? `: ${order.join(', then ')}.` : '.') +
     distinctLine +
-    ' If a subsystem has no material change, make no call for it. Do not write story prose or commentary. If there is nothing to do at all, reply with only the word DONE.' +
+    ' Call only for subsystems that materially changed, and reply with tool calls alone.' +
+    (steers
+      ? ' Steer every reply, even when nothing needs recording.'
+      : ' If there is nothing to do at all, reply with only the word DONE.') +
     (guidance ? `\n\n${guidance}` : '')
   )
 }

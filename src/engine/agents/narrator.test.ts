@@ -481,10 +481,16 @@ describe('buildPlotterInstruction', () => {
     expect(memoryOnly).not.toContain('update_ooc')
     // A single subsystem needs no distinction clause.
     expect(memoryOnly).not.toContain('Keep the subsystems distinct')
+    // Without the plan there is no steer, so doing nothing is allowed.
+    expect(memoryOnly).toContain('reply with only the word DONE')
 
     const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
     expect(all).toContain('Before the narrator writes the reply')
     expect(all).toContain('`steer`')
+    // With it, the Plotter directs every reply.
+    expect(all).toContain('Steer every reply')
+    expect(all).not.toContain('reply with only the word DONE')
+    expect(all).toContain('updates, then recalls, then the steer')
     expect(all).toContain('`update_ooc`')
     expect(all).toContain('Keep the subsystems distinct')
     // The per-subsystem guidance and size status ride in the instruction.
