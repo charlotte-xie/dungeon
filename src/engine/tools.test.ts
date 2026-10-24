@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { executeTool } from './tools'
+import { executeTool, FUTURE_PLOT_PLAN_TOOL } from './tools'
 
 describe('tool execution boundaries', () => {
   it('rejects an unsafe update_state atomically', () => {
@@ -204,6 +204,40 @@ describe('tool execution boundaries', () => {
     expect(unsafe.data).toBe(data)
     expect(unsafe.result).toMatch(/unsafe memory path/)
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
+  it('changes the plot plan by insert and remove only', () => {
+    const data = { state: {}, plot: ['The flood rises.'], memory: {}, ooc: [] }
+    // Without a position, the entry goes at the end.
+    const added = executeTool(
+      'future_plot_plan',
+      JSON.stringify({ op: 'insert', text: 'The order returns.' }),
+      data,
+    )
+    expect(added.data.plot).toEqual(['The flood rises.', 'The order returns.'])
+    expect(added.result).toBe('ok — inserted at position 2. Plan now has 2 entries.')
+    const first = executeTool(
+      'future_plot_plan',
+      JSON.stringify({ op: 'insert', position: 1, text: 'A rival arrives.' }),
+      added.data,
+    )
+    expect(first.data.plot[0]).toBe('A rival arrives.')
+    const removed = executeTool('future_plot_plan', JSON.stringify({ op: 'remove', position: 2 }), first.data)
+    expect(removed.data.plot).toEqual(['A rival arrives.', 'The order returns.'])
+    expect(removed.result).toContain('removed entry 2')
+    // The tool says when: a good idea in, a completed or abandoned entry out.
+    expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('`insert` a good idea')
+    expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('once it is completed or abandoned')
+    // Rewriting in place turned directions into notes on the current scene.
+    for (const op of ['update', 'append', 'delete']) {
+      const refused = executeTool(
+        'future_plot_plan',
+        JSON.stringify({ op, position: 1, text: 'The knight attacks.' }),
+        data,
+      )
+      expect(refused.data).toBe(data)
+      expect(refused.result).toContain('requires `op` to be one of "insert","remove"')
+    }
   })
 
   it('reports list-editor errors with the OOC noun', () => {

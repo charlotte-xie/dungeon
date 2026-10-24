@@ -52,18 +52,18 @@ describe('capability-aware prompts', () => {
 
   it('prevents semantically duplicate future plot beats', () => {
     const rules = buildPlotRules(10, 500)
-    expect(rules).toContain('one entry per dramatic function')
-    expect(rules).toContain('replace it with its consequence')
+    expect(rules).toContain('one short entry for each thread')
   })
 
-  it('plans what the world does from principles, with no worked example to copy', () => {
+  it('keeps the plan a list of where the story is heading, with no structure to copy', () => {
     const rules = buildPlotRules(10, 500)
-    expect(rules).toContain('The plan is about the world')
-    expect(rules).toContain('The player writes their own character')
-    // An example's bargain, "struck or broken", came back as NPC ultimatums.
-    expect(rules).not.toMatch(/example/i)
-    // So did a dramatic question, which became the player's decision.
-    expect(rules).not.toMatch(/question/i)
+    expect(rules).toContain('in the medium and long term')
+    expect(rules).toContain('Each entry is a direction for the world')
+    // Changes are optional: only a good idea that improves the story.
+    expect(rules).toContain('change it only when that improves the story')
+    // Labelled entries and a worked example planned the player's decision,
+    // which came back as NPC ultimatums.
+    expect(rules).not.toMatch(/example|question|promise|stakes|payoff/i)
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {

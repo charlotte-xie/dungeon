@@ -135,7 +135,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     mockedModel.mockResolvedValueOnce(
       completion({
         toolCalls: [
-          { id: 'p1', name: 'future_plot_plan', arguments: '{"op":"append","text":"Next: the miller returns."}' },
+          { id: 'p1', name: 'future_plot_plan', arguments: '{"op":"insert","text":"The miller returns."}' },
           { id: 'o1', name: 'update_ooc', arguments: '{"op":"append","text":"Keep replies short."}' },
           { id: 'r1', name: 'check_state', arguments: '{}' },
           { id: 'bad', name: 'update_memory', arguments: '{"set":{}}' },
@@ -147,7 +147,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
-    expect(result.data.plot).toEqual(['Next: the miller returns.'])
+    expect(result.data.plot).toEqual(['The miller returns.'])
     expect(result.data.ooc).toEqual(['Keep replies short.'])
     expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
     const narratorReq = requests()[2]
@@ -288,6 +288,29 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     const prose = messages.findIndex((m) => m.role === 'assistant' && m.content === 'Hesta opens the door.')
     expect(prose).toBeGreaterThan(0)
     expect(messages[prose + 1].content).toContain('Steer the reply now')
+  })
+
+  it('sets the story up on the opening, and records each reply after it', async () => {
+    const snapshots = recordRequests((req) =>
+      isPlotter(req) ? completion({ toolCalls: [STEER] }) : completion({ text: 'Prose.' }),
+    )
+    const opening: NarratorContext = {
+      ...CTX,
+      history: [
+        {
+          id: 't0',
+          kind: 'bootstrap',
+          input: '(OOC: Begin the story.)',
+          reply: { id: 't0-reply', model: 'test-model', text: '' },
+        },
+      ],
+    }
+    await runNarrator(opening, new AbortController().signal)
+    await runNarrator(CTX, new AbortController().signal)
+
+    const [openingPlotter, , replyPlotter] = snapshots
+    expect(openingPlotter.at(-1)?.content).toContain('the narrator writes the opening')
+    expect(replyPlotter.at(-1)?.content).toContain('the narrator writes the next reply')
   })
 
   it('reminds the Plotter once to steer after a batch without one, and only once', async () => {
@@ -541,5 +564,25 @@ describe('buildPlotterInstruction', () => {
     expect(all).not.toContain('Memory: STATUS')
     const bigMemory = { ...CTX.initialData, memory: { notes: { is: 'x'.repeat(9000) } } }
     expect(buildPlotterInstruction(CTX.flags, bigMemory, 4000)).toContain('Memory: STATUS')
+  })
+
+  it('sets the records and the plan up from the scenario on the opening', () => {
+    const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, true)
+    expect(opening).toContain('Set up the records from the scenario')
+    expect(opening).toContain('Write the plan: where the story is heading in the medium and long term')
+    expect(opening).toContain('Steer the opening with `steer`')
+    expect(opening).toContain('then `recall_memory`, then `steer`')
+    // There is no reply or player action yet to record or answer.
+    expect(opening).not.toMatch(/last reply|last action/)
+    expect(opening).not.toMatch(/decision|choice|decide|choose/i)
+
+    const noPlan = buildPlotterInstruction(
+      { ...CTX.flags, includePlotOutline: false },
+      CTX.initialData,
+      4000,
+      true,
+    )
+    expect(noPlan).not.toMatch(/plan|steer/i)
+    expect(noPlan).toContain('reply with only the word DONE')
   })
 })

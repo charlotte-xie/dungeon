@@ -25,8 +25,10 @@ Prompt changes are checked against these.
 - Maintains continuity by reminding the narrator of key details
 - Memory holds durable facts about people, places and things, as present-tense standalone sentences. The current scene stays out.
 - The player's memory entry has no wants or bond: the player's intent is theirs.
-- The plot plan is private and never revealed: Promise, Stakes, Intentions, Next, Payoff.
-  - No Question: a dramatic question became the player's decision, which waited in the plan and came back as NPC ultimatums.
+- The plot plan is a private list of where the story is heading in the medium and long term, never revealed. It changes when the story takes a different direction.
+- Plan changes are optional: the Plotter inserts a good idea that improves the story, and removes an entry once it is completed or abandoned.
+  - Insert and remove only: rewriting entries in place turned medium-term directions into notes on the current scene.
+  - Not a labelled structure: Promise, Question, Stakes and Payoff planned the player's decision, which waited in the plan and came back as NPC ultimatums.
 - The plan and steers are about the world: an NPC pursues a goal, a transition to a new scene, the important consequences of the player's last action. They never set up a choice for the player.
 - Secrets stay hidden until the story reveals them.
 

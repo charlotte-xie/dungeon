@@ -106,6 +106,9 @@ export function buildPlotterInstruction(
   flags: ContextFlags,
   data: StoryData,
   stateCleanupThreshold: number,
+  // The opening has no reply to record from: the Plotter sets the records
+  // and the plan up from the scenario instead.
+  opening = false,
 ): string {
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
   const reads = enabled.map((s) => s.checkTool.name)
@@ -114,10 +117,20 @@ export function buildPlotterInstruction(
   // the plan itself stays private.
   const steers = flags.includePlotOutline
   const recalls = flags.includeMemory
-  const steps = [
+  const openingSteps = [
+    'Set up the records from the scenario: who and what the story starts with.',
+    ...(steers ? ['Write the plan: where the story is heading in the medium and long term.'] : []),
+    ...(recalls
+      ? [`Recall with \`${RECALL_MEMORY_TOOL.name}\` the people, places and things the opening involves.`]
+      : []),
+    ...(steers
+      ? [`Steer the opening with \`${STEER_TOOL.name}\`: what happens in the world as the story begins.`]
+      : []),
+  ]
+  const replySteps = [
     `Record what the last reply established that the records (the ${reads.join(' / ')} results) don’t yet hold.`,
     steers
-      ? 'Pick the next meaningful development, from the plan’s Next where it fits: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings, and update the plan.'
+      ? 'Pick the next meaningful development, moving towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings, and change the plan when you have a good idea that improves the story.'
       : 'Work out how the world answers the player, and record the changes that follow.',
     ...(recalls
       ? [
@@ -130,6 +143,7 @@ export function buildPlotterInstruction(
         ]
       : []),
   ]
+  const steps = opening ? openingSteps : replySteps
   const order = [
     `${updates.join(', ')} for the records`,
     ...(recalls ? [`\`${RECALL_MEMORY_TOOL.name}\``] : []),
@@ -137,7 +151,7 @@ export function buildPlotterInstruction(
   ]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
-    'You are acting as the Plotter: you direct the story and keep its records, and the narrator writes the next reply from your briefing.\n' +
+    `You are acting as the Plotter: you direct the story and keep its records, and the narrator writes ${opening ? 'the opening' : 'the next reply'} from your briefing.\n` +
     steps.map((step, i) => `${i + 1}. ${step}`).join('\n') +
     `\n\nReply with tool calls alone: ${order.join(', then ')}. Update a record only where something changed.` +
     (steers ? '' : ' If there is nothing to record, reply with only the word DONE.') +
@@ -247,7 +261,12 @@ export async function runNarrator(
     const enabledToolNames = new Set(tools.map((t) => t.name))
     const messages = buildPlotterMessages({
       ...story,
-      pivot: buildPlotterInstruction(ctx.flags, data, ctx.stateCleanupThreshold),
+      pivot: buildPlotterInstruction(
+        ctx.flags,
+        data,
+        ctx.stateCleanupThreshold,
+        ctx.history.at(-1)?.kind === 'bootstrap',
+      ),
     })
     const pushToolResult = (call: ModelToolCall, content: string) => {
       messages.push({ role: 'tool', toolCallId: call.id, content })

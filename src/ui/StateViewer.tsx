@@ -354,11 +354,9 @@ export function StateViewer({
         {tab === 'plot' && context.includePlotOutline && (
           <>
             <p className="hint">
-              The director maintains five labelled entries: <strong>Promise, Stakes,
-              Intentions, Next, and Payoff</strong>. Promise captures the intended
-              experience; the other entries guide consequential developments and scene
-              endings without choosing the player's actions. Next and Payoff change as
-              developments land. Older hook lists are reorganised on later turns. One entry per line;
+              The plotter's private plan: where the story is heading in the medium and
+              long term. The plotter inserts a good idea for the story, and removes an
+              entry once it is completed or abandoned. One entry per line;
               leading <code>-</code>, <code>*</code>, or{' '}
               <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
               each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr

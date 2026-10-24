@@ -44,24 +44,24 @@ export const UPDATE_STATE_TOOL: ModelToolDefinition = {
 export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
     name: 'future_plot_plan',
     description:
-      `Edit the private plot plan, one operation per call: \`append\` or \`insert\` an entry, \`update\` one, or \`delete\` one. Positions are 1-indexed. At most ${MAX_PLOT_ITEMS} entries of ${MAX_PLOT_ITEM_CHARS} characters.`,
+      `Change the private plot plan, one operation per call: \`insert\` a good idea for where the story is heading, or \`remove\` an entry once it is completed or abandoned. Positions are 1-indexed. At most ${MAX_PLOT_ITEMS} entries of ${MAX_PLOT_ITEM_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {
         op: {
           type: 'string',
-          enum: ['append', 'insert', 'update', 'delete'],
-          description: 'Update operation to perform.',
+          enum: ['insert', 'remove'],
+          description: 'Operation to perform.',
         },
         position: {
           type: 'integer',
           minimum: 1,
           description:
-            '1-indexed slot. Required for insert/update/delete. For insert, may equal length+1 (append at end). Ignored for append.',
+            '1-indexed slot. For insert, where the entry goes (leave it out to add the entry at the end). Required for remove.',
         },
         text: {
           type: 'string',
-          description: `New bullet content. Required for append/insert/update. Must be <= ${MAX_PLOT_ITEM_CHARS} chars. Ignored for delete.`,
+          description: `The new entry. Required for insert. Must be <= ${MAX_PLOT_ITEM_CHARS} chars.`,
         },
       },
       required: ['op'],
@@ -211,6 +211,8 @@ export interface ToolExecResult {
   result: string
 }
 
+type ListOp = 'append' | 'insert' | 'update' | 'delete' | 'remove'
+
 interface ListEditSpec {
   toolName: string
   // Lower-case noun used in result messages ('plan', 'OOC list').
@@ -219,6 +221,8 @@ interface ListEditSpec {
   capAdvice: string
   maxItems: number
   maxItemChars: number
+  // The operations the list's tool offers.
+  ops: readonly ListOp[]
 }
 
 // Shared editor for the numbered-list subsystems (future plot plan, OOC
@@ -229,15 +233,15 @@ function executeListEdit(
   list: string[],
   spec: ListEditSpec,
 ): { list: string[] | null; result: string } {
-  const { toolName, noun, capAdvice, maxItems, maxItemChars } = spec
+  const { toolName, noun, capAdvice, maxItems, maxItemChars, ops } = spec
   const capNoun = noun.charAt(0).toUpperCase() + noun.slice(1)
   try {
     const args = JSON.parse(rawArgs) as { op?: unknown; position?: unknown; text?: unknown }
     const op = args.op
-    if (op !== 'append' && op !== 'insert' && op !== 'update' && op !== 'delete') {
+    if (!ops.includes(op as ListOp)) {
       return {
         list: null,
-        result: `error: ${toolName} requires \`op\` to be one of "append","insert","update","delete". ${capNoun} unchanged.`,
+        result: `error: ${toolName} requires \`op\` to be one of ${ops.map((o) => `"${o}"`).join(',')}. ${capNoun} unchanged.`,
       }
     }
     const text = typeof args.text === 'string' ? args.text.trim() : ''
@@ -269,16 +273,18 @@ function executeListEdit(
       return { list: next, result: `ok — appended as entry ${next.length}.` }
     }
     if (op === 'insert') {
-      if (!Number.isInteger(position) || position < 1 || position > list.length + 1) {
+      // Without a position, the entry goes at the end.
+      const at = args.position === undefined ? list.length + 1 : position
+      if (!Number.isInteger(at) || at < 1 || at > list.length + 1) {
         return {
           list: null,
-          result: `error: insert position ${args.position ?? '(missing)'} out of range. Valid: 1..${list.length + 1}. ${capNoun} unchanged.`,
+          result: `error: insert position ${args.position} out of range. Valid: 1..${list.length + 1}. ${capNoun} unchanged.`,
         }
       }
-      const next = [...list.slice(0, position - 1), text, ...list.slice(position - 1)]
+      const next = [...list.slice(0, at - 1), text, ...list.slice(at - 1)]
       return {
         list: next,
-        result: `ok — inserted at position ${position}. ${capNoun} now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
+        result: `ok — inserted at position ${at}. ${capNoun} now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
       }
     }
     if (op === 'update') {
@@ -292,17 +298,17 @@ function executeListEdit(
       next[position - 1] = text
       return { list: next, result: `ok — updated entry ${position}.` }
     }
-    // op === 'delete'
+    // op === 'delete' or 'remove'
     if (!Number.isInteger(position) || position < 1 || position > list.length) {
       return {
         list: null,
-        result: `error: delete position ${args.position ?? '(missing)'} out of range. Valid: 1..${list.length}. ${capNoun} unchanged.`,
+        result: `error: ${op} position ${args.position ?? '(missing)'} out of range. Valid: 1..${list.length}. ${capNoun} unchanged.`,
       }
     }
     const next = [...list.slice(0, position - 1), ...list.slice(position)]
     return {
       list: next,
-      result: `ok — deleted entry ${position}. ${capNoun} now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
+      result: `ok — ${op === 'remove' ? 'removed' : 'deleted'} entry ${position}. ${capNoun} now has ${next.length} entr${next.length === 1 ? 'y' : 'ies'}.`,
     }
   } catch (err) {
     return { list: null, result: `error: ${err instanceof Error ? err.message : String(err)}` }
@@ -536,9 +542,10 @@ export function executeTool(
     const edit = executeListEdit(rawArgs, plot, {
       toolName: 'future_plot_plan',
       noun: 'plan',
-      capAdvice: 'Delete a past-event or stale entry instead.',
+      capAdvice: 'Remove an entry the story has reached or left behind first.',
       maxItems: MAX_PLOT_ITEMS,
       maxItemChars: MAX_PLOT_ITEM_CHARS,
+      ops: ['insert', 'remove'],
     })
     return edit.list
       ? { data: { state, plot: edit.list, memory, ooc }, result: edit.result }
@@ -582,6 +589,7 @@ export function executeTool(
       capAdvice: 'Delete a completed or stale entry instead.',
       maxItems: MAX_OOC_ITEMS,
       maxItemChars: MAX_OOC_ITEM_CHARS,
+      ops: ['append', 'insert', 'update', 'delete'],
     })
     return edit.list
       ? { data: { state, plot, memory, ooc: edit.list }, result: edit.result }

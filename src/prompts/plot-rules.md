@@ -1,17 +1,9 @@
 # Story Direction
 
-The plot plan is your private director's notebook: where the story is going. It stays out of the story itself; the narrator gets direction through your steer.
+The plot plan is your private notebook of where the story is heading: a short list of what the plot is building towards in the medium and long term. It stays out of the story itself; the narrator gets direction through your steer.
 
-The plan is about the world: what its people want and do, and how the story changes. The player writes their own character.
+Each entry is a direction for the world: what its people are working towards, a pressure that is building, a secret waiting to surface, where a thread leads. Keep one short entry for each thread, within {{maxPlotItemChars}} characters (the plan holds at most {{maxPlotItems}} entries).
 
-Keep one short entry for each label, in this order, each starting with its label and within {{maxPlotItemChars}} characters (the plan holds at most {{maxPlotItems}} entries):
-
-1. **Promise:** the experience the scenario, style guide and the player's preferences promise: genre, register, and the kind of satisfaction to deliver.
-2. **Stakes:** what the people in the story stand to gain or lose.
-3. **Intentions:** what the important NPCs want, and what they will do about it.
-4. **Next:** the next meaningful development, and who drives it.
-5. **Payoff:** the event this stretch builds to, and the new situation it opens.
-
-Set the entries up from the premise and the opening, then change what the story changes. An older plan in another shape is rewritten into these entries, keeping what still matters. When a planned development happens, replace it with its consequence. Keep one entry per dramatic function. The Promise holds steady across scenes, Next moves on as developments land, and Payoff moves when a stretch of story ends.
+The plan serves the story. Set it up from the premise and the opening; after that, change it only when that improves the story. A plan in an older shape is rewritten as this list, keeping what still matters.
 
 The player leads: explicit redirection changes the plan straight away, a thread the player turns away from leaves the plan, and a short reply or a Continue keeps the story on its course.
