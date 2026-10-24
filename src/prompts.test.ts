@@ -10,14 +10,14 @@ import {
 } from './prompts'
 
 describe('capability-aware prompts', () => {
-  it('keeps the turn reminder to a pointer at the latest input', () => {
-    expect(buildTurnReminder()).toBe("Reply to the player's latest input.")
+  it('keeps the turn reminder to one storytelling line', () => {
+    expect(buildTurnReminder()).toBe('Tell what happens next.')
   })
 
   it('keeps the opening and Continue directives to the player’s short request', () => {
     expect(buildNewAdventureBootstrap()).toBe('(OOC: Begin the story.)')
     expect(CONTINUE_DIRECTIVE).toBe(
-      '(OOC: Continue: move the story on to its next meaningful development, in a full turn.)',
+      '(OOC: Continue: carry the story on to its next meaningful development.)',
     )
   })
 
@@ -25,8 +25,8 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('Developments grow out of what is already in play')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('what is set up pays off')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('the story moves on to its consequences')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('Stop on the moment it lands')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('The last sentence is something a camera would see.')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('Give the consequences room to play out')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('close on a moment a camera would see')
     // NPCs press in their own words rather than offering the player a menu.
     expect(DEFAULT_SYSTEM_PROMPT).toContain("leave the player's options to the player")
   })

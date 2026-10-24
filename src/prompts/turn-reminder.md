@@ -1,1 +1,1 @@
-Reply to the player's latest input.
+Tell what happens next.
