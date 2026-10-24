@@ -118,7 +118,7 @@ export function buildPlotterInstruction(
   const steers = flags.includePlotOutline
   const recalls = flags.includeMemory
   const openingSteps = [
-    'Set up the records from the scenario: who and what the story starts with.',
+    'Set up the records from the scenario: the people, places and things the story starts with, and what each person wants.',
     ...(steers ? ['Write the plan: where the story is heading in the medium and long term.'] : []),
     ...(recalls
       ? [`Recall with \`${RECALL_MEMORY_TOOL.name}\` the people, places and things the opening involves.`]
@@ -128,7 +128,7 @@ export function buildPlotterInstruction(
       : []),
   ]
   const replySteps = [
-    `Record what the last reply established that the records (the ${reads.join(' / ')} results) don’t yet hold.`,
+    `Record only what the last reply established that is important for future continuity and the records (the ${reads.join(' / ')} results) don’t yet hold.`,
     steers
       ? 'Pick the next meaningful development, moving towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings, and change the plan when you have a good idea that improves the story.'
       : 'Work out how the world answers the player, and record the changes that follow.',
@@ -139,7 +139,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development. When recent replies have circled one moment or one image, steer somewhere fresh.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development. The player’s character does only what the player’s input says or implies.`,
         ]
       : []),
   ]

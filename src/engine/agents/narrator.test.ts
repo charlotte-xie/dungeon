@@ -547,6 +547,10 @@ describe('buildPlotterInstruction', () => {
     // reply, after its updates and recalls.
     expect(all).toContain('Deliver what the story has set up')
     expect(all).toContain('Steer every reply')
+    // Steers written about the player became third-person narration and
+    // moves the player never made.
+    expect(all).toContain('The player’s character does only what the player’s input says or implies')
+    expect(all).toContain('important for future continuity')
     expect(all).toContain('then `recall_memory`, then `steer`')
     expect(all).not.toContain('reply with only the word DONE')
     // Choice wording pulls models towards ending on a choice.
@@ -569,6 +573,7 @@ describe('buildPlotterInstruction', () => {
   it('sets the records and the plan up from the scenario on the opening', () => {
     const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, true)
     expect(opening).toContain('Set up the records from the scenario')
+    expect(opening).toContain('what each person wants')
     expect(opening).toContain('Write the plan: where the story is heading in the medium and long term')
     expect(opening).toContain('Steer the opening with `steer`')
     expect(opening).toContain('then `recall_memory`, then `steer`')

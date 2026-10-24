@@ -7,12 +7,14 @@ Prompt changes are checked against these.
 - Does the writing. Nothing else.
 - No reasoning, no tools. It writes from the story, the Plotter's updates, recalled memories and steer.
 - Follows the steer.
+- The player's character does only what the player's input says or implies.
 - Never decides what the player's character thinks, feels, says or chooses.
 - Uses the player's exact words when given; narrates the gist of their speech without inventing a quote.
 - British/international English, second person, present tense.
 - Stays in the story: the player hears from the world, never from the DM.
 - Clean, vivid prose: no telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
 - No recapping: a remembered fact is mentioned only when the moment makes it newly relevant.
+- Fresh images each reply: a gesture or phrase used once is spent.
 
 ## Plotter
 
@@ -31,6 +33,10 @@ Prompt changes are checked against these.
   - Not a labelled structure: Promise, Question, Stakes and Payoff planned the player's decision, which waited in the plan and came back as NPC ultimatums.
 - The plan and steers are about the world: an NPC pursues a goal, a transition to a new scene, the important consequences of the player's last action. They never set up a choice for the player.
 - Secrets stay hidden until the story reveals them.
+- Sets up what each NPC wants from the opening, so they have something to pursue.
+- Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
+- Records only what is important for future continuity: catalogued details came back as repetition.
+- Steers include the player's character only as the player's input says or implies.
 
 ## Story
 
@@ -62,6 +68,7 @@ Prompt changes are checked against these.
 
 - OOC direction, in (parentheses) or [brackets], is authoritative and applied without mention in the story.
 - "NEXT REPLY ONLY" guidance applies to one reply. Standing preferences hold until the player changes them.
+- Standing preferences are stored as targets ("replies of about two short paragraphs"), not changes ("shorter").
 
 ## Prompts
 
@@ -88,6 +95,9 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - The same choice re-offered for six turns.
 - Replies ending on "…waiting".
 - Micro actions: a fight running reply after reply, each ending on the next attack.
+- The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
+- The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".
+- Third-person narration copied from a steer written about the player: "They finish the drinks".
 - Foreshadowing that never delivers.
 - Replies shrinking every turn under "keep replies a bit shorter".
 - The Plotter writing prose instead of steering.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { executeTool, FUTURE_PLOT_PLAN_TOOL } from './tools'
+import { executeTool, FUTURE_PLOT_PLAN_TOOL, UPDATE_OOC_TOOL } from './tools'
 
 describe('tool execution boundaries', () => {
   it('rejects an unsafe update_state atomically', () => {
@@ -37,6 +37,8 @@ describe('tool execution boundaries', () => {
     )
     expect(deleted.data.ooc).toEqual(['No character death without consent.'])
     expect(deleted.result).toContain('OOC list now has 1 entry')
+    // "Shorter" recorded word for word kept shrinking replies.
+    expect(UPDATE_OOC_TOOL.description).toContain('standing target')
   })
 
   it('edits memory facets surgically by dotted path', () => {

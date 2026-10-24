@@ -19,7 +19,7 @@ Modern, dialogue-led and slow-burning. There are no monsters to fight, so the st
 3. A light, personal line in character, for example `"You've been here since seven, haven't you?" I say, perching on the edge of her desk.`
 4. Continue.
 5. A bold move: ask Sam for a drink after work, with a pretext.
-6. A small gesture with a length preference: `… (OOC: keep replies a bit shorter.)`
+6. A small gesture, for example `"Then stop reaching for it," I say, and touch my glass to hers.`
 7. Continue.
 
 ## What it exercises
@@ -31,10 +31,11 @@ Modern, dialogue-led and slow-burning. There are no monsters to fight, so the st
 - **Repetition:** the same gesture or closing image reused reply after reply.
 - **Point of view:** the narration stays in the second person ("you"), even when the player and Sam move together.
 - **The plan:** does it gain directions from the people (Margaret, the studio, Sam's past), or sit unchanged?
-- **OOC:** "a bit shorter" should be recorded as a standing target, and replies shouldn't keep shrinking.
+- **Length:** standard replies should sit around two or three paragraphs.
 
 ## Results
 
 | Commit | Findings |
 |---|---|
 | b850a0c | Strong prose and subtext; Sam's lines carry double meaning ("I'll keep the kettle on"), and no reply ended on a choice or ultimatum. But the story circled one evening: the same images closed reply after reply ("the corner of her mouth lifts" in four replies; "Outside, a bus hisses… Inside, the evening has narrowed to…" in four), and on Continue Sam repeated her "newly single, second mug" confession. The plan kept its two vague opening entries for six turns and never brought in Margaret, the competition or the studio as developments. The narration slipped into the third person ("They finish the drinks", "neither of them has quite named"), credited the player with feelings, and twice ended waiting on the player ("the question implicit in the pause"; "a pause, the kind that invites reply"). "Keep replies a bit shorter" was recorded word for word rather than as a standing target, though length held (272 words before, 122 and 134 after). |
+| After 5da8176: NPC goals at the opening, records only for continuity, the player acts only from their input, fresh images, OOC targets on the tool | Sam and Margaret had `wants` from the opening, and the story moved: Sam's radical scheme, Margaret stepping in on a Continue ("that's us publicly in it now"), a time skip to the pub. No third-person slips. Still: the plan opened as themes ("Build slow-burn romance…") and gained one scene event; the narrator gave the player feelings three times ("something neither of you has named yet"); two replies ended on Sam's question ("Walk back with me?"); one "Outside… Inside…" coda returned. "Keep replies a bit shorter" was still stored word for word, the steers repeated it ("Keep the reply to two short paragraphs"), and replies shrank 236 → 82 → 46 words, a regression on b850a0c's 272 → 122 → 134. |

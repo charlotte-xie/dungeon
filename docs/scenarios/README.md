@@ -125,7 +125,7 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 - Micro actions: a fight or exchange running reply after reply, each ending on the next attack or the next line.
 - A development replayed: the same thing lost, found or revealed twice.
 - Continue that adds a beat instead of reaching a meaningful development: an outcome, a transition to a new scene, a consequence landing.
-- Length: the brief asks for two or three paragraphs. Note replies of one paragraph or four and more, and replies shrinking after a length preference.
+- Length: the brief asks for two or three paragraphs. Note standard replies of one paragraph, or of four and more.
 
 **The player's character**
 

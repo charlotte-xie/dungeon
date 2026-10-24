@@ -36,6 +36,11 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('follow their own goals, with their own personality and subtext')
   })
 
+  it('leaves the player’s character to the player, and keeps each reply fresh', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain("they do only what the player's input says or implies")
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('a gesture or phrase used once is spent')
+  })
+
   it('measures length preferences against a full reply', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('any length preference is measured against that')
   })
@@ -58,7 +63,7 @@ describe('capability-aware prompts', () => {
   it('keeps the plan a list of where the story is heading, with no structure to copy', () => {
     const rules = buildPlotRules(10, 500)
     expect(rules).toContain('in the medium and long term')
-    expect(rules).toContain('Each entry is a direction for the world')
+    expect(rules).toContain('Each entry is a development the world will bring about')
     // Changes are optional: only a good idea that improves the story.
     expect(rules).toContain('change it only when that improves the story')
     // Labelled entries and a worked example planned the player's decision,
