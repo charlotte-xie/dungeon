@@ -12,7 +12,10 @@ import {
 
 describe('capability-aware prompts', () => {
   it('opens on the player’s move only when there is one', () => {
-    expect(buildTurnReminder(true)).toBe(
+    expect(buildTurnReminder('continue')).toBe(
+      'Carry on from where the last reply ended, advancing the story to its next meaningful development.',
+    )
+    expect(buildTurnReminder('player')).toBe(
       'Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development.',
     )
   })
@@ -53,7 +56,7 @@ describe('capability-aware prompts', () => {
     )
     expect(DEFAULT_SYSTEM_PROMPT).toContain('a question, tactic, gesture or phrase used once is spent')
     // Fiction, not explanation.
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('let motives and meaning show through them, unexplained')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('let motives, meaning and mood show through it, never named or explained')
     // An answered question or met situation is settled, not re-asked.
     expect(DEFAULT_SYSTEM_PROMPT).toContain('or the player has answered it or let it pass, the story moves on from it')
   })

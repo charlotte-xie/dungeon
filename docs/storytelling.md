@@ -16,7 +16,7 @@ Prompt changes are checked against these.
 - Stays in the story: the player hears from the world, never from the DM.
 - Clean, vivid prose: no telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
 - No recapping: a remembered fact is mentioned only when the moment makes it newly relevant.
-- Writes fiction, not explanation: what happens and what people do and say, with motives and meaning left to show through them.
+- Writes fiction, not explanation: what happens and what people do and say, with motives, meaning and mood left to show through them, never named.
 - Fresh each reply: a question, tactic, gesture or phrase used once is spent.
 
 ## Plotter
@@ -44,7 +44,7 @@ Prompt changes are checked against these.
 - Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
 - Records only what is important for future continuity: catalogued details came back as repetition.
 - Steers include the player's character only as the player's input says or implies, and leave their feelings to the player.
-- Steers say only what happens, as plain events: no reasons or commentary ("to gain time for himself", "This advances the deadline pressure").
+- Steers say only what happens, as plain events: no reasons or commentary ("to gain time for himself", "This advances the deadline pressure"). They may give mood or style guidance; the narrator shows it and never names it.
 
 ## Story
 
@@ -58,6 +58,7 @@ Prompt changes are checked against these.
 - Never end on a prompt for the player or hand the story back for them to settle: a question (an NPC's included), a list of options, someone or something waiting, or narration pointing at the player's turn. Bring the story to a point where the player can take it on.
   - Prompts avoid "for the player to respond to" framing, which led models to write the prompt out.
 - Continue is a whole, full turn. Players press it when they think the story hasn't advanced enough: move faster to a meaningful development.
+  - The player's last move was played out in the last reply: Continue carries on from where that reply ended, advancing the story, and never retells it.
 - Continuity is very important. If the player is carrying a dagger in one scene, it shouldn't transform into an axe without a good reason
 - Deliver the kind of story the scenario and style guide promise, in their register.
 - Developments grow out of what's already in play, not new threats from nowhere.
@@ -107,6 +108,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - Replies ending on "…waiting".
 - Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
 - Micro actions: a fight running reply after reply, each ending on the next attack.
+- Naming the mood instead of showing it: "The psychological tension sharpens.", often repeated.
 - Explaining instead of telling: "It sounds like a practical offer. It also sounds like an invitation…", "…if you leave him, the creature will be on you next."
 - The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".

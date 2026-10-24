@@ -3,6 +3,7 @@ import {
   buildContextInjectionMessages,
   buildMemoryPayload,
   buildNarratorMessages,
+  buildNarratorNotesMessage,
   buildNarratorSections,
   buildPlotterGuidance,
   buildPlotterMessages,
@@ -340,6 +341,14 @@ describe('buildPlotterMessages layout', () => {
     expect(p.chronicle).toEqual(n.chronicle)
     // System prompt, content stance, and scenario come first in both.
     expect(p.system.slice(0, 3)).toEqual(n.system.slice(0, 3))
+  })
+})
+
+describe('buildNarratorNotesMessage', () => {
+  it('has the narrator show a steer’s mood rather than name it', () => {
+    const notes = buildNarratorNotesMessage(ALL_FLAGS)
+    expect(notes?.content).toContain('sometimes with a mood or style to aim for')
+    expect(notes?.content).toContain('showing any mood rather than naming it')
   })
 })
 

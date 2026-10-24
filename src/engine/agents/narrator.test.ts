@@ -577,7 +577,7 @@ describe('buildPlotterInstruction', () => {
   })
 
   it('sets the records and the plan up from the scenario on the opening', () => {
-    const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, true)
+    const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'bootstrap')
     expect(opening).toContain('Set up the records from the scenario')
     expect(opening).toContain('what each person wants')
     expect(opening).toContain('Write the plan: long-term ideas for where the story is heading')
@@ -591,9 +591,20 @@ describe('buildPlotterInstruction', () => {
       { ...CTX.flags, includePlotOutline: false },
       CTX.initialData,
       4000,
-      true,
+      'bootstrap',
     )
     expect(noPlan).not.toMatch(/plan|steer/i)
     expect(noPlan).toContain('reply with only the word DONE')
+  })
+
+  it('carries on from the last reply on a Continue, without going back to the last move', () => {
+    const continuing = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'continue')
+    expect(continuing).toContain('The player has handed this reply to you with Continue')
+    expect(continuing).toContain('Pick the next meaningful development from where the last reply ended')
+    // Pointing at the player's last action had steers retell it.
+    expect(continuing).not.toContain('last action')
+    expect(buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)).toContain(
+      'the important consequences of the player’s last action land',
+    )
   })
 })

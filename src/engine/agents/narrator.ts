@@ -43,6 +43,7 @@ import type {
   StoryData,
   TraceEvent,
   Turn,
+  TurnKind,
 } from '../types'
 
 export interface NarratorContext {
@@ -107,9 +108,12 @@ export function buildPlotterInstruction(
   data: StoryData,
   stateCleanupThreshold: number,
   // The opening has no reply to record from: the Plotter sets the records
-  // and the plan up from the scenario instead.
-  opening = false,
+  // and the plan up from the scenario instead. On a Continue the player's
+  // last move was played out in the last reply, so nothing points back at it.
+  kind: TurnKind = 'player',
 ): string {
+  const opening = kind === 'bootstrap'
+  const continuing = kind === 'continue'
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
   const reads = enabled.map((s) => s.checkTool.name)
   const updates = enabled.map((s) => `\`${s.updateTool.name}\``)
@@ -129,9 +133,13 @@ export function buildPlotterInstruction(
   ]
   const replySteps = [
     `Record only what the last reply established that matters to the plot or its continuity and the records (the ${reads.join(' / ')} results) don’t yet hold.`,
-    steers
-      ? 'Pick the next meaningful development, moving towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
-      : 'Work out how the world answers the player, and record the changes that follow.',
+    steers && continuing
+      ? 'The player has handed this reply to you with Continue: their last move was played out in the last reply, and the world moves on without them. Pick the next meaningful development from where the last reply ended, moving towards where the plan is heading: an NPC pursues their goal, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development is an event that leaves the story somewhere new. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
+      : steers
+        ? 'Pick the next meaningful development, moving towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
+        : continuing
+          ? 'Work out how the world moves on from where the last reply ended, and record the changes that follow.'
+          : 'Work out how the world answers the player, and record the changes that follow.',
     ...(recalls
       ? [
           `Recall with \`${RECALL_MEMORY_TOOL.name}\` the remembered people, places and things the reply involves, so the narrator keeps them consistent.`,
@@ -265,7 +273,7 @@ export async function runNarrator(
         ctx.flags,
         data,
         ctx.stateCleanupThreshold,
-        ctx.history.at(-1)?.kind === 'bootstrap',
+        ctx.history.at(-1)?.kind,
       ),
     })
     const pushToolResult = (call: ModelToolCall, content: string) => {
@@ -444,7 +452,7 @@ export async function runNarrator(
         reasoningTokens - plotterReasoningTokens || undefined,
       )
     }
-    pushNudge(narratorMessages, buildTurnReminder(ctx.history.at(-1)?.kind === 'player'))
+    pushNudge(narratorMessages, buildTurnReminder(ctx.history.at(-1)?.kind))
   }
 
   return {

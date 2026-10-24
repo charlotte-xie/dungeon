@@ -9,6 +9,7 @@ import defaultScenario from './prompts/default-scenario.md?raw'
 import newAdventureBootstrapTemplate from './prompts/new-adventure-bootstrap.md?raw'
 import reviserSystem from './prompts/reviser.md?raw'
 import continueDirective from './prompts/continue-directive.md?raw'
+import type { TurnKind } from './engine/types'
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
@@ -28,10 +29,17 @@ export const CONTINUE_DIRECTIVE = continueDirective.trim()
 // guidance. Restating it here would invite a rule-by-rule check every turn,
 // and this tail is never cached.
 // After the player's own input, the reply opens by telling what they did
-// and said; an opening or a Continue has no move to tell.
-export function buildTurnReminder(playerMove = false): string {
+// and said. On a Continue their last move was told in the last reply, so the
+// story carries on from there; an opening has no move to tell.
+export function buildTurnReminder(kind?: TurnKind): string {
   const reminder = turnReminder.trim()
-  return playerMove ? `Open with what the player did, briefly, and what they said, in their exact words. ${reminder}` : reminder
+  if (kind === 'player') {
+    return `Open with what the player did, briefly, and what they said, in their exact words. ${reminder}`
+  }
+  if (kind === 'continue') {
+    return 'Carry on from where the last reply ended, advancing the story to its next meaningful development.'
+  }
+  return reminder
 }
 
 export const NSFW_ON_PROMPT =
