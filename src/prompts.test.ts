@@ -52,6 +52,8 @@ describe('capability-aware prompts', () => {
       'never write them for the player, alone or as something they share with someone else',
     )
     expect(DEFAULT_SYSTEM_PROMPT).toContain('a question, tactic, gesture or phrase used once is spent')
+    // Fiction, not explanation.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('let motives and meaning show through them, unexplained')
     // An answered question or met situation is settled, not re-asked.
     expect(DEFAULT_SYSTEM_PROMPT).toContain('or the player has answered it or let it pass, the story moves on from it')
   })

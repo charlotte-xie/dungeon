@@ -548,6 +548,8 @@ describe('buildPlotterInstruction', () => {
     expect(all).toContain('Deliver what the story has set up')
     expect(all).toContain('Steer every reply')
     expect(all).toContain('naming the player’s character as the records do')
+    // Steers explaining reasons pulled the narration into explanation.
+    expect(all).toContain('as plain events with no reasons or commentary')
     // Steers written about the player became third-person narration and
     // moves the player never made.
     expect(all).toContain('The player’s character does only what the player’s input says or implies, and their feelings are the player’s own')

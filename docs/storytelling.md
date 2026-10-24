@@ -16,6 +16,7 @@ Prompt changes are checked against these.
 - Stays in the story: the player hears from the world, never from the DM.
 - Clean, vivid prose: no telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
 - No recapping: a remembered fact is mentioned only when the moment makes it newly relevant.
+- Writes fiction, not explanation: what happens and what people do and say, with motives and meaning left to show through them.
 - Fresh each reply: a question, tactic, gesture or phrase used once is spent.
 
 ## Plotter
@@ -43,6 +44,7 @@ Prompt changes are checked against these.
 - Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
 - Records only what is important for future continuity: catalogued details came back as repetition.
 - Steers include the player's character only as the player's input says or implies, and leave their feelings to the player.
+- Steers say only what happens, as plain events: no reasons or commentary ("to gain time for himself", "This advances the deadline pressure").
 
 ## Story
 
@@ -105,6 +107,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - Replies ending on "…waiting".
 - Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
 - Micro actions: a fight running reply after reply, each ending on the next attack.
+- Explaining instead of telling: "It sounds like a practical offer. It also sounds like an invitation…", "…if you leave him, the creature will be on you next."
 - The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".
 - Third-person narration copied from a steer written about the player: "They finish the drinks".
