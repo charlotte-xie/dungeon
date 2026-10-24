@@ -10,12 +10,13 @@ Prompt changes are checked against these.
 - The player's character does only what the player's input says or implies.
 - Never decides what the player's character thinks, feels, says or chooses.
 - The player's emotions and interiority are their own: never written for them, alone or shared ("something neither of you has named").
+- Opens by narrating what the player did and said, briefly, then plays out what follows: it reads as a story.
 - Uses the player's exact words when given; narrates the gist of their speech without inventing a quote.
 - British/international English, second person, present tense.
 - Stays in the story: the player hears from the world, never from the DM.
 - Clean, vivid prose: no telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
 - No recapping: a remembered fact is mentioned only when the moment makes it newly relevant.
-- Fresh images each reply: a gesture or phrase used once is spent.
+- Fresh each reply: a question, tactic, gesture or phrase used once is spent.
 
 ## Plotter
 
@@ -26,10 +27,13 @@ Prompt changes are checked against these.
 - Keeps the records: state, memory, plot plan, OOC preferences.
 - Steers every reply: what happens in the world, such as an NPC pursuing a goal, a transition to the next scene, or the consequences of a player action.
 - Maintains continuity by reminding the narrator of key details
-- Memory holds durable facts about people, places and things, as present-tense standalone sentences. The current scene stays out.
+- Memory holds durable facts about people, places and things, each a single complete present-tense sentence that means something on its own, with no implied context: no fragments. The current scene stays out.
+- Characters' appearance and what they are wearing are recorded. Secrets are a map, one per secret, so each goes once the story reveals it.
+- Facets that gather facts (knowledge, possessions, relationships) are maps of short items, each an important, plot-relevant point: not every observation, and not one long string recounting every scene.
 - The player's memory entry has no wants or bond: the player's intent is theirs.
 - Records and steers call the player's character by their name once the scenario or the player gives one, and "you" until then, as the story does; never "the player". Memory keys the character the same way. "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table").
-- The plot plan is a private list of where the story is heading in the medium and long term, never revealed. It changes when the story takes a different direction.
+- The plot plan is a private list of long-term story ideas only, never revealed. It changes when the story takes a different direction.
+- The next step goes in the steer, never the plan.
 - Plan changes are optional: the Plotter inserts a good idea that improves the story, and removes an entry once it is completed or abandoned.
   - Insert and remove only: rewriting entries in place turned medium-term directions into notes on the current scene.
   - Not a labelled structure: Promise, Question, Stakes and Payoff planned the player's decision, which waited in the plan and came back as NPC ultimatums.
@@ -56,6 +60,7 @@ Prompt changes are checked against these.
 - Deliver the kind of story the scenario and style guide promise, in their register.
 - Developments grow out of what's already in play, not new threats from nowhere.
 - Once a planned development happens, it gives way to its consequence; it is never replayed.
+- Once the player has answered a question or met a situation, or let it pass with a Continue, it's settled: the story moves on to what that brings, and no NPC asks again or repeats the same move.
 - Routine passes in a clause; a simple task doesn't sprout a chain of errands.
 - Quiet scenes are fine when something moves beneath them.
 - Respect the player's steering: explicit redirection wins, and a thread they turn away from stays dropped rather than returning in disguise. Brief replies and Continue aren't rejection.
@@ -70,7 +75,8 @@ Prompt changes are checked against these.
 
 - OOC direction, in (parentheses) or [brackets], is authoritative and applied without mention in the story.
 - "NEXT REPLY ONLY" guidance applies to one reply. Standing preferences hold until the player changes them.
-- Standing preferences are stored as targets ("replies of about two short paragraphs"), not changes ("shorter").
+- The OOC list holds only direction the player has given, each as a standing preference ("Don't have NPCs ask repetitive questions").
+  - A length example on the OOC tool led the Plotter to record the brief's own "two or three paragraphs" as a preference the player never gave.
 
 ## Prompts
 
@@ -95,6 +101,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - Ending on a prompt: "…waiting for your answer", "urging you to step through or turn back", "as though the vault itself is pressing you to decide".
 - NPCs using dialogue to present an X-or-Y choice: "Name yourself or bleed.", "Answer, or return what you hold."
 - The same choice re-offered for six turns.
+- An NPC repeating a move the player has already met: Thorne steering them away from the same passage four replies running.
 - Replies ending on "…waiting".
 - Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
 - Micro actions: a fight running reply after reply, each ending on the next attack.

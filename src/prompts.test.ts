@@ -11,6 +11,12 @@ import {
 } from './prompts'
 
 describe('capability-aware prompts', () => {
+  it('opens on the player’s move only when there is one', () => {
+    expect(buildTurnReminder(true)).toBe(
+      'Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development.',
+    )
+  })
+
   it('keeps the turn reminder to one storytelling line', () => {
     expect(buildTurnReminder()).toBe(
       'Play out what follows, including the next meaningful story development.',
@@ -31,6 +37,8 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain(
       'play out the consequences, including the next meaningful story development',
     )
+    // The player's move is told first, so the reply reads as a story.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('When the player acts or speaks, open by telling it, briefly')
     // Scripting the last line turned a fight into attack after attack.
     expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/closes? on|camera|last line/i)
     // People follow their own goals rather than waiting on the player.
@@ -43,7 +51,9 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain(
       'never write them for the player, alone or as something they share with someone else',
     )
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('a gesture or phrase used once is spent')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('a question, tactic, gesture or phrase used once is spent')
+    // An answered question or met situation is settled, not re-asked.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('or the player has answered it or let it pass, the story moves on from it')
   })
 
   it('measures length preferences against a full reply', () => {
@@ -73,8 +83,10 @@ describe('capability-aware prompts', () => {
 
   it('keeps the plan a list of where the story is heading, with no structure to copy', () => {
     const rules = buildPlotRules(10, 500)
-    expect(rules).toContain('in the medium and long term')
-    expect(rules).toContain('Each entry is a development the world will bring about')
+    expect(rules).toContain('private notebook of long-term story ideas')
+    // Next-step beats belong in the steer, not the plan.
+    expect(rules).toContain('the next step goes in your steer, not the plan')
+    expect(rules).toContain('Each entry is a long-term development the world will bring about')
     // Changes are optional: only a good idea that improves the story.
     expect(rules).toContain('change it only when that improves the story')
     // Labelled entries and a worked example planned the player's decision,
@@ -91,6 +103,19 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('in the story they are always "you"')
     // "The player" in the records leaked into dialogue.
     expect(rules).not.toMatch(/saw the player|wary of the player|The player is lean/)
+  })
+
+  it('keeps gathered facts as short items, each one that will matter later', () => {
+    const rules = buildMemoryRules()
+    // One long knowledge string recounting every scene was the failure.
+    expect(rules).toContain('is a map with one short item for each fact')
+    expect(rules).toContain('It holds only points that matter to the plot, not every observation.')
+    expect(rules).toContain('"constable": "Hesta saw Rook argue with a constable."')
+    // Single complete sentences, never fragments ("30 pounds").
+    expect(rules).toContain('a single complete present-tense sentence that names its subject')
+    expect(rules).toContain('"money": "Rook has 30 pounds."')
+    expect(rules).toContain('`appearance`, `wearing`')
+    expect(rules).toContain('`secrets` (a map')
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {

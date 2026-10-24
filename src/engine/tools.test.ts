@@ -37,8 +37,10 @@ describe('tool execution boundaries', () => {
     )
     expect(deleted.data.ooc).toEqual(['No character death without consent.'])
     expect(deleted.result).toContain('OOC list now has 1 entry')
-    // "Shorter" recorded word for word kept shrinking replies.
-    expect(UPDATE_OOC_TOOL.description).toContain('standing target')
+    // The list is the player's own direction; a length example on the tool
+    // got the brief's own guidance recorded as a preference.
+    expect(UPDATE_OOC_TOOL.description).toContain('Each entry is direction the player has given')
+    expect(UPDATE_OOC_TOOL.description).not.toMatch(/paragraph|shorter/i)
   })
 
   it('edits memory facets surgically by dotted path', () => {
@@ -228,7 +230,7 @@ describe('tool execution boundaries', () => {
     expect(removed.data.plot).toEqual(['A rival arrives.', 'The order returns.'])
     expect(removed.result).toContain('removed entry 2')
     // The tool says when: a good idea in, a completed or abandoned entry out.
-    expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('`insert` a good idea')
+    expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('`insert` a long-term story idea')
     expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('once it is completed or abandoned')
     // Rewriting in place turned directions into notes on the current scene.
     for (const op of ['update', 'append', 'delete']) {

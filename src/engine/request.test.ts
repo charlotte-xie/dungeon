@@ -131,9 +131,11 @@ describe('buildNarratorMessages layout', () => {
     const [input, ooc, reminder] = messages.slice(-3)
     expect(input).toMatchObject({ role: 'user', content: 'I enter the mill.' })
     expect(ooc).toEqual({ role: 'system', content: '# OOC instructions\n\n1. Keep replies short.' })
+    // After the player's own input, the reply opens by telling their move.
     expect(reminder).toEqual({
       role: 'system',
-      content: 'Play out what follows, including the next meaningful story development.',
+      content:
+        'Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development.',
     })
     for (const m of messages) {
       for (const value of PLOTTER_ONLY) expect(m.content).not.toContain(value)
@@ -146,7 +148,8 @@ describe('buildNarratorMessages layout', () => {
     expect(ooc.role).toBe('system')
     expect(reminder).toMatchObject({
       role: 'user',
-      content: '(OOC: Play out what follows, including the next meaningful story development.)',
+      content:
+        '(OOC: Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development.)',
     })
   })
 

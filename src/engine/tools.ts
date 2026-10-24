@@ -44,7 +44,7 @@ export const UPDATE_STATE_TOOL: ModelToolDefinition = {
 export const FUTURE_PLOT_PLAN_TOOL: ModelToolDefinition = {
     name: 'future_plot_plan',
     description:
-      `Change the private plot plan, one operation per call: \`insert\` a good idea for where the story is heading, or \`remove\` an entry once it is completed or abandoned. Positions are 1-indexed. At most ${MAX_PLOT_ITEMS} entries of ${MAX_PLOT_ITEM_CHARS} characters.`,
+      `Change the private plot plan, one operation per call: \`insert\` a long-term story idea, or \`remove\` an entry once it is completed or abandoned. Positions are 1-indexed. At most ${MAX_PLOT_ITEMS} entries of ${MAX_PLOT_ITEM_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {
@@ -129,7 +129,7 @@ export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_OOC_TOOL: ModelToolDefinition = {
     name: 'update_ooc',
     description:
-      `Edit the list of the player's standing OOC instructions, one operation per call: \`append\` or \`insert\` an entry, \`update\` one, or \`delete\` one. Write each entry as a standing target ("replies of about two short paragraphs", "plenty of dialogue"), not a change from the last reply ("shorter"). Positions are 1-indexed. At most ${MAX_OOC_ITEMS} entries of ${MAX_OOC_ITEM_CHARS} characters.`,
+      `Edit the list of the player's standing OOC instructions, one operation per call: \`append\` or \`insert\` an entry, \`update\` one, or \`delete\` one. Each entry is direction the player has given, written as a standing preference, such as "Don't have NPCs ask repetitive questions". Positions are 1-indexed. At most ${MAX_OOC_ITEMS} entries of ${MAX_OOC_ITEM_CHARS} characters.`,
     parameters: {
       type: 'object',
       properties: {

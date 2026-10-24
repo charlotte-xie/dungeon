@@ -314,9 +314,9 @@ export function StateViewer({
             <p className="hint">
               The DM maintains this JSON via the <code>update_memory</code> tool — the
               fact file of <strong>people, places, and things</strong> that persist across
-              scenes. Each key is a slug; each value is an object of short string facets
-              (<code>is</code>, <code>wants</code>, <code>knows</code>, <code>bond</code>,{' '}
-              <code>secret</code>, …). Edits are additive by dotted path, with rename via{' '}
+              scenes. Each key is a slug; each value is an object of facets, each a single
+              sentence or a map of them (<code>is</code>, <code>wants</code>,{' '}
+              <code>knowledge</code>, <code>bond</code>, <code>secrets</code>, …). Edits are additive by dotted path, with rename via{' '}
               <code>move</code>. Current: {memoryEntries} entr
               {memoryEntries === 1 ? 'y' : 'ies'}.
             </p>
@@ -354,8 +354,8 @@ export function StateViewer({
         {tab === 'plot' && context.includePlotOutline && (
           <>
             <p className="hint">
-              The plotter's private plan: where the story is heading in the medium and
-              long term. The plotter inserts a good idea for the story, and removes an
+              The plotter's private plan: long-term ideas for where the story is
+              heading. The plotter inserts a good idea for the story, and removes an
               entry once it is completed or abandoned. One entry per line;
               leading <code>-</code>, <code>*</code>, or{' '}
               <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,

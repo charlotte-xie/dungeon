@@ -27,8 +27,11 @@ export const CONTINUE_DIRECTIVE = continueDirective.trim()
 // player's input and nothing more: the system prompt carries the story's
 // guidance. Restating it here would invite a rule-by-rule check every turn,
 // and this tail is never cached.
-export function buildTurnReminder(): string {
-  return turnReminder.trim()
+// After the player's own input, the reply opens by telling what they did
+// and said; an opening or a Continue has no move to tell.
+export function buildTurnReminder(playerMove = false): string {
+  const reminder = turnReminder.trim()
+  return playerMove ? `Open with what the player did, briefly, and what they said, in their exact words. ${reminder}` : reminder
 }
 
 export const NSFW_ON_PROMPT =

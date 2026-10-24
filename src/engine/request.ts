@@ -414,7 +414,13 @@ export function buildNarratorSections(args: ModelMessagesArgs): RequestSections 
     system: [...buildFrameMessages(args), ...(notes ? [notes] : [])],
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, true),
-    tail: [...(ooc ? [ooc] : []), directiveMessage(buildTurnReminder(), args.reminderAsSystem)],
+    tail: [
+      ...(ooc ? [ooc] : []),
+      directiveMessage(
+        buildTurnReminder(args.history.at(-1)?.kind === 'player'),
+        args.reminderAsSystem,
+      ),
+    ],
   }
 }
 
