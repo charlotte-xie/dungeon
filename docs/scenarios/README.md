@@ -8,6 +8,7 @@ Each scenario file gives the premise to paste in, a script of inputs, what that 
 |---|---|
 | [Relic hunter](relic-hunter.md) | Fantasy crypt with a rival: fights, NPC ultimatums, plan drift, Continue |
 | [Office romance](office-romance.md) | Modern and dialogue-led: subtext, slow pacing, the player's inner life, life-sim drift |
+| [Derelict beacon](derelict-beacon.md) | Hard science fiction: atmosphere, description and mood from the brief and style guide alone |
 
 ## Before you start
 
@@ -39,7 +40,7 @@ window.fetch = async (url, init) => {
 const args = (c) => { try { return JSON.parse(c.arguments) } catch { return {} } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Endings that may hand the story back: questions, waiting, the player's turn or choice.
-const HAND_BACK = /\?|\b(your|the) (call|move|turn)\b|\bchoices?\b|\b(is|are) yours\b|\byours to\b|up to you|unless you|\bwait(s|ing)?\b|\bawaits?\b|invites? (a )?repl|for (your|an) answer|hold(s)? (its|their|her|his) breath|\bdecid|what (will|do) you/i
+const HAND_BACK = /\?|\b(your|the) (call|move|turn)\b|\bchoices?\b|\b(is|are) yours\b|\byours to\b|up to you|unless you|\bwait(s|ing)?\b|\bawaits?\b|invites? (a )?repl|for (your|an) answer|hold(s)? (its|their|her|his) breath|\bdeci(d|sion)|what (will|do) you/i
 // Dialogue that may offer the player an X-or-Y, anywhere in the reply.
 const OFFER = /[“"][^”"]*(\bchoices?\b|\bor\b)[^”"]*[”"]/i
 // One line per request: the Plotter's calls, plan changes and steer, or the narrator's text.
