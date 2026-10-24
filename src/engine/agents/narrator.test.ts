@@ -518,7 +518,7 @@ describe('buildPlotterInstruction', () => {
     expect(memoryOnly).toContain('reply with only the word DONE')
 
     const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
-    expect(all).toContain('Before the narrator tells what happens next')
+    expect(all).toContain('the narrator writes the next reply from your briefing')
     expect(all).toContain('`update_ooc`')
     // With the plan on, the Plotter delivers a development and steers every
     // reply, after its updates and recalls.
@@ -528,8 +528,11 @@ describe('buildPlotterInstruction', () => {
     expect(all).not.toContain('reply with only the word DONE')
     // Choice wording pulls models towards ending on a choice.
     expect(all).not.toMatch(/decision|choice|decide|choose/i)
-    // Steers end on an event, not on a cue for the player.
-    expect(all).toContain('how far its consequences play out, and the line of dialogue or action by someone in the world that the reply closes on')
+    // Steers play out consequences through the next development, with no
+    // scripted last line: that turned a fight into attack after attack.
+    expect(all).toContain('Pick the next meaningful development')
+    expect(all).toContain('playing out the consequences, including that development')
+    expect(all).not.toMatch(/closes? on|camera|how far/i)
     expect(all).not.toMatch(/respond to/i)
     // Size status rides along; memory's only once it grows long.
     expect(all).toContain('STATUS: state size')

@@ -33,9 +33,11 @@ Prompt changes are checked against these.
 - Dramatic story, not life sim.
 - Keep the story moving: write to a point inviting the player to make real decisions, not react to minor annoyances or bookkeeping details.
   - Prompts express this without "decision" or "choice" wording, which pulls models towards ending on a choice (526c859).
-- Let consequences play out and advance to a natural point for the player to take their next turn.
+- Play out consequences, including the next meaningful story development.
+- Leave the player an open opportunity for where to take the story next.
+  - Prompts don't script how a reply ends. Closing on an NPC's line or action (8cbe3b8) turned a fight into attack after attack for seven replies.
 - We never want to end on a choice ("Do X or Y?").
-- Never end on a prompt for the player: a question, a list of options, or someone waiting for their answer. End on something a camera would see: a line of dialogue or an action by someone other than the player.
+- Never end on a prompt for the player: a question, a list of options, or someone waiting for their answer.
   - Prompts avoid "for the player to respond to" framing, which led models to write the prompt out.
 - Continue is a whole, full turn. Players press it when they think the story hasn't advanced enough: move faster to a meaningful development.
 - Continuity is very important. If the player is carrying a dagger in one scene, it shouldn't transform into an axe without a good reason
@@ -77,6 +79,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - NPCs using dialogue to present an X-or-Y choice: "Name yourself or bleed.", "Answer, or return what you hold."
 - The same choice re-offered for six turns.
 - Replies ending on "…waiting".
+- Micro actions: a fight running reply after reply, each ending on the next attack.
 - Foreshadowing that never delivers.
 - Replies shrinking every turn under "keep replies a bit shorter".
 - The Plotter writing prose instead of steering.

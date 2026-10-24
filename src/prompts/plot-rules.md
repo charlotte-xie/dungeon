@@ -8,7 +8,7 @@ Keep one short entry for each label, in this order, each within {{maxPlotItemCha
 2. **Question:** the dramatic question of this stretch of story.
 3. **Stakes:** why its answer matters to these people.
 4. **Intentions:** what the important NPCs want, and what they will do about it.
-5. **Next:** the development that comes next: an NPC's move, a consequence, a revelation.
+5. **Next:** the next meaningful development: an NPC's move, a consequence, a revelation.
 6. **Payoff:** what resolves or transforms this stretch, and when its scene ends.
 
 Example:

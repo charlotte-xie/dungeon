@@ -117,7 +117,7 @@ export function buildPlotterInstruction(
   const steps = [
     `Record what the last reply established that the records (the ${reads.join(' / ')} results) don’t yet hold.`,
     steers
-      ? 'Pick the reply’s development: what the world does in answer to the player — an NPC acts on what they want, a consequence lands, a secret surfaces, a thread from earlier returns — taken from the plan’s Next where it fits. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings, and update the plan.'
+      ? 'Pick the next meaningful development: what the world does in answer to the player — an NPC acts on what they want, a consequence lands, a secret surfaces, a thread from earlier returns — taken from the plan’s Next where it fits. Deliver what the story has set up, so the development is an event that leaves the story somewhere new; when the player holds back, the world moves on. Record the changes it brings, and update the plan.'
       : 'Work out how the world answers the player, and record the changes that follow.',
     ...(recalls
       ? [
@@ -126,7 +126,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what happens, who makes it happen, how far its consequences play out, and the line of dialogue or action by someone in the world that the reply closes on. A steer describes the world. When recent replies have circled one moment or one image, steer somewhere fresh.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what happens and who makes it happen, playing out the consequences, including that development. A steer describes the world. When recent replies have circled one moment or one image, steer somewhere fresh.`,
         ]
       : []),
   ]
@@ -137,7 +137,7 @@ export function buildPlotterInstruction(
   ]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
-    'The player has acted. Before the narrator tells what happens next, you are acting as the Plotter: you direct the story and keep its records, and the narrator writes from your briefing.\n' +
+    'You are acting as the Plotter: you direct the story and keep its records, and the narrator writes the next reply from your briefing.\n' +
     steps.map((step, i) => `${i + 1}. ${step}`).join('\n') +
     `\n\nReply with tool calls alone: ${order.join(', then ')}. Update a record only where something changed.` +
     (steers ? '' : ' If there is nothing to record, reply with only the word DONE.') +

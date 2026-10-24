@@ -131,7 +131,10 @@ describe('buildNarratorMessages layout', () => {
     const [input, ooc, reminder] = messages.slice(-3)
     expect(input).toMatchObject({ role: 'user', content: 'I enter the mill.' })
     expect(ooc).toEqual({ role: 'system', content: '# OOC instructions\n\n1. Keep replies short.' })
-    expect(reminder).toEqual({ role: 'system', content: 'Tell what happens next.' })
+    expect(reminder).toEqual({
+      role: 'system',
+      content: 'Play out what follows, including the next meaningful story development.',
+    })
     for (const m of messages) {
       for (const value of PLOTTER_ONLY) expect(m.content).not.toContain(value)
     }
@@ -141,7 +144,10 @@ describe('buildNarratorMessages layout', () => {
     const messages = buildNarratorMessages(args([playerTurn('t1', 'I wait.')], undefined, false))
     const [ooc, reminder] = messages.slice(-2)
     expect(ooc.role).toBe('system')
-    expect(reminder).toMatchObject({ role: 'user', content: '(OOC: Tell what happens next.)' })
+    expect(reminder).toMatchObject({
+      role: 'user',
+      content: '(OOC: Play out what follows, including the next meaningful story development.)',
+    })
   })
 
   it('omits disabled records from the note and the tail', () => {

@@ -11,7 +11,9 @@ import {
 
 describe('capability-aware prompts', () => {
   it('keeps the turn reminder to one storytelling line', () => {
-    expect(buildTurnReminder()).toBe('Tell what happens next.')
+    expect(buildTurnReminder()).toBe(
+      'Play out what follows, including the next meaningful story development.',
+    )
   })
 
   it('keeps the opening and Continue directives to the player’s short request', () => {
@@ -24,9 +26,12 @@ describe('capability-aware prompts', () => {
   it('keeps the story moving through consequences grown from what is in play', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('Developments grow out of what is already in play')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('what is set up pays off')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('the story moves on to its consequences')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('Give the consequences room to play out')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('close on a moment a camera would see')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('the story moves on from it')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      'play out the consequences, including the next meaningful story development',
+    )
+    // Scripting the last line turned a fight into attack after attack.
+    expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/closes? on|camera|last line/i)
     // NPCs press in their own words rather than offering the player a menu.
     expect(DEFAULT_SYSTEM_PROMPT).toContain("leave the player's options to the player")
   })

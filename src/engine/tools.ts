@@ -184,13 +184,13 @@ export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
 export const STEER_TOOL: ModelToolDefinition = {
     name: 'steer',
     description:
-      'Steer the narrator’s reply: what happens, who makes it happen, how far its consequences play out, and the line of dialogue or action it closes on. Two or three plain sentences; the narrator does the telling.',
+      'Steer the narrator’s reply: what happens and who makes it happen, playing out the consequences, including the next meaningful development. A few plain sentences; the narrator does the telling.',
     parameters: {
       type: 'object',
       properties: {
         text: {
           type: 'string',
-          description: 'The steer, in two or three plain sentences.',
+          description: 'The steer, in a few plain sentences.',
         },
       },
       required: ['text'],

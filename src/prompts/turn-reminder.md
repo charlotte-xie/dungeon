@@ -1,1 +1,1 @@
-Tell what happens next.
+Play out what follows, including the next meaningful story development.
