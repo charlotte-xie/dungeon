@@ -531,7 +531,9 @@ describe('buildPlotterInstruction', () => {
     // Steers play out consequences through the next development, with no
     // scripted last line: that turned a fight into attack after attack.
     expect(all).toContain('Pick the next meaningful development')
-    expect(all).toContain('playing out the consequences, including that development')
+    expect(all).toContain('an NPC pursues their goal')
+    expect(all).toContain('the story moves on to the next scene')
+    expect(all).toContain('what happens in the world, through that development')
     expect(all).not.toMatch(/closes? on|camera|how far/i)
     expect(all).not.toMatch(/respond to/i)
     // Size status rides along; memory's only once it grows long.

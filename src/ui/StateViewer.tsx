@@ -354,8 +354,8 @@ export function StateViewer({
         {tab === 'plot' && context.includePlotOutline && (
           <>
             <p className="hint">
-              The director maintains six labelled entries: <strong>Promise, Question,
-              Stakes, Intentions, Next, and Payoff</strong>. Promise captures the intended
+              The director maintains five labelled entries: <strong>Promise, Stakes,
+              Intentions, Next, and Payoff</strong>. Promise captures the intended
               experience; the other entries guide consequential developments and scene
               endings without choosing the player's actions. Next and Payoff change as
               developments land. Older hook lists are reorganised on later turns. One entry per line;

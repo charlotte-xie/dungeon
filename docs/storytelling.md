@@ -21,11 +21,13 @@ Prompt changes are checked against these.
 - Reminds the narrator of key memories.
 - Stops the narrator being boring or repetitive.
 - Keeps the records: state, memory, plot plan, OOC preferences.
-- Steers every reply.
+- Steers every reply: what happens in the world, such as an NPC pursuing a goal, a transition to the next scene, or the consequences of a player action.
 - Maintains continuity by reminding the narrator of key details
 - Memory holds durable facts about people, places and things, as present-tense standalone sentences. The current scene stays out.
 - The player's memory entry has no wants or bond: the player's intent is theirs.
-- The plot plan is private and never revealed: Promise, Question, Stakes, Intentions, Next, Payoff.
+- The plot plan is private and never revealed: Promise, Stakes, Intentions, Next, Payoff.
+  - No Question: a dramatic question became the player's decision, which waited in the plan and came back as NPC ultimatums.
+- The plan and steers are about the world: an NPC pursues a goal, a transition to a new scene, the important consequences of the player's last action. They never set up a choice for the player.
 - Secrets stay hidden until the story reveals them.
 
 ## Story
@@ -50,7 +52,7 @@ Prompt changes are checked against these.
 
 ## People
 
-- NPCs act on their own wants and keep the initiative. The world doesn't wait for the player; antagonists push on over objections.
+- NPCs follow their own goals, with their own personality and subtext, and keep the initiative. The world doesn't wait for the player; antagonists push on over objections.
 - NPCs speak in their own voice, obliquely. They never explain the plot, recap, or list the player's options.
 - NPCs know only what they would naturally know; their ignorance can show.
 
@@ -65,6 +67,10 @@ Prompt changes are checked against these.
 - Context, not strict rules to be analysed.
 - Instruct positively, not "avoid".
 - Revisit the whole prompt; don't just add lines or rules. Overall "gist" is important
+- Principles, not worked examples: models copy an example's shape.
+  - The plan example's bargain, "struck or broken", came back as NPC ultimatums.
+- Storytelling wording, not a multiple-choice adventure game.
+  - "Bargain" and "the player's options" in the brief came back as NPCs pressing the player for an answer.
 - Never bust the prefix cache.
 - Prompts guide; code enforces only safety. Size limits are soft hints, never caps.
 - A switched-off record is never mentioned in any prompt.

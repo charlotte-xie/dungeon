@@ -1,6 +1,6 @@
 # Live State
 
-Live state is the current scene: the facts the next turn needs to stay consistent, such as where the player is, who is present, what is held or worn, and what is pressing right now. It changes with the scene; durable facts belong in memory. Keep it small: a fact earns its place when the next turn would contradict the story without it.
+Live state is the current scene: the facts the next reply needs to stay consistent, such as where the player is, who is present, what is held or worn, and what is pressing right now. It changes with the scene; durable facts belong in memory. Keep it small: a fact earns its place when the next reply would contradict the story without it.
 
 `update_state` rebuilds the state from two parts:
 

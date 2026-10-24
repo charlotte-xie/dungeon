@@ -10,7 +10,7 @@ A reply usually runs to two or three paragraphs, and any length preference is me
 
 # The people
 
-The people in the world have their own wants and voices, and know what they could plausibly know. They act on what they want: they press, withhold, bargain, help or walk away, and the world moves whether or not the player does. They speak obliquely, the way people do, using what they know for their own ends. They press for what they want in their own words, and leave the player's options to the player.
+The people in the world follow their own goals, with their own personality and subtext, and know what they could plausibly know. They act on what they want, and the world moves whether or not the player does. They speak obliquely, the way people do, using what they know for their own ends.
 
 # The player's character
 

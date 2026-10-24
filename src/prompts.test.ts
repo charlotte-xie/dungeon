@@ -32,8 +32,8 @@ describe('capability-aware prompts', () => {
     )
     // Scripting the last line turned a fight into attack after attack.
     expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/closes? on|camera|last line/i)
-    // NPCs press in their own words rather than offering the player a menu.
-    expect(DEFAULT_SYSTEM_PROMPT).toContain("leave the player's options to the player")
+    // People follow their own goals rather than waiting on the player.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('follow their own goals, with their own personality and subtext')
   })
 
   it('measures length preferences against a full reply', () => {
@@ -44,6 +44,8 @@ describe('capability-aware prompts', () => {
     // Choice and decision wording pulls models towards ending on a choice.
     const texts = [DEFAULT_SYSTEM_PROMPT, buildPlotRules(10, 500), CONTINUE_DIRECTIVE]
     for (const text of texts) expect(text).not.toMatch(/decision|choice|decide|choose/i)
+    // So does the wording of a multiple-choice game.
+    for (const text of texts) expect(text).not.toMatch(/bargain|option/i)
     // So does framing the ending as the player's cue to respond.
     expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/respond to|up to them/i)
   })
@@ -52,6 +54,16 @@ describe('capability-aware prompts', () => {
     const rules = buildPlotRules(10, 500)
     expect(rules).toContain('one entry per dramatic function')
     expect(rules).toContain('replace it with its consequence')
+  })
+
+  it('plans what the world does from principles, with no worked example to copy', () => {
+    const rules = buildPlotRules(10, 500)
+    expect(rules).toContain('The plan is about the world')
+    expect(rules).toContain('The player writes their own character')
+    // An example's bargain, "struck or broken", came back as NPC ultimatums.
+    expect(rules).not.toMatch(/example/i)
+    // So did a dramatic question, which became the player's decision.
+    expect(rules).not.toMatch(/question/i)
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {
