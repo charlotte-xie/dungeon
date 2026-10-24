@@ -21,9 +21,11 @@ export interface SummarizerInput {
   // The adventure's prompt-cache key; the summariser uses its own key derived
   // from it (see roleCacheKey).
   cacheKey?: string
-  // Long-term memory at the time of the fold, passed as grounding canon so
-  // summaries keep entity names and established facts consistent across folds
-  // (without it, adjacent entries can drift — "the priest" vs. his name).
+  // Long-term memory at the time of the fold, passed whole as grounding canon
+  // so summaries keep entity names and established facts consistent across
+  // folds (without it, adjacent entries can drift — "the priest" vs. his
+  // name). Folds are rare, and matching entries to the inputs missed exactly
+  // those unnamed references.
   memory: Memory
   // The texts to compress into one summary. For level-0 folds these are raw
   // turn renderings ("PLAYER: ...\n\nDM: ..."); for level promotions these
@@ -38,44 +40,6 @@ export interface SummarizerResult {
   summary: string
 }
 
-function normalizeWords(text: string): string {
-  return text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
-}
-
-// Memory is useful for canonical entity names, but sending the entire store
-// distracts the summariser and can leak unrelated facts into the chronicle.
-// Keep only entries whose slug or leading identity phrase is mentioned in the
-// material being summarised.
-export function relevantMemoryForInputs(memory: Memory, inputs: string[]): Memory {
-  const source = ` ${normalizeWords(inputs.join('\n'))} `
-  const relevant: Memory = {}
-  for (const [slug, entry] of Object.entries(memory)) {
-    const slugPhrase = normalizeWords(slug.replace(/[_-]+/g, ' '))
-    const slugMentioned = slugPhrase !== 'player' && source.includes(` ${slugPhrase} `)
-    // Identity phrase: the entry itself when it is a string, else its `is`
-    // facet, else the first string value found.
-    const record =
-      typeof entry === 'object' && entry !== null && !Array.isArray(entry)
-        ? (entry as Record<string, unknown>)
-        : undefined
-    const identitySource =
-      typeof entry === 'string'
-        ? entry
-        : record
-          ? typeof record.is === 'string'
-            ? record.is
-            : (Object.values(record).find((v): v is string => typeof v === 'string') ?? '')
-          : ''
-    const identity = identitySource.split(/[;.!?]/, 1)[0] ?? ''
-    const names = identity.match(/\b[A-Z][\p{L}'’-]{2,}\b/gu) ?? []
-    const nameMentioned = names
-      .filter((name) => !['The', 'This', 'That'].includes(name))
-      .some((name) => source.includes(` ${normalizeWords(name)} `))
-    if (slugMentioned || nameMentioned) relevant[slug] = entry
-  }
-  return relevant
-}
-
 export async function runSummarizer(
   input: SummarizerInput,
   signal: AbortSignal,
@@ -84,13 +48,12 @@ export async function runSummarizer(
     .map((text, i) => `--- ENTRY ${i + 1} ---\n\n${text}`)
     .join('\n\n')
 
-  const relevantMemory = relevantMemoryForInputs(input.memory, input.inputs)
-  const canonBlock = Object.keys(relevantMemory).length
+  const canonBlock = Object.keys(input.memory).length
     ? `--- CANON (long-term memory — grounding only) ---\n\n` +
       `Use this only to preserve the spelling and identity of entities already mentioned ` +
       `in the inputs. Do NOT summarise this block or import any fact that the inputs ` +
       `themselves do not establish or change.\n\n` +
-      `\`\`\`json\n${JSON.stringify(relevantMemory, null, 2)}\n\`\`\`\n\n`
+      `\`\`\`json\n${JSON.stringify(input.memory, null, 2)}\n\`\`\`\n\n`
     : ''
 
   const userContent =

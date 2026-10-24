@@ -12,11 +12,11 @@ Memory holds durable facts. The chronicle keeps the full past, the plot plan hol
 - Characters: `wants`, `facts`, `knowledge` (what they have witnessed or been told, including about the player's character), `bond` (how they regard the player's character), `relationships`.
 - Places: `npcs`, `layout`.
 - Things: `significance`, `location`.
-- The player's character (key `player`): `background`, `skills`, `possessions` (a map of item to description), `oaths`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `bond`; each NPC's attitude to them lives on that NPC's `bond`.
+- The player's character: `background`, `skills`, `possessions` (a map of item to description), `oaths`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `bond`; each NPC's attitude to them lives on that NPC's `bond`.
 
-Write about the player's character by name, as a fact of the story. Until the player gives a name, call them by how the story describes them, such as "the new designer" or "the adventurer", rather than "the player"; the name is the player's to give.
+Key the player's character by their name once the scenario or the player gives one, and `you` until then, as the story calls them, and write about them the same way ("Rook is lean and weathered", "You are new in town"). The name is the player's to give. An older entry keyed `player` moves to the new key.
 
-Use these names, add a facet while it matters, and itemise into a map where content is naturally keyed (`player.possessions.money`).
+Use these names, add a facet while it matters, and itemise into a map where content is naturally keyed (`Rook.possessions.money`).
 
 ## Example
 
@@ -29,7 +29,7 @@ Use these names, add a facet while it matters, and itemise into a map where cont
     "bond": "Hesta is wary of Rook and helps only when it costs her nothing.",
     "secret": "Hesta is hiding her son Tam upstairs after a robbery went wrong; only she and Tam know."
   },
-  "player": {
+  "Rook": {
     "is": "Rook is lean and weathered and walks with a slight limp.",
     "background": "Rook is a veteran of the border wars, drifting since discharge.",
     "possessions": {

@@ -28,7 +28,7 @@ Prompt changes are checked against these.
 - Maintains continuity by reminding the narrator of key details
 - Memory holds durable facts about people, places and things, as present-tense standalone sentences. The current scene stays out.
 - The player's memory entry has no wants or bond: the player's intent is theirs.
-- Records and steers name the player's character as a fact of the story; until the player gives a name, they use how the story describes them ("the new designer"), never "the player". "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table").
+- Records and steers call the player's character by their name once the scenario or the player gives one, and "you" until then, as the story does; never "the player". Memory keys the character the same way. "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table").
 - The plot plan is a private list of where the story is heading in the medium and long term, never revealed. It changes when the story takes a different direction.
 - Plan changes are optional: the Plotter inserts a good idea that improves the story, and removes an entry once it is completed or abandoned.
   - Insert and remove only: rewriting entries in place turned medium-term directions into notes on the current scene.

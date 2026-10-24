@@ -84,9 +84,10 @@ describe('capability-aware prompts', () => {
 
   it('records the player’s character by name, as a fact of the story', () => {
     const rules = buildMemoryRules()
-    expect(rules).toContain("Write about the player's character by name")
-    expect(rules).toContain("the name is the player's to give")
-    expect(rules).toContain('rather than "the player"')
+    expect(rules).toContain("Key the player's character by their name")
+    expect(rules).toContain('and `you` until then, as the story calls them')
+    expect(rules).toContain("The name is the player's to give")
+    expect(rules).not.toContain('(key `player`)')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('in the story they are always "you"')
     // "The player" in the records leaked into dialogue.
     expect(rules).not.toMatch(/saw the player|wary of the player|The player is lean/)
