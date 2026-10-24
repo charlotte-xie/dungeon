@@ -177,7 +177,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Plot plan',
     rulesMessage: `${PLOT_RULES}\n\nThe current plan arrives as \`${CHECK_PLOT_PLAN_TOOL.name}\` results.`,
     narratorNote:
-      '`steer` says what happens in the reply and the development it ends on. Follow it, and make the telling your own.',
+      '`steer` says what happens in the reply and the moment it stops on. Follow it, and make the telling your own.',
     buildPayload: (data) => buildPlotPayload(data.plot),
     buildGuidance: () => '',
   },

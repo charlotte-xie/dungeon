@@ -126,7 +126,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what happens, who makes it happen, and the story development the reply ends on for the player to respond to. When recent replies have circled one moment or one image, steer somewhere fresh.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what happens, who makes it happen, and the moment the reply stops on: a line of dialogue or an action by someone in the world. A steer describes the world. When recent replies have circled one moment or one image, steer somewhere fresh.`,
         ]
       : []),
   ]

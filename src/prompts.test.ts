@@ -25,8 +25,10 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('Developments grow out of what is already in play')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('what is set up pays off')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('the story moves on to its consequences')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('ends on a story development for the player to respond to')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('What they do next is up to them.')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('Stop on the moment it lands')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('The last sentence is something a camera would see.')
+    // NPCs press in their own words rather than offering the player a menu.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain("leave the player's options to the player")
   })
 
   it('measures length preferences against a full reply', () => {
@@ -37,6 +39,8 @@ describe('capability-aware prompts', () => {
     // Choice and decision wording pulls models towards ending on a choice.
     const texts = [DEFAULT_SYSTEM_PROMPT, buildPlotRules(10, 500), CONTINUE_DIRECTIVE]
     for (const text of texts) expect(text).not.toMatch(/decision|choice|decide|choose/i)
+    // So does framing the ending as the player's cue to respond.
+    expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/respond to|up to them/i)
   })
 
   it('prevents semantically duplicate future plot beats', () => {

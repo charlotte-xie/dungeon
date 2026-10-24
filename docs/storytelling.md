@@ -35,6 +35,8 @@ Prompt changes are checked against these.
   - Prompts express this without "decision" or "choice" wording, which pulls models towards ending on a choice (526c859).
 - Let consequences play out and advance to a natural point for the player to take their next turn.
 - We never want to end on a choice ("Do X or Y?").
+- Never end on a prompt for the player: a question, a list of options, or someone waiting for their answer. End on something a camera would see: a line of dialogue or an action by someone other than the player.
+  - Prompts avoid "for the player to respond to" framing, which led models to write the prompt out.
 - Continue is a whole, full turn. Players press it when they think the story hasn't advanced enough: move faster to a meaningful development.
 - Continuity is very important. If the player is carrying a dagger in one scene, it shouldn't transform into an axe without a good reason
 - Deliver the kind of story the scenario and style guide promise, in their register.
@@ -71,6 +73,8 @@ Prompt changes are checked against these.
 If these are observed regularly, the prompt or tools probably need tweaking
 
 - Ending on a choice: "Take the key or back away?"
+- Ending on a prompt: "…waiting for your answer", "urging you to step through or turn back", "as though the vault itself is pressing you to decide".
+- NPCs using dialogue to present an X-or-Y choice: "Name yourself or bleed.", "Answer, or return what you hold."
 - The same choice re-offered for six turns.
 - Replies ending on "…waiting".
 - Foreshadowing that never delivers.

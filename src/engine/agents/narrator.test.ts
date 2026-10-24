@@ -528,6 +528,9 @@ describe('buildPlotterInstruction', () => {
     expect(all).not.toContain('reply with only the word DONE')
     // Choice wording pulls models towards ending on a choice.
     expect(all).not.toMatch(/decision|choice|decide|choose/i)
+    // Steers end on an event, not on a cue for the player.
+    expect(all).toContain('the moment the reply stops on: a line of dialogue or an action by someone in the world')
+    expect(all).not.toMatch(/respond to/i)
     // Size status rides along; memory's only once it grows long.
     expect(all).toContain('STATUS: state size')
     expect(all).not.toContain('Memory: STATUS')
