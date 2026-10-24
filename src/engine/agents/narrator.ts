@@ -139,7 +139,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development. The player’s character does only what the player’s input says or implies.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development, naming the player’s character as the records do. The player’s character does only what the player’s input says or implies, and their feelings are the player’s own.`,
         ]
       : []),
   ]

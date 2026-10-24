@@ -547,9 +547,10 @@ describe('buildPlotterInstruction', () => {
     // reply, after its updates and recalls.
     expect(all).toContain('Deliver what the story has set up')
     expect(all).toContain('Steer every reply')
+    expect(all).toContain('naming the player’s character as the records do')
     // Steers written about the player became third-person narration and
     // moves the player never made.
-    expect(all).toContain('The player’s character does only what the player’s input says or implies')
+    expect(all).toContain('The player’s character does only what the player’s input says or implies, and their feelings are the player’s own')
     expect(all).toContain('important for future continuity')
     expect(all).toContain('then `recall_memory`, then `steer`')
     expect(all).not.toContain('reply with only the word DONE')

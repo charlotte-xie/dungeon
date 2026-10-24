@@ -9,10 +9,12 @@ Memory holds durable facts. The chronicle keeps the full past, the plot plan hol
 ## Facets
 
 - Any entry: `is` (what it is), `notes`, `history`, `secret` (true but not yet revealed in the story, and who knows).
-- Characters: `wants`, `facts`, `knowledge` (what they have witnessed or been told, including about the player), `bond` (how they regard the player), `relationships`.
+- Characters: `wants`, `facts`, `knowledge` (what they have witnessed or been told, including about the player's character), `bond` (how they regard the player's character), `relationships`.
 - Places: `npcs`, `layout`.
 - Things: `significance`, `location`.
-- The player (key `player`): `background`, `skills`, `possessions` (a map of item to description), `oaths`, `reputation`. The player's intentions and feelings are their own, so their entry has no `wants` or `bond`; each NPC's attitude to the player lives on that NPC's `bond`.
+- The player's character (key `player`): `background`, `skills`, `possessions` (a map of item to description), `oaths`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `bond`; each NPC's attitude to them lives on that NPC's `bond`.
+
+Write about the player's character by name, as a fact of the story. Until the player gives a name, call them by how the story describes them, such as "the new designer" or "the adventurer", rather than "the player"; the name is the player's to give.
 
 Use these names, add a facet while it matters, and itemise into a map where content is naturally keyed (`player.possessions.money`).
 
@@ -23,13 +25,13 @@ Use these names, add a facet while it matters, and itemise into a map where cont
   "Hesta": {
     "is": "Hesta is the town baker, a stout woman with grey hair tied back; she owns the bakery on Mill Lane.",
     "wants": "Hesta wants to keep the shop open and her son out of the constabulary's hands.",
-    "knowledge": "Hesta saw the player argue with a constable and knows they are new in town.",
-    "bond": "Hesta is wary of the player and helps only when it costs her nothing.",
+    "knowledge": "Hesta saw Rook argue with a constable and knows Rook is new in town.",
+    "bond": "Hesta is wary of Rook and helps only when it costs her nothing.",
     "secret": "Hesta is hiding her son Tam upstairs after a robbery went wrong; only she and Tam know."
   },
   "player": {
-    "is": "The player is lean and weathered and walks with a slight limp.",
-    "background": "A veteran of the border wars, drifting since discharge.",
+    "is": "Rook is lean and weathered and walks with a slight limp.",
+    "background": "Rook is a veteran of the border wars, drifting since discharge.",
     "possessions": {
       "money": "30 pounds",
       "sabre": "A chipped but serviceable sabre."

@@ -9,6 +9,7 @@ Prompt changes are checked against these.
 - Follows the steer.
 - The player's character does only what the player's input says or implies.
 - Never decides what the player's character thinks, feels, says or chooses.
+- The player's emotions and interiority are their own: never written for them, alone or shared ("something neither of you has named").
 - Uses the player's exact words when given; narrates the gist of their speech without inventing a quote.
 - British/international English, second person, present tense.
 - Stays in the story: the player hears from the world, never from the DM.
@@ -27,6 +28,7 @@ Prompt changes are checked against these.
 - Maintains continuity by reminding the narrator of key details
 - Memory holds durable facts about people, places and things, as present-tense standalone sentences. The current scene stays out.
 - The player's memory entry has no wants or bond: the player's intent is theirs.
+- Records and steers name the player's character as a fact of the story; until the player gives a name, they use how the story describes them ("the new designer"), never "the player". "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table").
 - The plot plan is a private list of where the story is heading in the medium and long term, never revealed. It changes when the story takes a different direction.
 - Plan changes are optional: the Plotter inserts a good idea that improves the story, and removes an entry once it is completed or abandoned.
   - Insert and remove only: rewriting entries in place turned medium-term directions into notes on the current scene.
@@ -36,7 +38,7 @@ Prompt changes are checked against these.
 - Sets up what each NPC wants from the opening, so they have something to pursue.
 - Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
 - Records only what is important for future continuity: catalogued details came back as repetition.
-- Steers include the player's character only as the player's input says or implies.
+- Steers include the player's character only as the player's input says or implies, and leave their feelings to the player.
 
 ## Story
 
@@ -47,7 +49,7 @@ Prompt changes are checked against these.
 - Leave the player an open opportunity for where to take the story next.
   - Prompts don't script how a reply ends. Closing on an NPC's line or action (8cbe3b8) turned a fight into attack after attack for seven replies.
 - We never want to end on a choice ("Do X or Y?").
-- Never end on a prompt for the player: a question, a list of options, or someone waiting for their answer.
+- Never end on a prompt for the player or hand the story back for them to settle: a question (an NPC's included), a list of options, someone or something waiting, or narration pointing at the player's turn. Bring the story to a point where the player can take it on.
   - Prompts avoid "for the player to respond to" framing, which led models to write the prompt out.
 - Continue is a whole, full turn. Players press it when they think the story hasn't advanced enough: move faster to a meaningful development.
 - Continuity is very important. If the player is carrying a dagger in one scene, it shouldn't transform into an axe without a good reason
@@ -94,6 +96,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - NPCs using dialogue to present an X-or-Y choice: "Name yourself or bleed.", "Answer, or return what you hold."
 - The same choice re-offered for six turns.
 - Replies ending on "…waiting".
+- Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
 - Micro actions: a fight running reply after reply, each ending on the next attack.
 - The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".

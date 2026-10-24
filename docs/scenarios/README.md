@@ -38,6 +38,10 @@ window.fetch = async (url, init) => {
 }
 const args = (c) => { try { return JSON.parse(c.arguments) } catch { return {} } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+// Endings that may hand the story back: questions, waiting, the player's turn or choice.
+const HAND_BACK = /\?|\b(your|the) (call|move|turn)\b|\bchoices?\b|\byours\b|up to you|unless you|\bwait(s|ing)?\b|\bawaits?\b|invites? (a )?repl|for (your|an) answer|hold(s)? (its|their|her|his) breath|\bdecid|what (will|do) you/i
+// Dialogue that may offer the player an X-or-Y, anywhere in the reply.
+const OFFER = /[“"][^”"]*(\bchoices?\b|\bor\b)[^”"]*[”"]/i
 // One line per request: the Plotter's calls, plan changes and steer, or the narrator's text.
 window.__report = (list) => list.map((e) => {
   const out = e.response?.output || []
@@ -52,7 +56,8 @@ window.__report = (list) => list.map((e) => {
     plan: calls.filter((c) => c.name === 'future_plot_plan').map((c) => { const a = args(c); return `${a.op}${a.position ? ' ' + a.position : ''}${a.text ? ': ' + a.text : ''}` }),
     steer: calls.filter((c) => c.name === 'steer').map((c) => args(c).text).join(' | '),
   }
-  return { role: 'narrator', ms: e.ms, cache, words: text.split(/\s+/).filter(Boolean).length, paragraphs: text.split(/\n\s*\n/).length, text }
+  const ending = (text.match(/[^.!?…]+[.!?…]+["”’]?/g) || [text]).slice(-2).join(' ').trim()
+  return { role: 'narrator', ms: e.ms, cache, words: text.split(/\s+/).filter(Boolean).length, paragraphs: text.split(/\n\s*\n/).length, handBack: HAND_BACK.test(ending), offer: OFFER.test(text), sayPlayer: /\bthe player\b/i.test(text), ending, text }
 })
 window.__waitIdle = async () => {
   const t0 = Date.now()
@@ -116,7 +121,9 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 
 **Endings and choices**
 
-- The reply ends on a prompt: a question to the player, "Your choice.", "Decide quickly", "The first step is yours.", someone waiting for an answer.
+- The reply hands the story back: a question, an NPC's included ("Walk back with me?"); "Your choice." or "leaves the choice entirely yours"; "The first step is yours."; someone or something waiting ("The Vaults wait.", "the question implicit in the pause"). The helper flags endings like these as `handBack`, and dialogue with "or" or "choice" in it as `offer`; read each flagged reply yourself, since many flags are innocent.
+- An NPC lays out the options in dialogue anywhere in the reply, even when the reply ends elsewhere: "Two choices. We go back together…, or we press on…".
+- "The player" appears in the story itself, in narration or dialogue (`sayPlayer`): "She stops at the player's table", "Sam, keep the player on it".
 - An NPC delivers an X-or-Y in dialogue: "Split what we can carry, or die alone." A terse line said on the move while the NPC acts ("Deeper or drown," already moving) is a character, not a menu; note it but don't count it.
 - The same choice re-offered over several replies.
 

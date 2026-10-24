@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildMemoryRules,
   buildNewAdventureBootstrap,
   buildPlotRules,
   buildSummarizerLengthNote,
@@ -37,12 +38,22 @@ describe('capability-aware prompts', () => {
   })
 
   it('leaves the player’s character to the player, and keeps each reply fresh', () => {
-    expect(DEFAULT_SYSTEM_PROMPT).toContain("they do only what the player's input says or implies")
+    expect(DEFAULT_SYSTEM_PROMPT).toContain("They do only what the player's input says or implies")
+    // Shared feelings too: "something neither of you has named yet".
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      'never write them for the player, alone or as something they share with someone else',
+    )
     expect(DEFAULT_SYSTEM_PROMPT).toContain('a gesture or phrase used once is spent')
   })
 
   it('measures length preferences against a full reply', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('any length preference is measured against that')
+  })
+
+  it('brings the story to where the player can take it on, without handing it back', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      'bring the story to a point where they can take it on, without asking or prompting them',
+    )
   })
 
   it('keeps choice framing out of the prompts', () => {
@@ -69,6 +80,16 @@ describe('capability-aware prompts', () => {
     // Labelled entries and a worked example planned the player's decision,
     // which came back as NPC ultimatums.
     expect(rules).not.toMatch(/example|question|promise|stakes|payoff/i)
+  })
+
+  it('records the player’s character by name, as a fact of the story', () => {
+    const rules = buildMemoryRules()
+    expect(rules).toContain("Write about the player's character by name")
+    expect(rules).toContain("the name is the player's to give")
+    expect(rules).toContain('rather than "the player"')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('in the story they are always "you"')
+    // "The player" in the records leaked into dialogue.
+    expect(rules).not.toMatch(/saw the player|wary of the player|The player is lean/)
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {
