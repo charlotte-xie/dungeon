@@ -5,7 +5,9 @@ Prompt changes are checked against these.
 ## Narrator
 
 - Does the writing. Nothing else.
-- No reasoning, no tools. It writes from the story, the Plotter's updates, recalled memories and steer.
+- No reasoning, no tools. It writes from the story, its story updates and its notes for the reply.
+- A story update stays in its history: the memories recalled for the reply, as they stood then, and the player's OOC instructions when they change. An entry it already holds is brought up to date when the records change, so its view never goes stale.
+- The notes for the reply are for that reply only: the scene as it stands and the steer. Past steers don't stay in view to be copied or repeated, and the Plotter's record-keeping stays out of sight.
 - Follows the steer.
 - The player's character does only what the player's input says or implies.
 - Never decides what the player's character thinks, feels, says or chooses.

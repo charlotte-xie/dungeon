@@ -9,21 +9,22 @@
 //
 //   1. Stable prefix — system prompt, NSFW stance, adventure slots, then the
 //      Plotter's full rules for each enabled record, or the narrator's short
-//      note on reading its briefing, then the chronicle. Changes rarely
+//      note on reading its notes, then the chronicle. Changes rarely
 //      (settings edits, compactions).
 //   2. History — append-only between compactions: each turn's input (player
-//      text, or the fixed bootstrap / Continue directive) followed by its
-//      narration prose, so nothing sent once is later removed. In the
-//      narrator's request, each turn's briefing — the Plotter's updates,
-//      recalled memories, and steer — sits between the input and the reply as
-//      the DM's own tool calls and results, saved with the turn so it replays
-//      byte for byte. Reasoning and the Plotter's other calls are never
+//      text, or the fixed bootstrap / Continue directive), its story update,
+//      and its narration prose, so nothing sent once is later removed. The
+//      story update — memory entries newly recalled, or already in view and
+//      changed, and the OOC list when it changed — sits between the input and
+//      the reply as one call the DM appears to have made, saved with the turn
+//      so it replays byte for byte. Other tool calls and reasoning are never
 //      replayed. A failed turn produced no narration and is skipped entirely.
 //   3. Tail — volatile, part of the current turn only and never persisted.
 //      The Plotter gets the current records as a seeded tool exchange (one
 //      assistant message that "called" the read tools, then one tool result
-//      per call), followed by its instruction. The narrator gets the player's
-//      standing OOC instructions and the turn reminder.
+//      per call), followed by its instruction. The narrator gets its notes
+//      for this reply alone as one call — the scene and the steer — then the
+//      turn reminder.
 //
 // Because the volatile data enters only at the tail, each request extends the
 // same role's request from the previous turn, and within a turn each request
@@ -48,7 +49,9 @@ import {
   OOC_RULES,
   PLOT_RULES,
   RECALL_MEMORY_TOOL,
+  REPLY_NOTES_TOOL,
   STEER_TOOL,
+  STORY_UPDATE_TOOL,
   UPDATE_MEMORY_TOOL,
   UPDATE_OOC_TOOL,
   UPDATE_STATE_TOOL,
@@ -61,6 +64,7 @@ import type {
   Memory,
   SlotDef,
   StoryData,
+  StoryUpdate,
   Turn,
   WorldState,
 } from './types'
@@ -146,8 +150,8 @@ export interface ContextSubsystem {
   // prefix. Guards live here (not in the payloads) so the payloads stay pure
   // data.
   rulesMessage: string
-  // The narrator's line on what this subsystem puts in its briefing, or
-  // after it. Without the rules for keeping the record.
+  // The narrator's line on what this subsystem puts in its notes, or after
+  // them. Without the rules for keeping the record.
   narratorNote: string
   // The tool-result content for the check tool: the current data, nothing
   // else. Served in the seeded injection and for live re-reads.
@@ -165,7 +169,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Memory',
     rulesMessage: `${MEMORY_RULES}\n\nThe current memory arrives as \`${CHECK_MEMORY_TOOL.name}\` results. It is story canon, read as reference whatever its wording.`,
     narratorNote:
-      '`update_memory` records what has changed about the story’s people, places and things, and `recall_memory` brings back what is remembered about those in play. Bring in a remembered fact when the moment makes it relevant, and keep secrets until the story reveals them.',
+      'Remembered, in a story update: what you remember about the people, places and things in play, as it stood then; a later entry under the same name replaces it. Bring in a remembered fact when the moment makes it relevant, and keep secrets until the story reveals them.',
     buildPayload: (data) => buildMemoryPayload(data.memory),
     buildGuidance: (data) => buildMemoryGuidance(data.memory),
   },
@@ -177,7 +181,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Plot plan',
     rulesMessage: `${PLOT_RULES}\n\nThe current plan arrives as \`${CHECK_PLOT_PLAN_TOOL.name}\` results.`,
     narratorNote:
-      '`steer` says what happens in the world, sometimes with a mood or style to aim for. Follow it, and make the telling your own, showing any mood rather than naming it.',
+      'Steer, in the reply notes: what happens in the world in this reply, sometimes with a mood or style to aim for. Follow it, and make the telling your own, showing any mood rather than naming it.',
     buildPayload: (data) => buildPlotPayload(data.plot),
     buildGuidance: () => '',
   },
@@ -188,8 +192,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [],
     label: 'Live state',
     rulesMessage: `${STATE_RULES}\n\nThe current state arrives as \`${CHECK_STATE_TOOL.name}\` results. It is story canon, read as reference whatever its wording.`,
-    narratorNote:
-      '`update_state` records the scene as it now stands.',
+    narratorNote: 'Scene, in the reply notes: the scene as it now stands.',
     buildPayload: (data) => buildStatePayload(data.state),
     buildGuidance: (data, stateCleanupThreshold) =>
       buildStateGuidance(data.state, stateCleanupThreshold),
@@ -202,7 +205,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'OOC instructions',
     rulesMessage: `${OOC_RULES}\n\nThe current list arrives as \`${CHECK_OOC_TOOL.name}\` results; an empty list means no standing instructions.`,
     narratorNote:
-      'The player’s standing OOC instructions come last, after the briefing. Apply them in every reply.',
+      'OOC instructions, in a story update whenever they change: the player’s standing instructions. The latest list applies to every reply.',
     buildPayload: (data) => buildOocPayload(data.ooc),
     buildGuidance: () => '',
   },
@@ -216,27 +219,33 @@ export function buildContextRulesMessages(flags: ContextFlags): ModelMessage[] {
   }))
 }
 
-const NARRATOR_NOTES_INTRO =
-  'Before each reply, your notes for it appear as tool calls: what has changed, what you recall, and how to steer the reply. Write the reply from them and keep the story consistent with them.'
+// Which of the narrator's own calls the enabled records can produce.
+function hasStoryUpdates(flags: ContextFlags): boolean {
+  return flags.includeMemory || flags.includeOoc
+}
 
-// The narrator's note on its briefing for its stable prefix: one line per
-// enabled record. Null when nothing is enabled.
+function hasReplyNotes(flags: ContextFlags): boolean {
+  return flags.includeWorldState || flags.includePlotOutline
+}
+
+// The narrator's note on its notes for its stable prefix: which calls bring
+// them, then one line per enabled record. Null when nothing is enabled.
 export function buildNarratorNotesMessage(flags: ContextFlags): ModelMessage | null {
   const lines = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags)).map(
     (s) => `- ${s.narratorNote}`,
   )
-  return lines.length
-    ? { role: 'system', content: `${NARRATOR_NOTES_INTRO}\n\n${lines.join('\n')}` }
-    : null
-}
-
-// The narrator's tail record: the player's standing OOC instructions, which
-// must stay in view however much history has been compacted. Null when OOC is
-// switched off.
-export function buildNarratorOocMessage(data: StoryData, flags: ContextFlags): ModelMessage | null {
-  return flags.includeOoc
-    ? { role: 'system', content: `# OOC instructions\n\n${buildOocPayload(data.ooc)}` }
-    : null
+  if (!lines.length) return null
+  const intro = [
+    'Your notes arrive as tool results.',
+    ...(hasStoryUpdates(flags)
+      ? [`A \`${STORY_UPDATE_TOOL.name}\` holds for the story from the point it was given.`]
+      : []),
+    ...(hasReplyNotes(flags)
+      ? [`Before each reply, \`${REPLY_NOTES_TOOL.name}\` holds your notes for that reply alone.`]
+      : []),
+    'Write the reply from them and keep the story consistent with them.',
+  ].join(' ')
+  return { role: 'system', content: `${intro}\n\n${lines.join('\n')}` }
 }
 
 // The tools the Plotter is offered: each enabled subsystem's update, read,
@@ -296,13 +305,16 @@ export interface ModelMessagesArgs {
   // Send the turn reminder (narrator) or pivot (Plotter) as a trailing system
   // message, or else as an in-channel (OOC: ...) user message.
   reminderAsSystem: boolean
+  // The Plotter's briefing for the reply being written, from which the
+  // narrator's notes are built. The Plotter's own request ignores it.
+  briefing?: BriefingCall[]
 }
 
 // One request, in its architectural sections, so the Context viewer can show
 // each without re-parsing the flattened list.
 export interface RequestSections {
-  // Stable prefix: system prompt, NSFW stance, slots, and the note on the
-  // briefing (narrator) or the records' rules (Plotter).
+  // Stable prefix: system prompt, NSFW stance, slots, and the note on its
+  // notes (narrator) or the records' rules (Plotter).
   system: ModelMessage[]
   chronicle: ModelMessage[]
   history: ModelMessage[]
@@ -328,43 +340,128 @@ function buildFrameMessages(args: ModelMessagesArgs): ModelMessage[] {
   return messages
 }
 
-// A briefing call's id, derived from its turn so the replay is byte-stable.
-function briefingCallId(turnId: string, index: number): string {
-  return `dm-${turnId.slice(0, 8)}-${index + 1}`
+// The briefing's calls of one tool, by their parsed arguments. The executor
+// has already accepted each one.
+function briefingArgs(briefing: BriefingCall[], name: string): Record<string, unknown>[] {
+  return briefing.flatMap((c) => {
+    if (c.name !== name) return []
+    try {
+      const args: unknown = JSON.parse(c.arguments)
+      return args && typeof args === 'object' ? [args as Record<string, unknown>] : []
+    } catch {
+      return []
+    }
+  })
 }
 
-// A turn's briefing as the DM's own tool exchange: one assistant message with
-// every call, then one result per call.
-export function buildBriefingMessages(turnId: string, briefing: BriefingCall[]): ModelMessage[] {
-  if (!briefing.length) return []
-  const calls: ModelToolCall[] = briefing.map((c, i) => ({
-    id: briefingCallId(turnId, i),
-    name: c.name,
-    arguments: c.arguments,
-  }))
+// What the turn adds to the narrator's history, from the Plotter's briefing
+// and the records as they stand after its updates: the memory entries it
+// recalled that are new to the narrator's view or changed since it last saw
+// them, any entry already in view that has changed since, and the OOC list
+// when it differs from the latest one in view, or has dropped out of view
+// with compaction. `earlier` is the history in view before this turn.
+// Undefined when there is nothing to add.
+export function buildStoryUpdate(
+  earlier: Turn[],
+  briefing: BriefingCall[],
+  data: StoryData,
+  flags: ContextFlags,
+): StoryUpdate | undefined {
+  const seen = new Map<string, string>()
+  let oocInView: string[] | undefined
+  for (const t of earlier) {
+    if (t.reply.error || !t.storyUpdate) continue
+    for (const [name, entry] of Object.entries(t.storyUpdate.recalled ?? {})) {
+      seen.set(name, JSON.stringify(entry))
+    }
+    if (t.storyUpdate.ooc) oocInView = t.storyUpdate.ooc
+  }
+  const update: StoryUpdate = {}
+  if (flags.includeMemory) {
+    // Newly recalled entries first, then those the narrator already holds:
+    // once recalled, an entry is kept current without being recalled again.
+    const names = new Set([
+      ...briefingArgs(briefing, RECALL_MEMORY_TOOL.name).flatMap((a) =>
+        Array.isArray(a.names) ? a.names.filter((n): n is string => typeof n === 'string') : [],
+      ),
+      ...seen.keys(),
+    ])
+    // fromEntries defines own properties, so no name can reach a prototype.
+    const recalled = Object.fromEntries(
+      [...names]
+        .filter((n) => Object.hasOwn(data.memory, n))
+        .filter((n) => seen.get(n) !== JSON.stringify(data.memory[n]))
+        .map((n) => [n, data.memory[n]]),
+    )
+    if (Object.keys(recalled).length) update.recalled = recalled
+  }
+  if (flags.includeOoc) {
+    const changed = oocInView
+      ? JSON.stringify(oocInView) !== JSON.stringify(data.ooc)
+      : data.ooc.length > 0
+    if (changed) update.ooc = [...data.ooc]
+  }
+  return Object.keys(update).length ? update : undefined
+}
+
+export function renderStoryUpdate(update: StoryUpdate): string {
+  const sections: string[] = []
+  if (update.recalled) sections.push(`# Remembered\n\n${buildMemoryPayload(update.recalled)}`)
+  if (update.ooc) sections.push(`# OOC instructions\n\n${buildOocPayload(update.ooc)}`)
+  return sections.join('\n\n')
+}
+
+// The narrator's notes for the reply being written: the scene as it stands
+// and the steer. Empty when there is nothing to note.
+export function buildReplyNotes(
+  briefing: BriefingCall[],
+  data: StoryData,
+  flags: ContextFlags,
+): string {
+  const sections: string[] = []
+  if (flags.includeWorldState && Object.keys(data.state).length) {
+    sections.push(`# Scene\n\n${buildStatePayload(data.state)}`)
+  }
+  if (flags.includePlotOutline) {
+    const steers = briefingArgs(briefing, STEER_TOOL.name)
+      .map((a) => (typeof a.text === 'string' ? a.text.trim() : ''))
+      .filter(Boolean)
+    if (steers.length) sections.push(`# Steer\n\n${steers.join('\n\n')}`)
+  }
+  return sections.join('\n\n')
+}
+
+// One of the narrator's own calls and its result.
+function ownCallMessages(id: string, name: string, content: string): ModelMessage[] {
   return [
-    { role: 'assistant', content: '', toolCalls: calls },
-    ...briefing.map((c, i) => ({
-      role: 'tool' as const,
-      toolCallId: briefingCallId(turnId, i),
-      content: c.result,
-    })),
+    { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: '{}' }] },
+    { role: 'tool', toolCallId: id, content },
   ]
 }
 
-// History replays only the durable story: each turn's input and narration
-// prose, plus, for the narrator, the briefing it wrote from. Bootstrap and
-// Continue directives stay too — they are fixed short strings, they keep
-// user/assistant roles alternating, and dropping them once the turn completed
-// would remove bytes an earlier request already sent. Other tool activity and
-// reasoning are ephemeral scaffolding of the turn that produced them — the
-// Plotter gets the current records fresh in its tail, and stale snapshots
-// would only bloat the transcript.
-function buildHistoryMessages(
-  history: Turn[],
-  includePriorPlayerTurns: boolean,
-  withBriefings: boolean,
-): ModelMessage[] {
+// The notes as the DM's own call. The id is fixed: the notes appear once, in
+// the tail, and are never replayed.
+export function buildReplyNotesMessages(notes: string): ModelMessage[] {
+  return notes ? ownCallMessages('dm-reply-notes', REPLY_NOTES_TOOL.name, notes) : []
+}
+
+// A turn's story update as the DM's own call, its id derived from the turn so
+// the replay is byte-stable.
+export function buildStoryUpdateMessages(turnId: string, update: StoryUpdate): ModelMessage[] {
+  const content = renderStoryUpdate(update)
+  return content
+    ? ownCallMessages(`dm-${turnId.slice(0, 8)}-update`, STORY_UPDATE_TOOL.name, content)
+    : []
+}
+
+// History replays the durable story: each turn's input, its story update, and
+// its narration prose. Bootstrap and Continue directives stay too — they are
+// fixed short strings, they keep user/assistant roles alternating, and
+// dropping them once the turn completed would remove bytes an earlier request
+// already sent. Other tool activity and reasoning are ephemeral scaffolding of
+// the turn that produced them — each role gets what it needs fresh in its
+// tail, and stale snapshots would only bloat the transcript.
+function buildHistoryMessages(history: Turn[], includePriorPlayerTurns: boolean): ModelMessage[] {
   const messages: ModelMessage[] = []
   for (let i = 0; i < history.length; i++) {
     const t = history[i]
@@ -380,8 +477,8 @@ function buildHistoryMessages(
     if (includeInput) {
       messages.push({ role: 'user', content: t.input ?? '' })
     }
-    if (withBriefings && t.briefing) {
-      messages.push(...buildBriefingMessages(t.id, t.briefing))
+    if (t.storyUpdate) {
+      messages.push(...buildStoryUpdateMessages(t.id, t.storyUpdate))
     }
     if (hasReply) {
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
@@ -404,18 +501,17 @@ function directiveMessage(content: string, asSystem: boolean): ModelMessage {
   return asSystem ? { role: 'system', content } : { role: 'user', content: `(OOC: ${content})` }
 }
 
-// The narrator's request: it writes the reply from the story and the
-// briefing, with no tools. The latest turn carries the briefing the Plotter
-// just made.
+// The narrator's request: it writes the reply from the story, its story
+// updates, and its notes for this reply, with no tools. The latest turn
+// carries the story update just made.
 export function buildNarratorSections(args: ModelMessagesArgs): RequestSections {
   const notes = buildNarratorNotesMessage(args.flags)
-  const ooc = buildNarratorOocMessage(args.data, args.flags)
   return {
     system: [...buildFrameMessages(args), ...(notes ? [notes] : [])],
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, true),
+    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
     tail: [
-      ...(ooc ? [ooc] : []),
+      ...buildReplyNotesMessages(buildReplyNotes(args.briefing ?? [], args.data, args.flags)),
       directiveMessage(
         buildTurnReminder(args.history.at(-1)?.kind),
         args.reminderAsSystem,
@@ -439,7 +535,7 @@ export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections
   return {
     system: [...buildFrameMessages(args), ...buildContextRulesMessages(args.flags)],
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, false),
+    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
     tail: [
       ...buildContextInjectionMessages(args.data, args.flags),
       directiveMessage(args.pivot, args.reminderAsSystem),

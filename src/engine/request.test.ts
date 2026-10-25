@@ -8,13 +8,16 @@ import {
   buildPlotterGuidance,
   buildPlotterMessages,
   buildPlotterSections,
+  buildReplyNotes,
   buildStateGuidance,
+  buildStoryUpdate,
+  renderStoryUpdate,
   buildStatePayload,
   type ContextFlags,
   type ModelMessagesArgs,
 } from './request'
 import type { ModelMessage } from './model/types'
-import type { AdventureSlots, BriefingCall, Turn } from './types'
+import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
 const SLOTS: AdventureSlots = { scenario: 'A haunted mill.', styleGuide: '' }
 
@@ -27,21 +30,24 @@ const ALL_FLAGS: ContextFlags = {
 
 const RULE_HEADINGS = ['# Long-Term Memory', '# Story Direction', '# Live State', '# OOC Instructions']
 
-// Records only the Plotter reads in full; the narrator gets the OOC list.
-const PLOTTER_ONLY = ['the mill"', 'A drifter with a debt.', 'The miller returns at dusk']
+// Records only the Plotter reads in full: the narrator gets the scene in its
+// notes, and the OOC list and recalled memories only through story updates.
+const PLOTTER_ONLY = ['A drifter with a debt.', 'The miller returns at dusk', 'Keep replies short.']
+
+const UPDATE: StoryUpdate = { recalled: { Hesta: { is: 'The baker.' } } }
 
 const BRIEFING: BriefingCall[] = [
-  { name: 'update_state', arguments: '{"keep":[],"set":{"scene.door":"open"}}', result: 'ok — state rebuilt' },
+  { name: 'recall_memory', arguments: '{"names":["player","Hesta"]}', result: '{"player":{}}' },
   { name: 'steer', arguments: '{"text":"Nobody answers."}', result: 'ok' },
 ]
 
-function playerTurn(id: string, input: string, reply?: string, briefing?: BriefingCall[]): Turn {
+function playerTurn(id: string, input: string, reply?: string, storyUpdate?: StoryUpdate): Turn {
   return {
     id,
     kind: 'player',
     input,
     reply: { id: `${id}-reply`, model: 'test', text: reply },
-    briefing,
+    storyUpdate,
   }
 }
 
@@ -49,6 +55,7 @@ function args(
   history: Turn[],
   overrides?: Partial<ContextFlags>,
   reminderAsSystem = true,
+  briefing?: BriefingCall[],
 ): ModelMessagesArgs {
   return {
     systemPrompt: 'system prompt',
@@ -65,11 +72,22 @@ function args(
     flags: { ...ALL_FLAGS, ...overrides },
     nsfw: false,
     reminderAsSystem,
+    briefing,
   }
 }
 
-function narrator(history: Turn[], overrides?: Partial<ContextFlags>): ModelMessage[] {
-  return buildNarratorMessages(args(history, overrides))
+function narrator(
+  history: Turn[],
+  overrides?: Partial<ContextFlags>,
+  briefing?: BriefingCall[],
+): ModelMessage[] {
+  return buildNarratorMessages(args(history, overrides, true, briefing))
+}
+
+// A request up to and including its latest input: what the next turn's
+// request must reproduce.
+function upToLatestInput(messages: ModelMessage[]): ModelMessage[] {
+  return messages.slice(0, messages.findLastIndex((m) => m.role === 'user') + 1)
 }
 
 const PIVOT = 'Plan the turn.'
@@ -87,51 +105,67 @@ function storyRoles(messages: ModelMessage[]): string[] {
 }
 
 describe('buildNarratorMessages layout', () => {
-  it('gives the narrator a line on its briefing per record, not the rules for keeping them', () => {
+  it('gives the narrator a line on its notes per record, not the rules for keeping them', () => {
     const messages = narrator([playerTurn('t1', 'I enter the mill.')])
     for (const heading of RULE_HEADINGS) {
       expect(messages.some((m) => m.content.includes(heading))).toBe(false)
     }
     const firstUser = messages.findIndex((m) => m.role === 'user')
-    const notes = messages.filter((m, i) => i < firstUser && m.content.startsWith('Before each reply'))
+    const notes = messages.filter((m, i) => i < firstUser && m.content.startsWith('Your notes arrive'))
     expect(notes).toHaveLength(1)
-    for (const mention of ['`update_memory`', '`recall_memory`', '`steer`', '`update_state`', 'OOC instructions']) {
+    for (const mention of [
+      '`story_update`',
+      '`reply_notes`',
+      'Remembered, in a story update',
+      'Steer, in the reply notes',
+      'Scene, in the reply notes',
+      'OOC instructions, in a story update',
+    ]) {
       expect(notes[0].content).toContain(mention)
     }
+    // The Plotter's record-keeping stays out of sight.
+    expect(notes[0].content).not.toMatch(/update_|recall_memory|`steer`/)
   })
 
-  it('replays each turn’s briefing as the DM’s own calls between its input and reply', () => {
-    const messages = narrator([
-      playerTurn('t1', 'I knock.', 'No answer.', BRIEFING),
-      playerTurn('t2', 'I try the handle.', undefined, [
-        { name: 'recall_memory', arguments: '{"names":["player"]}', result: '{"player":{}}' },
-      ]),
-    ])
+  it('replays each turn’s story update in history, and gives notes for the current reply only', () => {
+    const t1: Turn = {
+      ...playerTurn('t1', 'I knock.', 'No answer.', UPDATE),
+      // A briefing an older version saved is never replayed.
+      briefing: BRIEFING,
+    }
+    const messages = narrator(
+      [t1, playerTurn('t2', 'I try the handle.', undefined, { ooc: ['Keep replies short.'] })],
+      undefined,
+      BRIEFING,
+    )
     const story = messages.slice(messages.findIndex((m) => m.role === 'user'))
     expect(story.map((m) => (m.toolCalls ? 'calls' : m.role))).toEqual([
       'user',
       'calls',
       'tool',
-      'tool',
       'assistant',
       'user',
       'calls',
       'tool',
-      'system',
+      'calls',
+      'tool',
       'system',
     ])
-    expect(story[1].toolCalls).toEqual([
-      { id: 'dm-t1-1', name: 'update_state', arguments: BRIEFING[0].arguments },
-      { id: 'dm-t1-2', name: 'steer', arguments: BRIEFING[1].arguments },
-    ])
-    expect(story[2]).toEqual({ role: 'tool', toolCallId: 'dm-t1-1', content: BRIEFING[0].result })
+    expect(story[1].toolCalls).toEqual([{ id: 'dm-t1-update', name: 'story_update', arguments: '{}' }])
+    expect(story[2]).toEqual({ role: 'tool', toolCallId: 'dm-t1-update', content: renderStoryUpdate(UPDATE) })
+    expect(story[6].content).toBe('# OOC instructions\n\n1. Keep replies short.')
+    expect(story[7].toolCalls).toEqual([{ id: 'dm-reply-notes', name: 'reply_notes', arguments: '{}' }])
+    expect(story[8]).toMatchObject({ role: 'tool', toolCallId: 'dm-reply-notes' })
+    expect(story[8].content).toContain('Nobody answers.')
   })
 
-  it('ends with the OOC list, then the turn reminder, and holds no other records', () => {
+  it('ends with its notes, then the turn reminder, and holds no other records', () => {
     const messages = narrator([playerTurn('t1', 'I enter the mill.')])
-    const [input, ooc, reminder] = messages.slice(-3)
+    const [input, call, notes, reminder] = messages.slice(-4)
     expect(input).toMatchObject({ role: 'user', content: 'I enter the mill.' })
-    expect(ooc).toEqual({ role: 'system', content: '# OOC instructions\n\n1. Keep replies short.' })
+    expect(call.toolCalls?.map((c) => c.name)).toEqual(['reply_notes'])
+    // With nothing steered, the notes hold the scene alone.
+    expect(notes.content).toBe('# Scene\n\n```json\n{\n  "scene": {\n    "location": "the mill"\n  }\n}\n```')
     // After the player's own input, the reply opens by telling their move.
     expect(reminder).toEqual({
       role: 'system',
@@ -143,10 +177,9 @@ describe('buildNarratorMessages layout', () => {
     }
   })
 
-  it('sends the reminder in-channel when asked, keeping the OOC list out of the player’s voice', () => {
+  it('sends the reminder in-channel when asked', () => {
     const messages = buildNarratorMessages(args([playerTurn('t1', 'I wait.')], undefined, false))
-    const [ooc, reminder] = messages.slice(-2)
-    expect(ooc.role).toBe('system')
+    const reminder = messages[messages.length - 1]
     expect(reminder).toMatchObject({
       role: 'user',
       content:
@@ -155,16 +188,19 @@ describe('buildNarratorMessages layout', () => {
   })
 
   it('omits disabled records from the note and the tail', () => {
-    const messages = narrator([playerTurn('t1', 'Hello?')], {
-      includeMemory: false,
-      includePlotOutline: false,
-      includeOoc: false,
-    })
-    const notes = messages.find((m) => m.content.startsWith('Before each reply'))
-    expect(notes?.content).toContain('`update_state`')
-    expect(notes?.content).not.toContain('`recall_memory`')
-    expect(notes?.content).not.toContain('`steer`')
-    expect(messages[messages.length - 2]).toMatchObject({ role: 'user', content: 'Hello?' })
+    const messages = narrator(
+      [playerTurn('t1', 'Hello?')],
+      { includeMemory: false, includePlotOutline: false, includeOoc: false },
+      BRIEFING,
+    )
+    const notes = messages.find((m) => m.content.startsWith('Your notes arrive'))
+    expect(notes?.content).toContain('Scene, in the reply notes')
+    expect(notes?.content).not.toMatch(/Remembered|Steer|story_update|OOC/)
+    const [input, , replyNotes, reminder] = messages.slice(-4)
+    expect(input).toMatchObject({ role: 'user', content: 'Hello?' })
+    expect(replyNotes.content).toMatch(/^# Scene/)
+    expect(replyNotes.content).not.toMatch(/# Remembered|# Steer/)
+    expect(reminder.role).toBe('system')
   })
 
   it('sends no note when every record is switched off', () => {
@@ -174,7 +210,7 @@ describe('buildNarratorMessages layout', () => {
       includeMemory: false,
       includeOoc: false,
     })
-    expect(messages.some((m) => m.content.startsWith('Before each reply'))).toBe(false)
+    expect(messages.some((m) => m.content.startsWith('Your notes arrive'))).toBe(false)
     expect(messages[messages.length - 2]).toMatchObject({ role: 'user', content: 'Hello?' })
   })
 
@@ -195,7 +231,8 @@ describe('buildNarratorMessages layout', () => {
       withCalls(playerTurn('t2', 'I knock louder.', 'The door creaks open.'), 'update_memory'),
       playerTurn('t3', 'I step inside.'),
     ]
-    expect(narrator(history).some((m) => m.toolCalls?.length || m.role === 'tool')).toBe(false)
+    const narratorHistory = buildNarratorSections(args(history)).history
+    expect(narratorHistory.some((m) => m.toolCalls?.length || m.role === 'tool')).toBe(false)
     const plotterCalls = plotter(history)
       .filter((m) => m.role === 'assistant' && m.toolCalls?.length)
       .flatMap((m) => m.toolCalls?.map((c) => c.id) ?? [])
@@ -207,17 +244,18 @@ describe('buildNarratorMessages layout', () => {
     }
   })
 
-  it('extends a stable prefix across successive turns, briefing included (cache-friendly)', () => {
-    const t1 = playerTurn('t1', 'I knock.', undefined, BRIEFING)
-    const first = narrator([t1])
+  it('extends a stable prefix across successive turns, story update included (cache-friendly)', () => {
+    const t1 = playerTurn('t1', 'I knock.', undefined, UPDATE)
+    const first = narrator([t1], undefined, BRIEFING)
     const t1Done: Turn = { ...t1, reply: { ...t1.reply, text: 'No answer.' } }
     const second = narrator([t1Done, playerTurn('t2', 'I try the handle.')])
-    // Request 1 ends with the OOC list and reminder after t1's briefing.
-    // Request 2 must reproduce everything before them byte-for-byte, so the
-    // provider's prefix cache stays valid.
-    const shared = first.slice(0, -2)
-    expect(shared[shared.length - 1].role).toBe('tool')
+    // Request 1 ends with t1's notes and the reminder after t1's story
+    // update. Request 2 must reproduce everything before them byte-for-byte,
+    // so the provider's prefix cache stays valid.
+    const shared = first.slice(0, -3)
+    expect(shared[shared.length - 1]).toMatchObject({ role: 'tool', toolCallId: 'dm-t1-update' })
     expect(second.slice(0, shared.length)).toEqual(shared)
+    expect(second.some((m) => m.content.includes('Nobody answers.'))).toBe(false)
   })
 
   it('keeps bootstrap and Continue directives once their turn completes', () => {
@@ -240,7 +278,7 @@ describe('buildNarratorMessages layout', () => {
     expect(later.some((m) => m.content === '(OOC: Begin a new adventure.)')).toBe(true)
     // And the opening request's bytes are still a prefix of the later one:
     // nothing that was sent is later removed.
-    const shared = opening.slice(0, -2)
+    const shared = upToLatestInput(opening)
     expect(later.slice(0, shared.length)).toEqual(shared)
   })
 
@@ -249,7 +287,7 @@ describe('buildNarratorMessages layout', () => {
       id: 'f',
       kind: 'player',
       input: 'I shout.',
-      briefing: BRIEFING,
+      storyUpdate: { recalled: { Lost: { is: 'Lost direction.' } } },
       reply: {
         id: 'f-reply',
         model: 'test',
@@ -264,7 +302,7 @@ describe('buildNarratorMessages layout', () => {
     ])
     expect(messages.some((m) => m.content.includes('falters'))).toBe(false)
     expect(messages.some((m) => m.content === 'I shout.')).toBe(false)
-    expect(messages.some((m) => m.toolCalls?.length)).toBe(false)
+    expect(messages.some((m) => m.content.includes('Lost direction.'))).toBe(false)
     expect(storyRoles(messages)).toEqual(['user', 'assistant', 'user'])
   })
 })
@@ -316,9 +354,12 @@ describe('buildPlotterMessages layout', () => {
     expect(call.toolCalls?.map((c) => c.name)).toEqual(['check_state'])
   })
 
-  it('leaves the briefings to the narrator', () => {
-    const messages = plotter([playerTurn('t1', 'I knock.', 'No answer.', BRIEFING), playerTurn('t2', 'I wait.')])
-    expect(messages.some((m) => m.toolCalls?.some((c) => c.id.startsWith('dm-')))).toBe(false)
+  it('sees the story updates the narrator was given, but not its notes for the reply', () => {
+    const history = [playerTurn('t1', 'I knock.', 'No answer.', UPDATE), playerTurn('t2', 'I wait.')]
+    const messages = buildPlotterMessages({ ...args(history, undefined, true, BRIEFING), pivot: PIVOT })
+    const ids = messages.flatMap((m) => m.toolCalls?.map((c) => c.id) ?? [])
+    expect(ids.filter((id) => id.startsWith('dm-'))).toEqual(['dm-t1-update'])
+    expect(messages.some((m) => m.content.includes('Nobody answers.'))).toBe(false)
   })
 
   it('extends a stable prefix across successive turns (cache-friendly)', () => {
@@ -334,13 +375,117 @@ describe('buildPlotterMessages layout', () => {
   })
 
   it('shares the story with the narrator request', () => {
-    const history = [playerTurn('t1', 'I knock.', 'No answer.'), playerTurn('t2', 'I wait.')]
+    const history = [playerTurn('t1', 'I knock.', 'No answer.', UPDATE), playerTurn('t2', 'I wait.')]
     const n = buildNarratorSections(args(history))
     const p = buildPlotterSections({ ...args(history), pivot: PIVOT })
     expect(p.history).toEqual(n.history)
     expect(p.chronicle).toEqual(n.chronicle)
     // System prompt, content stance, and scenario come first in both.
     expect(p.system.slice(0, 3)).toEqual(n.system.slice(0, 3))
+  })
+})
+
+describe('buildReplyNotes', () => {
+  const data = {
+    state: { scene: { location: 'the mill' } },
+    plot: ['The miller returns at dusk'],
+    memory: { player: { is: 'A drifter with a debt.' }, Hesta: { is: 'The baker.' } },
+    ooc: [],
+  }
+
+  it('notes the scene, then the steer, and leaves the rest to the story update', () => {
+    const notes = buildReplyNotes(
+      [
+        { name: 'recall_memory', arguments: '{"names":["Hesta"]}', result: 'ok' },
+        { name: 'steer', arguments: '{"text":"Hesta looks up."}', result: 'ok' },
+      ],
+      data,
+      ALL_FLAGS,
+    )
+    expect(notes).toMatch(/^# Scene\n\n```json\n[\s\S]*"the mill"[\s\S]*```\n\n# Steer\n\nHesta looks up\.$/)
+  })
+
+  it('leaves out what is switched off or empty', () => {
+    const steer = [{ name: 'steer', arguments: '{"text":"Quiet."}', result: 'ok' }]
+    expect(buildReplyNotes(steer, data, { ...ALL_FLAGS, includeWorldState: false })).toBe('# Steer\n\nQuiet.')
+    expect(buildReplyNotes(steer, { ...data, state: {} }, { ...ALL_FLAGS, includePlotOutline: false })).toBe('')
+  })
+})
+
+describe('buildStoryUpdate', () => {
+  const data = {
+    state: {},
+    plot: ['The miller returns at dusk'],
+    memory: { player: { is: 'A drifter with a debt.' }, Hesta: { is: 'The baker.' } },
+    ooc: ['Keep replies short.'],
+  }
+  const recall = (names: string[]): BriefingCall => ({
+    name: 'recall_memory',
+    arguments: JSON.stringify({ names }),
+    result: '(stale)',
+  })
+  const done = (id: string, storyUpdate?: StoryUpdate): Turn =>
+    playerTurn(id, 'I wait.', 'Time passes.', storyUpdate)
+
+  it('adds recalled entries as they stand, and the OOC list', () => {
+    const update = buildStoryUpdate(
+      [],
+      [recall(['Hesta', 'Nobody']), { name: 'steer', arguments: '{"text":"Hesta looks up."}', result: 'ok' }],
+      data,
+      ALL_FLAGS,
+    )
+    // Entries come from the records, not the recall's result; unknown names
+    // and unrecalled entries stay out, and the steer is for the reply alone.
+    expect(update).toEqual({ recalled: { Hesta: { is: 'The baker.' } }, ooc: ['Keep replies short.'] })
+    const text = renderStoryUpdate(update ?? {})
+    expect(text).toMatch(/^# Remembered\n\n```json\n[\s\S]*The baker\.[\s\S]*```\n\n# OOC instructions\n\n1\. Keep replies short\.$/)
+    expect(text).not.toMatch(/stale|Nobody|A drifter|The miller|Hesta looks up/)
+  })
+
+  it('adds only what is new to the narrator’s view or changed', () => {
+    const earlier = [done('t1', { recalled: { Hesta: { is: 'The baker.' } }, ooc: ['Keep replies short.'] })]
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], data, ALL_FLAGS)).toBeUndefined()
+    const changed = { ...data, memory: { Hesta: { is: 'The widowed baker.' } }, ooc: [] }
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], changed, ALL_FLAGS)).toEqual({
+      recalled: { Hesta: { is: 'The widowed baker.' } },
+      // A cleared list is news too.
+      ooc: [],
+    })
+  })
+
+  it('keeps entries the narrator holds up to date without a recall', () => {
+    const earlier = [done('t1', { recalled: { Hesta: { is: 'The baker.' } } })]
+    const changed = {
+      ...data,
+      memory: { ...data.memory, Hesta: { is: 'The widowed baker.' }, Tam: { is: 'A new face.' } },
+      ooc: [],
+    }
+    // Tam changed too, but the narrator has never been given Tam.
+    expect(buildStoryUpdate(earlier, [], changed, ALL_FLAGS)).toEqual({
+      recalled: { Hesta: { is: 'The widowed baker.' } },
+    })
+  })
+
+  it('brings the OOC list back once it is out of view', () => {
+    // A failed turn's update was never shown; compaction drops older ones.
+    const failed: Turn = {
+      ...done('f', { ooc: ['Keep replies short.'] }),
+      reply: { id: 'f-reply', model: 'test', text: '(falters)', error: 'boom' },
+    }
+    expect(buildStoryUpdate([failed, done('t2')], [], data, ALL_FLAGS)).toEqual({
+      ooc: ['Keep replies short.'],
+    })
+    expect(buildStoryUpdate([], [], { ...data, ooc: [] }, ALL_FLAGS)).toBeUndefined()
+  })
+
+  it('leaves out what is switched off', () => {
+    const update = buildStoryUpdate(
+      [],
+      [recall(['Hesta']), { name: 'steer', arguments: '{"text":"x"}', result: 'ok' }],
+      data,
+      { ...ALL_FLAGS, includeMemory: false, includeOoc: false },
+    )
+    expect(update).toBeUndefined()
   })
 })
 

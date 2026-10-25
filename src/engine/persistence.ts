@@ -17,6 +17,7 @@ import type {
   SavedGame,
   SavedGameV1,
   SavedGameV2,
+  StoryUpdate,
   Turn,
   TurnRecovery,
   WorldSnapshot,
@@ -125,6 +126,15 @@ function isBriefingLike(value: unknown): value is BriefingCall[] {
   )
 }
 
+function isStoryUpdateLike(value: unknown): value is StoryUpdate {
+  if (!isRecord(value)) return false
+  return (
+    (value.recalled === undefined || isMemoryLike(value.recalled)) &&
+    (value.ooc === undefined ||
+      (Array.isArray(value.ooc) && value.ooc.every((entry) => typeof entry === 'string')))
+  )
+}
+
 export function isTurnLike(value: unknown): value is Turn {
   if (!isRecord(value)) return false
   return (
@@ -134,6 +144,7 @@ export function isTurnLike(value: unknown): value is Turn {
     (value.narrator === undefined || isModelCallLike(value.narrator)) &&
     isModelCallLike(value.reply) &&
     (value.plotter === undefined || isModelCallLike(value.plotter)) &&
+    (value.storyUpdate === undefined || isStoryUpdateLike(value.storyUpdate)) &&
     (value.briefing === undefined || isBriefingLike(value.briefing))
   )
 }

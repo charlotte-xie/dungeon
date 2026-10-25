@@ -7,9 +7,12 @@
 //      recalls the memories the reply needs, and may steer it, looping until
 //      it makes no calls.
 //   2. Narrate — the narrator, with no tools, writes the reply from the story
-//      and its briefing: the Plotter's world updates, recalled memories, and
-//      steer, shown as the DM's own tool calls ahead of the reply. The plan,
-//      the OOC edits, and the Plotter's reads stay the Plotter's.
+//      and two calls the DM appears to have made, built from the Plotter's
+//      briefing: the turn's story update, which stays in history (memories
+//      recalled or changed, the OOC list when it changed),
+//      and its notes for this reply alone (the scene and the steer). The
+//      records' updates, the plan, the OOC edits, and the Plotter's reads
+//      stay the Plotter's.
 //
 // Each request extends the same role's request from the previous turn, and
 // within a turn a nudge or a plotter iteration only appends, so each role
@@ -23,9 +26,19 @@ import {
   buildPlotterGuidance,
   buildPlotterMessages,
   buildPlotterTools,
+  buildReplyNotes,
+  buildStoryUpdate,
+  renderStoryUpdate,
   type ContextFlags,
 } from '../request'
-import { NARRATOR_VISIBLE_TOOLS, RECALL_MEMORY_TOOL, STEER_TOOL, executeEnabledTool } from '../tools'
+import {
+  BRIEFING_TOOLS,
+  RECALL_MEMORY_TOOL,
+  REPLY_NOTES_TOOL,
+  STEER_TOOL,
+  STORY_UPDATE_TOOL,
+  executeEnabledTool,
+} from '../tools'
 import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type {
@@ -41,6 +54,7 @@ import type {
   Chronicle,
   SamplingParams,
   StoryData,
+  StoryUpdate,
   TraceEvent,
   Turn,
   TurnKind,
@@ -75,6 +89,8 @@ export interface NarratorContext {
 // while the narrator writes.
 export interface Plotting {
   briefing: BriefingCall[]
+  // What the turn adds to the narrator's history, saved with the turn.
+  storyUpdate?: StoryUpdate
   trace: TraceEvent[]
   reasoningTokens?: number
   // Set when the Plotter failed; the narrator still writes, from whatever
@@ -142,7 +158,7 @@ export function buildPlotterInstruction(
           : 'Work out how the world answers the player, and record the changes that follow.',
     ...(recalls
       ? [
-          `Recall with \`${RECALL_MEMORY_TOOL.name}\` the remembered people, places and things the reply involves, so the narrator keeps them consistent.`,
+          `Recall with \`${RECALL_MEMORY_TOOL.name}\` the remembered people, places and things the reply brings into play, so the narrator keeps them consistent. Once recalled, an entry stays with the narrator, and later changes to it reach the narrator on their own.`,
         ]
       : []),
     ...(steers
@@ -169,8 +185,8 @@ export function buildPlotterInstruction(
 
 // Endpoints and models found to reject a request that replays tool calls
 // without offering any tools, for this browser session. The narrator then
-// sends the briefing tools' schemas with calls forbidden.
-const toolsRequiredForBriefing = new Set<string>()
+// sends the schemas of its own calls with calls forbidden.
+const toolsRequiredForOwnCalls = new Set<string>()
 
 function rejectsToolsWithoutSchemas(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
@@ -206,11 +222,13 @@ export async function runNarrator(
   const connection = { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol }
   const plotterConnection = { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'plotter') }
   const narratorConnection = { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'narrator') }
+  // The turn being played gets its story update once the Plotter is done.
+  const latest = ctx.history.length - 1
   const story = {
     systemPrompt: ctx.systemPrompt,
     slots: ctx.slots,
     chronicle: ctx.chronicle,
-    history: ctx.history,
+    history: ctx.history.map((t, i) => (i === latest ? { ...t, storyUpdate: undefined } : t)),
     data: ctx.initialData,
     includePriorPlayerTurns: ctx.includePriorPlayerTurns,
     flags: ctx.flags,
@@ -287,8 +305,8 @@ export async function runNarrator(
     }
     // Append the model's tool-call turn and execute each call in order,
     // serving context reads from the live data and everything else through
-    // the game-state executor. The calls the narrator sees join the briefing
-    // unless they were rejected. Reports whether the batch contained context
+    // the game-state executor. Recalls and steers join the briefing unless
+    // they were rejected. Reports whether the batch contained context
     // reads or rejected calls so the loop can decide whether another
     // iteration has a purpose.
     const handleToolCalls = (completion: { text: string; toolCalls: ModelToolCall[] }) => {
@@ -310,7 +328,7 @@ export async function runNarrator(
         data = exec.data
         const rejected = /^error\b/i.test(exec.result)
         if (rejected || /^partial\b/i.test(exec.result)) sawError = true
-        if (!rejected && NARRATOR_VISIBLE_TOOLS.has(call.name)) {
+        if (!rejected && BRIEFING_TOOLS.has(call.name)) {
           briefing.push({ name: call.name, arguments: call.arguments, result: exec.result })
         }
         pushToolResult(call, exec.result)
@@ -383,6 +401,7 @@ export async function runNarrator(
     }
     plotting = {
       briefing: [...briefing],
+      storyUpdate: buildStoryUpdate(ctx.history.slice(0, latest), briefing, data, ctx.flags),
       trace: [...plotterTrace],
       reasoningTokens: reasoningTokens || undefined,
       error,
@@ -396,16 +415,28 @@ export async function runNarrator(
   // An empty reply gets one nudge: the turn reminder again.
   trace = narratorTrace
   const plotterReasoningTokens = reasoningTokens
-  const latest = ctx.history.length - 1
+  const storyUpdate = plotting?.storyUpdate
   const narratorMessages = buildNarratorMessages({
     ...story,
-    history: ctx.history.map((t, i) => (i === latest ? { ...t, briefing } : t)),
+    history: story.history.map((t, i) => (i === latest ? { ...t, storyUpdate } : t)),
     data,
+    briefing,
   })
-  // A provider that won't take replayed tool calls without schemas gets the
-  // briefing tools' schemas, with calls forbidden.
+  // The story update and the notes show in the narrator's trace, which is
+  // never replayed into either role's context.
+  if (storyUpdate) {
+    trace.push({
+      kind: 'call',
+      name: STORY_UPDATE_TOOL.name,
+      arguments: '{}',
+      result: renderStoryUpdate(storyUpdate),
+    })
+  }
+  const notes = buildReplyNotes(briefing, data, ctx.flags)
+  if (notes) trace.push({ kind: 'call', name: REPLY_NOTES_TOOL.name, arguments: '{}', result: notes })
+  // A provider that won't take a replayed tool call without schemas gets the
+  // schemas of the narrator's own calls, with calls forbidden.
   const capabilityKey = `${ctx.baseUrl}\u0000${ctx.model}`
-  const briefingSchemas = tools.filter((t) => NARRATOR_VISIBLE_TOOLS.has(t.name))
   const narrate = async (label: string): Promise<ModelCompletion> => {
     const attempt = (withSchemas: boolean) =>
       completeModel(
@@ -413,7 +444,9 @@ export async function runNarrator(
           model: ctx.model,
           reasoningEffort: ctx.reasoningEffort,
           messages: narratorMessages,
-          ...(withSchemas ? { tools: briefingSchemas, toolChoice: 'none' as const } : {}),
+          ...(withSchemas
+            ? { tools: [STORY_UPDATE_TOOL, REPLY_NOTES_TOOL], toolChoice: 'none' as const }
+            : {}),
           temperature: ctx.sampling.temperature,
           label,
         },
@@ -421,15 +454,15 @@ export async function runNarrator(
         signal,
       )
     const replaysCalls = narratorMessages.some((m) => m.toolCalls?.length)
-    const withSchemas = replaysCalls && toolsRequiredForBriefing.has(capabilityKey)
+    const withSchemas = replaysCalls && toolsRequiredForOwnCalls.has(capabilityKey)
     try {
       return await attempt(withSchemas)
     } catch (err) {
       if (withSchemas || !replaysCalls || signal.aborted || !rejectsToolsWithoutSchemas(err)) throw err
-      toolsRequiredForBriefing.add(capabilityKey)
+      toolsRequiredForOwnCalls.add(capabilityKey)
       trace.push({
         kind: 'thought',
-        text: '(the provider rejected replayed tool calls without tools; resent with the briefing tools offered and calls forbidden)',
+        text: '(the provider rejected replayed tool calls without tools; resent with the narrator’s own tools offered and calls forbidden)',
       })
       return attempt(true)
     }

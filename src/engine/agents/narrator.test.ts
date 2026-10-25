@@ -111,27 +111,31 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
       true,
     )
 
-    // The narrator gets no tools, no rules, and no records — only the
-    // briefing, as the DM's own calls after the player's input.
+    // The narrator gets no tools, no rules, and no record-keeping — only its
+    // notes for the reply, as one call of its own after the player's input.
     expect(narratorReq.label).toBe('narrator:0')
     expect(narratorReq.tools ?? []).toEqual([])
     expect(narratorReq.messages.some((m) => m.content.includes('# Live State'))).toBe(false)
     const inputIdx = narratorReq.messages.findIndex((m) => m.role === 'user' && m.content === 'I knock.')
-    const briefing = narratorReq.messages[inputIdx + 1]
-    expect(briefing.toolCalls?.map((c) => c.name)).toEqual(['update_state', 'steer'])
-    expect(narratorReq.messages.slice(inputIdx + 2, inputIdx + 4).map((m) => m.role)).toEqual([
-      'tool',
-      'tool',
-    ])
+    const call = narratorReq.messages[inputIdx + 1]
+    expect(call.toolCalls?.map((c) => c.name)).toEqual(['reply_notes'])
+    const notes = narratorReq.messages[inputIdx + 2]
+    expect(notes.role).toBe('tool')
+    expect(notes.content).toContain('"location": "the mill"')
+    expect(notes.content).toContain('# Steer\n\nThe door gives under your knock.')
+    expect(notes.content).not.toContain('update_state')
 
-    expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['update_state', 'steer'])
+    expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
     expect(result.plotting?.trace.some((e) => e.kind === 'call' && e.name === 'update_state')).toBe(
       true,
     )
-    expect(result.trace.some((e) => e.kind === 'call')).toBe(false)
+    // The narrator's trace shows the notes it was given, and nothing else.
+    expect(result.trace.filter((e) => e.kind === 'call')).toEqual([
+      { kind: 'call', name: 'reply_notes', arguments: '{}', result: notes.content },
+    ])
   })
 
-  it('keeps the plan, OOC edits, reads, and rejected calls out of the briefing', async () => {
+  it('keeps the plan, OOC edits, reads, updates, and rejected calls out of the briefing', async () => {
     mockedModel.mockResolvedValueOnce(
       completion({
         toolCalls: [
@@ -150,17 +154,24 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.data.plot).toEqual(['The miller returns.'])
     expect(result.data.ooc).toEqual(['Keep replies short.'])
     expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
+    // The OOC list the Plotter changed reaches the narrator in the turn's
+    // story update; the plan never does.
+    expect(result.plotting?.storyUpdate).toEqual({ ooc: ['Keep replies short.'] })
     const narratorReq = requests()[2]
     const shown = narratorReq.messages.flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
-    expect(shown).toEqual(['steer'])
-    // The OOC list the Plotter left reaches the narrator in its tail.
+    expect(shown).toEqual(['story_update', 'reply_notes'])
+    expect(narratorReq.messages.some((m) => m.content.includes('The miller returns.'))).toBe(false)
     expect(narratorReq.messages.some((m) => m.content.includes('1. Keep replies short.'))).toBe(true)
   })
 
-  it('recalls memory entries into the narrator’s view', async () => {
+  it('recalls memory entries into the story update, as they stand after the updates', async () => {
     mockedModel.mockResolvedValueOnce(
       completion({
-        toolCalls: [{ id: 'm1', name: 'recall_memory', arguments: '{"names":["Hesta","Nobody"]}' }, STEER],
+        toolCalls: [
+          { id: 'm1', name: 'recall_memory', arguments: '{"names":["Hesta","Nobody"]}' },
+          { id: 'm2', name: 'update_memory', arguments: '{"set":{"Hesta":{"is":"The widowed baker."}}}' },
+          STEER,
+        ],
       }),
     )
     mockedModel.mockResolvedValueOnce(completion({ text: 'Hesta looks up.' }))
@@ -171,9 +182,10 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
 
     const narratorReq = requests()[1]
-    const recalled = narratorReq.messages.find((m) => m.role === 'tool')
-    expect(recalled?.content).toContain('The baker.')
-    expect(recalled?.content).toContain('(no entries named: Nobody)')
+    const update = narratorReq.messages.find((m) => m.role === 'tool' && m.toolCallId?.endsWith('-update'))
+    expect(update?.content).toContain('The widowed baker.')
+    expect(update?.content).not.toContain('The baker.')
+    expect(update?.content).not.toContain('Nobody')
   })
 
   it('reports the plotting before the narrator writes', async () => {
@@ -267,10 +279,6 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.plotting?.trace.some((e) => e.kind === 'thought' && e.text.includes('rejected'))).toBe(
       true,
     )
-    // Only the repaired call reaches the narrator.
-    expect(
-      result.plotting?.briefing.filter((c) => c.name === 'update_memory').map((c) => c.arguments),
-    ).toEqual(['{"set":{"the_mill":"An old mill."}}'])
   })
 
   it('reminds the Plotter once to steer when it writes prose instead', async () => {
@@ -323,7 +331,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
 
     expect(mockedModel).toHaveBeenCalledTimes(3)
     expect(result.text).toBe('Prose.')
-    expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['update_state'])
+    expect(result.plotting?.briefing).toEqual([])
   })
 
   it('still writes the reply when the Plotter fails', async () => {
@@ -376,21 +384,24 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(narrator1[narrator1.length - 1]).toEqual(narrator0[narrator0.length - 1])
   })
 
-  it('replays a turn’s briefing byte for byte in the next turn’s narrator request', async () => {
-    const snapshots = recordRequests((req) =>
+  it('keeps the story update in history and the notes for the current reply only', async () => {
+    const snapshots = recordRequests((req, n) =>
       isPlotter(req)
         ? completion({
+            // The first turn recalls Hesta; the second only changes her.
             toolCalls: [
-              { id: 'x1', name: 'update_state', arguments: '{"keep":[],"set":{"scene.location":"the mill"}}' },
-              { id: 'x2', name: 'steer', arguments: '{"text":"Nobody answers."}' },
+              { id: 'x1', name: 'update_memory', arguments: `{"set":{"Hesta":{"is":"Baker ${n}."}}}` },
+              ...(n === 1 ? [{ id: 'x2', name: 'recall_memory', arguments: '{"names":["Hesta"]}' }] : []),
+              { id: 'x3', name: 'steer', arguments: `{"text":"Steer ${n}."}` },
             ],
           })
         : completion({ text: 'Nobody answers.' }),
     )
     const first = await runNarrator(CTX, new AbortController().signal)
+    expect(first.plotting?.storyUpdate).toEqual({ recalled: { Hesta: { is: 'Baker 1.' } } })
     const done: Turn = {
       ...CTX.history[0],
-      briefing: first.plotting?.briefing,
+      storyUpdate: first.plotting?.storyUpdate,
       reply: { ...CTX.history[0].reply, text: first.text },
     }
     const next: Turn = {
@@ -404,12 +415,21 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
       new AbortController().signal,
     )
 
-    const firstNarrator = snapshots[1]
-    const secondNarrator = snapshots[3]
-    // Everything but the first request's tail (OOC list, reminder) is reused.
-    const shared = firstNarrator.slice(0, -2)
-    expect(shared[shared.length - 1].role).toBe('tool')
+    const [, firstNarrator, secondPlotter, secondNarrator] = snapshots
+    // Everything up to the first request's story update is reused; its notes
+    // and reminder were its tail.
+    const notesAt = firstNarrator.findIndex((m) => m.toolCalls?.[0]?.name === 'reply_notes')
+    const shared = firstNarrator.slice(0, notesAt)
+    expect(shared[shared.length - 1].content).toContain('Baker 1.')
     expect(secondNarrator.slice(0, shared.length)).toEqual(shared)
+    expect(firstNarrator.some((m) => m.content.includes('Steer 1.'))).toBe(true)
+    expect(secondNarrator.some((m) => m.content.includes('Steer 1.'))).toBe(false)
+    expect(secondNarrator.some((m) => m.content.includes('Steer 3.'))).toBe(true)
+    // Hesta changed without a recall: the narrator, who holds her, is told.
+    const updates = secondNarrator.filter((m) => m.toolCallId?.endsWith('-update'))
+    expect(updates.map((m) => m.content.includes('Baker 3.'))).toEqual([false, true])
+    // The Plotter sees the story updates the narrator was given.
+    expect(secondPlotter.some((m) => m.toolCallId?.endsWith('-update'))).toBe(true)
   })
 
   it('never executes a call the narrator returns, and nudges it for prose', async () => {
@@ -425,7 +445,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
 
     expect(result.text).toBe('Prose.')
     expect(result.data.state).toEqual({})
-    expect(result.trace.some((e) => e.kind === 'call')).toBe(false)
+    expect(result.trace.some((e) => e.kind === 'call' && e.name === 'update_state')).toBe(false)
     expect(result.trace.some((e) => e.kind === 'thought' && e.text.includes('nudge'))).toBe(true)
   })
 
@@ -440,7 +460,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(mockedModel).toHaveBeenCalledTimes(3)
   })
 
-  it('offers the briefing tools, calls forbidden, when a provider rejects calls without them', async () => {
+  it('offers the narrator’s own tools, calls forbidden, when a provider rejects calls without them', async () => {
     const ctx = { ...CTX, baseUrl: 'http://strict-provider' }
     let narratorCalls = 0
     mockedModel.mockImplementation(async (req) => {
@@ -460,12 +480,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.text).toBe('Quiet.')
     const narratorReqs = requests().filter((r) => !isPlotter(r))
     expect(narratorReqs[0].tools).toBeUndefined()
-    expect(narratorReqs[1].tools?.map((t) => t.name)).toEqual([
-      'update_memory',
-      'recall_memory',
-      'steer',
-      'update_state',
-    ])
+    expect(narratorReqs[1].tools?.map((t) => t.name)).toEqual(['story_update', 'reply_notes'])
     expect(narratorReqs[1].toolChoice).toBe('none')
     // Remembered for the session: the next turn sends them straight away.
     expect(narratorReqs[2].toolChoice).toBe('none')
@@ -557,6 +572,9 @@ describe('buildPlotterInstruction', () => {
     // Next-step beats belong in the steer, not the plan.
     expect(all).toContain('The development itself goes in your steer; change the plan only for a long-term story idea.')
     expect(all).toContain('What the player has already answered, or let pass with a Continue, is settled: steer what it brings.')
+    // A recalled entry stays with the narrator and is kept current.
+    expect(all).toContain('Once recalled, an entry stays with the narrator')
+    expect(all).not.toContain('long_term')
     expect(all).toContain('then `recall_memory`, then `steer`')
     expect(all).not.toContain('reply with only the word DONE')
     // Choice wording pulls models towards ending on a choice.

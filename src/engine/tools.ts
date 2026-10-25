@@ -160,14 +160,15 @@ export const CHECK_OOC_TOOL: ModelToolDefinition = {
     parameters: { type: 'object', properties: {} },
 }
 
-// Plotter tools whose calls the narrator sees. The narrator holds no memory or
-// plan of its own: before each reply it gets the Plotter's updates, the
-// memories it recalls, and its steer, as tool calls it appears to have made.
+// Plotter tools that brief the narrator. The narrator holds no memory or plan
+// of its own: before each reply it gets a story update, which stays in its
+// history, with the memories the Plotter recalls, and notes for the reply
+// alone, with the steer and the scene as it stands.
 
 export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
     name: 'recall_memory',
     description:
-      'Bring memory entries into the narrator’s view for this reply, by name. Call it after your updates, so the entries are current.',
+      'Bring memory entries into the narrator’s view, by name. Once recalled, an entry stays with the narrator, and later changes to it reach the narrator on their own. Call it after your updates, so the entries are current.',
     parameters: {
       type: 'object',
       properties: {
@@ -197,14 +198,27 @@ export const STEER_TOOL: ModelToolDefinition = {
     },
 }
 
-// The tools whose calls are replayed to the narrator. The plan, the OOC list
-// edits, and the read tools stay the Plotter's own.
-export const NARRATOR_VISIBLE_TOOLS: ReadonlySet<string> = new Set([
-  UPDATE_STATE_TOOL.name,
-  UPDATE_MEMORY_TOOL.name,
-  RECALL_MEMORY_TOOL.name,
-  STEER_TOOL.name,
-])
+// The tools whose calls make up the briefing the narrator's story update and
+// notes are built from. The records' updates, the plan, the OOC list edits,
+// and the read tools stay the Plotter's own.
+export const BRIEFING_TOOLS: ReadonlySet<string> = new Set([RECALL_MEMORY_TOOL.name, STEER_TOOL.name])
+
+// The narrator's own calls. A story update is kept with its turn and stays in
+// the narrator's history; the reply notes are for the reply being written
+// alone. Their schemas are sent only to a provider that won't take a replayed
+// call without them, with calls forbidden.
+export const STORY_UPDATE_TOOL: ModelToolDefinition = {
+    name: 'story_update',
+    description:
+      'What holds for the story from this point on: what you remember about those in play, and the player’s standing OOC instructions.',
+    parameters: { type: 'object', properties: {} },
+}
+
+export const REPLY_NOTES_TOOL: ModelToolDefinition = {
+    name: 'reply_notes',
+    description: 'Your notes for the reply you are writing: the scene as it stands, and how to steer the reply.',
+    parameters: { type: 'object', properties: {} },
+}
 
 export interface ToolExecResult {
   data: StoryData

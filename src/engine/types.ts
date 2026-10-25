@@ -33,13 +33,23 @@ export interface ModelCall {
   stopped?: boolean
 }
 
-// One call the Plotter made before the reply that the narrator sees — a world
-// update, a recalled memory, or a steer — with its result. Replayed in the
-// narrator's history as the DM's own tool call ahead of that turn's reply.
+// One call the Plotter made before the reply that briefs the narrator — a
+// recalled memory or a steer — with its result. The narrator's notes for that
+// reply are built from them.
 export interface BriefingCall {
   name: string
   arguments: string
   result: string
+}
+
+// What the narrator is told at a turn that holds for the rest of the story,
+// kept with the turn and replayed in history as a `story_update` call between
+// its input and reply: memory entries, as they stood then, that are newly
+// recalled or that it already holds and have changed; and the player's
+// standing OOC instructions, when they changed or have dropped out of view.
+export interface StoryUpdate {
+  recalled?: Memory
+  ooc?: string[]
 }
 
 export interface Turn {
@@ -56,8 +66,10 @@ export interface Turn {
   // so the trace pane can show the plot and narrate phases as distinct
   // sections.
   plotter?: ModelCall
-  // The Plotter's calls the narrator saw before writing this turn's reply.
-  // Absent on turns played before the Plotter ran first.
+  storyUpdate?: StoryUpdate
+  // The Plotter's briefing for this turn's reply, as saved by older versions,
+  // which replayed it to the narrator. No longer saved or read; the Plotter's
+  // trace keeps its calls.
   briefing?: BriefingCall[]
 }
 

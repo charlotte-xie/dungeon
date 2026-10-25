@@ -222,6 +222,20 @@ describe('turn validation', () => {
     expect(isTurnLike({ ...turn, briefing: 'steer' })).toBe(false)
     expect(isTurnLike({ ...turn, plotter: { id: 'p' } })).toBe(false)
   })
+
+  it('accepts a story update and checks its shape', () => {
+    const turn = {
+      id: 't',
+      kind: 'player',
+      input: 'x',
+      reply: { id: 'r', model: 'm', text: 'Prose.' },
+      storyUpdate: { recalled: { Hesta: { is: 'The baker.' } }, ooc: [] },
+    }
+    expect(isTurnLike(turn)).toBe(true)
+    expect(isTurnLike({ ...turn, storyUpdate: { ooc: [3] } })).toBe(false)
+    expect(isTurnLike({ ...turn, storyUpdate: { ooc: 'short' } })).toBe(false)
+    expect(isTurnLike({ ...turn, storyUpdate: { recalled: [] } })).toBe(false)
+  })
 })
 
 describe('stored undo and redo', () => {

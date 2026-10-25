@@ -347,7 +347,7 @@ export function useGameController(settings: GameSettings) {
           reasoningTokens: p.reasoningTokens,
           error: p.error,
         },
-        briefing: p.briefing.length ? p.briefing : undefined,
+        storyUpdate: p.storyUpdate,
       })
     }
     // The reply, polished by the reviser when it's on; a failed polish shows
