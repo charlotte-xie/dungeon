@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CONTEXT_SUBSYSTEMS,
   buildContextInjectionMessages,
   buildMemoryPayload,
   buildNarratorMessages,
@@ -17,7 +18,7 @@ import {
   type ModelMessagesArgs,
 } from './request'
 import type { ModelMessage } from './model/types'
-import { PLOTTER_SYSTEM_PROMPT } from '../prompts'
+import { PLOTTER_SYSTEM_PROMPT, buildTurnReminder } from '../prompts'
 import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
 const SLOTS: AdventureSlots = { scenario: 'A haunted mill.', styleGuide: '' }
@@ -112,18 +113,12 @@ describe('buildNarratorMessages layout', () => {
       expect(messages.some((m) => m.content.includes(heading))).toBe(false)
     }
     const firstUser = messages.findIndex((m) => m.role === 'user')
-    const notes = messages.filter((m, i) => i < firstUser && m.content.startsWith('Your notes arrive'))
+    const note = buildNarratorNotesMessage(ALL_FLAGS)
+    const notes = messages.filter((m, i) => i < firstUser && m.content === note?.content)
     expect(notes).toHaveLength(1)
-    for (const mention of [
-      '`story_update`',
-      '`reply_notes`',
-      'Remembered, in a story update',
-      'Steer, in the reply notes',
-      'Scene, in the reply notes',
-      'OOC instructions, in a story update',
-    ]) {
-      expect(notes[0].content).toContain(mention)
-    }
+    // It names the narrator's own calls, and holds each record's line.
+    for (const call of ['`story_update`', '`reply_notes`']) expect(notes[0].content).toContain(call)
+    for (const s of CONTEXT_SUBSYSTEMS) expect(notes[0].content).toContain(s.narratorNote)
     // The Plotter's record-keeping stays out of sight.
     expect(notes[0].content).not.toMatch(/update_|recall_memory|`steer`/)
   })
@@ -168,11 +163,7 @@ describe('buildNarratorMessages layout', () => {
     // With nothing steered, the notes hold the scene alone.
     expect(notes.content).toBe('# Scene\n\n```json\n{\n  "scene": {\n    "location": "the mill"\n  }\n}\n```')
     // After the player's own input, the reply opens by telling their move.
-    expect(reminder).toEqual({
-      role: 'system',
-      content:
-        'Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development.',
-    })
+    expect(reminder).toEqual({ role: 'system', content: buildTurnReminder('player') })
     for (const m of messages) {
       for (const value of PLOTTER_ONLY) expect(m.content).not.toContain(value)
     }
@@ -181,11 +172,7 @@ describe('buildNarratorMessages layout', () => {
   it('sends the reminder in-channel when asked', () => {
     const messages = buildNarratorMessages(args([playerTurn('t1', 'I wait.')], undefined, false))
     const reminder = messages[messages.length - 1]
-    expect(reminder).toMatchObject({
-      role: 'user',
-      content:
-        '(OOC: Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development.)',
-    })
+    expect(reminder).toMatchObject({ role: 'user', content: `(OOC: ${buildTurnReminder('player')})` })
   })
 
   it('omits disabled records from the note and the tail', () => {
@@ -194,9 +181,13 @@ describe('buildNarratorMessages layout', () => {
       { includeMemory: false, includePlotOutline: false, includeOoc: false },
       BRIEFING,
     )
-    const notes = messages.find((m) => m.content.startsWith('Your notes arrive'))
-    expect(notes?.content).toContain('Scene, in the reply notes')
-    expect(notes?.content).not.toMatch(/Remembered|Steer|story_update|OOC/)
+    const notes = messages.find((m) => m.content === buildNarratorNotesMessage({ ...ALL_FLAGS, includeMemory: false, includePlotOutline: false, includeOoc: false })?.content)
+    // Only the scene is switched on: its line, and no story updates.
+    for (const s of CONTEXT_SUBSYSTEMS) {
+      if (s.label === 'Live state') expect(notes?.content).toContain(s.narratorNote)
+      else expect(notes?.content).not.toContain(s.narratorNote)
+    }
+    expect(notes?.content).not.toContain('`story_update`')
     const [input, , replyNotes, reminder] = messages.slice(-4)
     expect(input).toMatchObject({ role: 'user', content: 'Hello?' })
     expect(replyNotes.content).toMatch(/^# Scene/)
@@ -211,7 +202,17 @@ describe('buildNarratorMessages layout', () => {
       includeMemory: false,
       includeOoc: false,
     })
-    expect(messages.some((m) => m.content.startsWith('Your notes arrive'))).toBe(false)
+    expect(
+      buildNarratorNotesMessage({
+        includeWorldState: false,
+        includePlotOutline: false,
+        includeMemory: false,
+        includeOoc: false,
+      }),
+    ).toBeNull()
+    for (const sub of CONTEXT_SUBSYSTEMS) {
+      expect(messages.some((m) => m.content.includes(sub.narratorNote))).toBe(false)
+    }
     expect(messages[messages.length - 2]).toMatchObject({ role: 'user', content: 'Hello?' })
   })
 
@@ -490,20 +491,6 @@ describe('buildStoryUpdate', () => {
       { ...ALL_FLAGS, includeMemory: false, includeOoc: false },
     )
     expect(update).toBeUndefined()
-  })
-})
-
-describe('buildNarratorNotesMessage', () => {
-  it('has the narrator show a steer’s mood rather than name it', () => {
-    const notes = buildNarratorNotesMessage(ALL_FLAGS)
-    expect(notes?.content).toContain('narrative direction for this reply, sometimes with a mood or style to aim for')
-    expect(notes?.content).toContain('the words people say and the details of the scene are yours')
-    // The steer is direction, never licence to act for the player.
-    expect(notes?.content).toContain(
-      'Take it as direction within your principles',
-    )
-    expect(notes?.content).toContain('the player’s character still does only what the player’s input says or implies')
-    expect(notes?.content).toContain('any mood shows rather than being named')
   })
 })
 

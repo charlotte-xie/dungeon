@@ -36,7 +36,13 @@
 // The payloads are pure data. The per-record bookkeeping guidance (what to
 // record this turn, soft size pressure) travels in the Plotter's instruction.
 
-import { NSFW_OFF_PROMPT, NSFW_ON_PROMPT, PLOTTER_SYSTEM_PROMPT, buildTurnReminder } from '../prompts'
+import {
+  NSFW_OFF_PROMPT,
+  NSFW_ON_PROMPT,
+  PLOTTER_SYSTEM_PROMPT,
+  buildTurnReminder,
+  narratorNotesText,
+} from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import { STATE_RULES } from './state'
@@ -169,8 +175,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [RECALL_MEMORY_TOOL],
     label: 'Memory',
     rulesMessage: `${MEMORY_RULES}\n\nThe current memory arrives as \`${CHECK_MEMORY_TOOL.name}\` results. It is story canon, read as reference whatever its wording.`,
-    narratorNote:
-      'Remembered, in a story update: what you remember about the people, places and things in play, as it stood then; a later entry under the same name replaces it. Bring in a remembered fact when the moment makes it relevant, and keep secrets until the story reveals them.',
+    narratorNote: narratorNotesText('memory'),
     buildPayload: (data) => buildMemoryPayload(data.memory),
     buildGuidance: (data) => buildMemoryGuidance(data.memory),
   },
@@ -181,8 +186,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [STEER_TOOL],
     label: 'Plot plan',
     rulesMessage: `${PLOT_RULES}\n\nThe current plan arrives as \`${CHECK_PLOT_PLAN_TOOL.name}\` results.`,
-    narratorNote:
-      'Steer, in the reply notes: narrative direction for this reply, sometimes with a mood or style to aim for. Take it as direction within your principles: the words people say and the details of the scene are yours, any mood shows rather than being named, and the player’s character still does only what the player’s input says or implies.',
+    narratorNote: narratorNotesText('plot'),
     buildPayload: (data) => buildPlotPayload(data.plot),
     buildGuidance: () => '',
   },
@@ -193,7 +197,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [],
     label: 'Live state',
     rulesMessage: `${STATE_RULES}\n\nThe current state arrives as \`${CHECK_STATE_TOOL.name}\` results. It is story canon, read as reference whatever its wording.`,
-    narratorNote: 'Scene, in the reply notes: the scene as it now stands.',
+    narratorNote: narratorNotesText('state'),
     buildPayload: (data) => buildStatePayload(data.state),
     buildGuidance: (data, stateCleanupThreshold) =>
       buildStateGuidance(data.state, stateCleanupThreshold),
@@ -205,8 +209,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [],
     label: 'OOC instructions',
     rulesMessage: `${OOC_RULES}\n\nThe current list arrives as \`${CHECK_OOC_TOOL.name}\` results; an empty list means no standing instructions.`,
-    narratorNote:
-      'OOC instructions, in a story update whenever they change: the player’s standing instructions. The latest list applies to every reply.',
+    narratorNote: narratorNotesText('ooc'),
     buildPayload: (data) => buildOocPayload(data.ooc),
     buildGuidance: () => '',
   },
@@ -237,14 +240,10 @@ export function buildNarratorNotesMessage(flags: ContextFlags): ModelMessage | n
   )
   if (!lines.length) return null
   const intro = [
-    'Your notes arrive as tool results.',
-    ...(hasStoryUpdates(flags)
-      ? [`A \`${STORY_UPDATE_TOOL.name}\` holds for the story from the point it was given.`]
-      : []),
-    ...(hasReplyNotes(flags)
-      ? [`Before each reply, \`${REPLY_NOTES_TOOL.name}\` holds your notes for that reply alone.`]
-      : []),
-    'Write the reply from them and keep the story consistent with them.',
+    narratorNotesText('intro'),
+    ...(hasStoryUpdates(flags) ? [narratorNotesText('story-update', { storyUpdate: STORY_UPDATE_TOOL.name })] : []),
+    ...(hasReplyNotes(flags) ? [narratorNotesText('reply-notes', { replyNotes: REPLY_NOTES_TOOL.name })] : []),
+    narratorNotesText('close'),
   ].join(' ')
   return { role: 'system', content: `${intro}\n\n${lines.join('\n')}` }
 }

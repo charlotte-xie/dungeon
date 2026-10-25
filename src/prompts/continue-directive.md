@@ -1,1 +1,1 @@
-(OOC: Continue: carry the story on to its next meaningful development.)
+(OOC: Continue: progress the story on to its next meaningful development.)

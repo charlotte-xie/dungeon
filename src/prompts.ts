@@ -5,6 +5,9 @@ import memoryRulesTemplate from './prompts/memory-rules.md?raw'
 import plotRulesTemplate from './prompts/plot-rules.md?raw'
 import oocRulesTemplate from './prompts/ooc-rules.md?raw'
 import turnReminder from './prompts/turn-reminder.md?raw'
+import plotterTurn from './prompts/plotter-turn.md?raw'
+import narratorNotes from './prompts/narrator-notes.md?raw'
+import nsfw from './prompts/nsfw.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
 import newAdventureBootstrapTemplate from './prompts/new-adventure-bootstrap.md?raw'
@@ -18,6 +21,49 @@ function fill(template: string, vars: Record<string, string | number>): string {
     return v === undefined ? match : String(v)
   })
 }
+
+// A prompt file holding several short prompts, each under a `## name`
+// heading, so wording that belongs together sits in one file. Reads a
+// section by name, filled with its variables; a missing section is a bug.
+function sectionReader<Name extends string>(file: string, template: string) {
+  const sections = new Map<string, string>()
+  for (const part of template.split(/^## /m).slice(1)) {
+    const end = part.indexOf('\n')
+    sections.set(part.slice(0, end).trim(), part.slice(end + 1).trim())
+  }
+  return (name: Name, vars: Record<string, string | number> = {}): string => {
+    const text = sections.get(name)
+    if (text === undefined) throw new Error(`${file} has no "## ${name}" section`)
+    return fill(text, vars)
+  }
+}
+
+// The Plotter's per-turn steps, the line on the order of its calls, and the
+// reminders it gets when it stops short.
+export type PlotterTurnSection =
+  | 'intro'
+  | 'opening-setup'
+  | 'opening-plan'
+  | 'opening-recall'
+  | 'opening-steer'
+  | 'record'
+  | 'develop'
+  | 'develop-continue'
+  | 'recall'
+  | 'steer'
+  | 'order'
+  | 'done'
+  | 'nudge-steer'
+  | 'nudge-rejected'
+export const plotterTurnText = sectionReader<PlotterTurnSection>('plotter-turn.md', plotterTurn)
+
+// The narrator's note on reading its own calls, and its line for each record.
+export const narratorNotesText = sectionReader<
+  'intro' | 'story-update' | 'reply-notes' | 'close' | 'memory' | 'plot' | 'state' | 'ooc'
+>('narrator-notes.md', narratorNotes)
+
+const turnReminderText = sectionReader<'default' | 'player' | 'continue'>('turn-reminder.md', turnReminder)
+const nsfwText = sectionReader<'on' | 'off'>('nsfw.md', nsfw)
 
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
 // The Plotter's own brief: it directs the story and keeps the records, and
@@ -36,19 +82,13 @@ export const CONTINUE_DIRECTIVE = continueDirective.trim()
 // and said. On a Continue their last move was told in the last reply, so the
 // story carries on from there; an opening has no move to tell.
 export function buildTurnReminder(kind?: TurnKind): string {
-  const reminder = turnReminder.trim()
-  if (kind === 'player') {
-    return `Open with what the player did, briefly, and what they said, in their exact words. ${reminder}`
-  }
-  if (kind === 'continue') {
-    return 'Carry on from where the last reply ended, advancing the story to its next meaningful development.'
-  }
-  return reminder
+  if (kind === 'player') return turnReminderText('player')
+  if (kind === 'continue') return turnReminderText('continue')
+  return turnReminderText('default')
 }
 
-export const NSFW_ON_PROMPT =
-  'The player is a consenting adult who agrees to dark, mature or NSFW themes. Include these if appropriate to the story.'
-export const NSFW_OFF_PROMPT = 'Keep descriptions and developments suitable for a general audience.'
+export const NSFW_ON_PROMPT = nsfwText('on')
+export const NSFW_OFF_PROMPT = nsfwText('off')
 
 export function buildStateRules(): string {
   return stateRulesTemplate.trim()

@@ -19,7 +19,7 @@
 // keeps its own provider prefix cache. Provider transport and response-format
 // quirks live under ../model.
 
-import { buildTurnReminder } from '../../prompts'
+import { buildTurnReminder, plotterTurnText, type PlotterTurnSection } from '../../prompts'
 import {
   CONTEXT_SUBSYSTEMS,
   buildNarratorMessages,
@@ -114,71 +114,58 @@ export interface NarratorHooks {
 
 export const MAX_PLOTTER_ITERATIONS = 4
 
-// The Plotter's instruction names only the subsystems that are actually
-// enabled — a static text would point the model at injections that don't
-// exist and tools that aren't advertised whenever a subsystem is switched
-// off. What to record lives in the rules; the instruction carries the turn's
-// steps and any size hints, computed from the data at the start of the turn.
+// The Plotter's instruction for the turn: its steps, worded in
+// plotter-turn.md, for the records that are switched on only — a step for a
+// switched-off record would point the model at injections that don't exist
+// and tools that aren't advertised. The principles live in the Plotter's
+// system prompt and what to record in the rules; the instruction carries the
+// turn's steps and any size hints, computed from the data at the start of
+// the turn.
 export function buildPlotterInstruction(
   flags: ContextFlags,
   data: StoryData,
   stateCleanupThreshold: number,
   // The opening has no reply to record from: the Plotter sets the records
-  // and the plan up from the scenario instead. On a Continue the player's
-  // last move was played out in the last reply, so nothing points back at it.
+  // and the plan up from the scenario instead.
   kind: TurnKind = 'player',
 ): string {
   const opening = kind === 'bootstrap'
-  const continuing = kind === 'continue'
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
-  const reads = enabled.map((s) => s.checkTool.name)
-  const updates = enabled.map((s) => `\`${s.updateTool.name}\``)
   // With the plot plan on, the Plotter directs every reply through a steer;
   // the plan itself stays private.
   const steers = flags.includePlotOutline
   const recalls = flags.includeMemory
-  const openingSteps = [
-    'Set up the records from the scenario: the people, places and things the story starts with, what each person wants, and the player’s character under their name, giving them a name that fits the scenario if it has none.',
-    ...(steers ? ['Write the plan: long-term ideas for where the story is heading.'] : []),
-    ...(recalls
-      ? [`Recall with \`${RECALL_MEMORY_TOOL.name}\` the people, places and things the opening involves.`]
-      : []),
-    ...(steers
-      ? [`Steer the opening with \`${STEER_TOOL.name}\`: how the story begins, concretely, carried by the world and its people and calling the player’s character “you”.`]
-      : []),
-  ]
-  const replySteps = [
-    `Record only what the last reply established that matters to the plot or its continuity and the records (the ${reads.join(' / ')} results) don’t yet hold.`,
-    steers && continuing
-      ? 'The player has handed this reply to you with Continue: their last move was played out in the last reply, and the world and its people carry the story on from there. Follow their pace, focus and interest first: what is meaningful is what they have been engaging with. From where the last reply ended, pick the one development that does most for the story at this point, concrete and substantial, so it leaves the story somewhere new: inside a moment they have been dwelling on, how the people in it respond and what it changes between them; otherwise, moving towards where the plan is heading, an NPC pursues their goal, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
-      : steers
-        ? 'Follow the player’s pace, focus and interest first: what is meaningful is what they engage with. Then pick the one development that does most for the story at this point, concrete and substantial, so it leaves the story somewhere new. When the player dwells on a moment and gives it detail, it grows inside that moment: how the people in it respond, and what it changes between them. When they move on or hold back, it moves towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
-        : continuing
-          ? 'Work out how the world moves on from where the last reply ended, and record the changes that follow.'
-          : 'Work out how the world answers the player, and record the changes that follow.',
-    ...(recalls
-      ? [
-          `Recall with \`${RECALL_MEMORY_TOOL.name}\` the remembered people, places and things the reply brings into play, so the narrator keeps them consistent. Once recalled, an entry stays with the narrator, and later changes to it reach the narrator on their own.`,
-        ]
-      : []),
-    ...(steers
-      ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: that development, concretely, saying what happens in the world and what it changes, carried by the world and its people, as plain events with no reasons or commentary. Leave the words people say and the details of the scene to the narrator. Call the player’s character “you”, as the story does: they do only what the player’s input says or implies, so the direction takes them no further, and their feelings are the player’s own. What the player has answered, let pass or not engaged with is settled: steer what it brings.`,
-        ]
-      : []),
-  ]
-  const steps = opening ? openingSteps : replySteps
-  const order = [
-    `${updates.join(', ')} for the records`,
-    ...(recalls ? [`\`${RECALL_MEMORY_TOOL.name}\``] : []),
-    ...(steers ? [`\`${STEER_TOOL.name}\``] : []),
-  ]
+  const vars = {
+    reply: opening ? 'the opening' : 'the next reply',
+    reads: enabled.map((s) => s.checkTool.name).join(' / '),
+    recall: RECALL_MEMORY_TOOL.name,
+    steer: STEER_TOOL.name,
+    order: [
+      `${enabled.map((s) => `\`${s.updateTool.name}\``).join(', ')} for the records`,
+      ...(recalls ? [`\`${RECALL_MEMORY_TOOL.name}\``] : []),
+      ...(steers ? [`\`${STEER_TOOL.name}\``] : []),
+    ].join(', then '),
+  }
+  const text = (name: PlotterTurnSection) => plotterTurnText(name, vars)
+  const steps: PlotterTurnSection[] = opening
+    ? [
+        'opening-setup',
+        ...(steers ? ['opening-plan' as const] : []),
+        ...(recalls ? ['opening-recall' as const] : []),
+        ...(steers ? ['opening-steer' as const] : []),
+      ]
+    : [
+        'record',
+        kind === 'continue' ? 'develop-continue' : 'develop',
+        ...(recalls ? ['recall' as const] : []),
+        ...(steers ? ['steer' as const] : []),
+      ]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (
-    `You are acting as the Plotter: you direct the story and keep its records, and the narrator writes ${opening ? 'the opening' : 'the next reply'} from your briefing.\n` +
-    steps.map((step, i) => `${i + 1}. ${step}`).join('\n') +
-    `\n\nReply with tool calls alone: ${order.join(', then ')}. Update a record only where something changed.` +
-    (steers ? '' : ' If there is nothing to record, reply with only the word DONE.') +
+    `${text('intro')}\n` +
+    steps.map((step, i) => `${i + 1}. ${text(step)}`).join('\n') +
+    `\n\n${text('order')}` +
+    (steers ? '' : ` ${text('done')}`) +
     (guidance ? `\n\n${guidance}` : '')
   )
 }
@@ -349,7 +336,7 @@ export async function runNarrator(
     const nudgeForSteer = () => {
       steerNudged = true
       forceCall = true
-      pushNudge(messages, `Steer the reply now with \`${STEER_TOOL.name}\`, using tool calls alone.`)
+      pushNudge(messages, plotterTurnText('nudge-steer', { steer: STEER_TOOL.name }))
     }
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
@@ -392,10 +379,7 @@ export async function runNarrator(
           continue
         }
         if (batch.sawError) {
-          pushNudge(
-            messages,
-            'One or more Plotter calls were rejected — see the tool results above. Re-issue the corrected calls now, or reply with only the word DONE to leave them unrecorded.',
-          )
+          pushNudge(messages, plotterTurnText('nudge-rejected'))
         }
       }
     } catch (err) {

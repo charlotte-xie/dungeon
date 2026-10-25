@@ -299,7 +299,8 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     const [plotter0, plotter1] = snapshots
     expect(plotter1.slice(0, plotter0.length)).toEqual(plotter0)
     expect(plotter1).toHaveLength(plotter0.length + 1)
-    expect(plotter1.at(-1)?.content).toContain('Steer the reply now')
+    expect(plotter1.at(-1)).toMatchObject({ role: 'system' })
+    expect(plotter1.at(-1)?.content).toContain('`steer`')
     expect(plotter1.some((m) => m.content === 'Hesta opens the door.')).toBe(false)
     expect(result.plotting?.trace.some((e) => e.kind === 'thought' && e.text === 'Hesta opens the door.')).toBe(true)
     // The request after the reminder has it make a call; no other does.
@@ -325,8 +326,10 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     await runNarrator(CTX, new AbortController().signal)
 
     const [openingPlotter, , replyPlotter] = snapshots
-    expect(openingPlotter.at(-1)?.content).toContain('the narrator writes the opening')
-    expect(replyPlotter.at(-1)?.content).toContain('the narrator writes the next reply')
+    expect(openingPlotter.at(-1)?.content).toBe(
+      buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'bootstrap'),
+    )
+    expect(replyPlotter.at(-1)?.content).toBe(buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'player'))
   })
 
   it('reminds the Plotter once to steer after a batch without one, and only once', async () => {
@@ -542,7 +545,9 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
 })
 
 describe('buildPlotterInstruction', () => {
-  it('names only the enabled subsystems and their steps', () => {
+  const noPlan = { ...CTX.flags, includePlotOutline: false }
+
+  it('names only the enabled records and their tools, updates before recalls before the steer', () => {
     const memoryOnly = buildPlotterInstruction(
       {
         includeWorldState: false,
@@ -556,102 +561,54 @@ describe('buildPlotterInstruction', () => {
     expect(memoryOnly).toContain('check_memory')
     expect(memoryOnly).toContain('`update_memory`')
     expect(memoryOnly).toContain('`recall_memory`')
-    expect(memoryOnly).not.toContain('`steer`')
-    expect(memoryOnly).not.toContain('check_state')
-    expect(memoryOnly).not.toContain('future_plot_plan')
-    expect(memoryOnly).not.toContain('update_ooc')
-    // Without the plan there is no steer, so doing nothing is allowed.
-    expect(memoryOnly).toContain('reply with only the word DONE')
+    for (const name of ['`steer`', 'check_state', 'future_plot_plan', 'update_ooc']) {
+      expect(memoryOnly).not.toContain(name)
+    }
 
     const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
-    expect(all).toContain('the narrator writes the next reply from your briefing')
-    expect(all).toContain('`update_ooc`')
-    // With the plan on, the Plotter delivers a development and steers every
-    // reply, after its updates and recalls.
-    expect(all).toContain('Deliver what the story has set up')
-    expect(all).toContain('Steer every reply')
-    // Records name the player's character; steers call them "you", as the
-    // story does, so the narrator never takes the name for someone else.
-    expect(all).toContain('Call the player’s character “you”, as the story does')
-    // Steers explaining reasons pulled the narration into explanation.
-    expect(all).toContain('as plain events with no reasons or commentary')
-    // Asking what a reply should "achieve" drew the player's character into
-    // the outcome, and the narrator spoke for them on Continue.
-    expect(all).toContain('carried by the world and its people')
-    expect(all).not.toContain('achieve')
-    // Scripted lines were copied word for word, and a weather line in every
-    // steer became rain in every reply: the telling is the narrator's.
-    expect(all).toContain('Leave the words people say and the details of the scene to the narrator')
-    // Steers written about the player became third-person narration and
-    // moves the player never made.
-    expect(all).toContain('they do only what the player’s input says or implies, so the direction takes them no further')
-    expect(all).toContain('matters to the plot or its continuity')
-    // Next-step beats belong in the steer, not the plan.
-    expect(all).toContain('The development itself goes in your steer; change the plan only for a long-term story idea.')
-    // What the player ignores is settled too: Theo knocked three times.
-    expect(all).toContain('What the player has answered, let pass or not engaged with is settled: steer what it brings.')
-    // A recalled entry stays with the narrator and is kept current.
-    expect(all).toContain('Once recalled, an entry stays with the narrator')
-    expect(all).not.toContain('long_term')
+    for (const name of ['`update_memory`', '`future_plot_plan`', '`update_state`', '`update_ooc`', '`recall_memory`', '`steer`']) {
+      expect(all).toContain(name)
+    }
     expect(all).toContain('then `recall_memory`, then `steer`')
-    expect(all).not.toContain('reply with only the word DONE')
-    // Choice wording pulls models towards ending on a choice.
-    expect(all).not.toMatch(/decision|choice|decide|choose/i)
-    // Steers play out consequences through the next development, with no
-    // scripted last line: that turned a fight into attack after attack.
-    // What is meaningful is what the player engages with: a moment they
-    // dwell on was cut short by an outside interruption.
-    expect(all).toContain('Follow the player’s pace, focus and interest first')
-    expect(all).toContain('it grows inside that moment')
-    expect(all).toContain('an NPC pursues their goal')
-    expect(all).toContain('the story moves on to the next scene')
-    // The most useful development, concretely: back-to-back Continues gave
-    // small beats.
-    expect(all).toContain('pick the one development that does most for the story at this point, concrete and substantial')
-    expect(all).toContain('that development, concretely')
-    expect(all).not.toMatch(/closes? on|camera|how far/i)
-    expect(all).not.toMatch(/respond to/i)
-    // Size status rides along; memory's only once it grows long.
+  })
+
+  it('lets the Plotter make no calls only when there is no steer to give', () => {
+    expect(buildPlotterInstruction(noPlan, CTX.initialData, 4000)).toContain('DONE')
+    expect(buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)).not.toContain('DONE')
+  })
+
+  it('gives the opening, a reply and a Continue their own steps', () => {
+    const reply = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
+    const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'bootstrap')
+    const continuing = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'continue')
+    expect(new Set([reply, opening, continuing]).size).toBe(3)
+    // The opening has no reply yet to record from, and pointing a Continue
+    // at the player's last action had steers retell it.
+    expect(opening).not.toMatch(/last reply|last action/)
+    expect(continuing).not.toContain('last action')
+    // A switched-off record is never mentioned.
+    expect(buildPlotterInstruction(noPlan, CTX.initialData, 4000, 'bootstrap')).not.toMatch(/plan|steer/i)
+  })
+
+  it('keeps out wording that pulled the models the wrong way', () => {
+    for (const kind of [undefined, 'bootstrap', 'continue'] as const) {
+      const text = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, kind)
+      // Choice wording pulled models towards ending on a choice.
+      expect(text).not.toMatch(/decision|choice|decide|choose/i)
+      // Asking what a reply should "achieve" drew the player's character
+      // into the outcome, and the narrator spoke for them on Continue.
+      expect(text).not.toContain('achieve')
+      // Scripting the last line turned a fight into attack after attack.
+      expect(text).not.toMatch(/closes? on|camera|how far/i)
+      expect(text).not.toMatch(/respond to/i)
+    }
+  })
+
+  it('carries size status for the records, memory’s only once it grows long', () => {
+    const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
     expect(all).toContain('STATUS: state size')
     expect(all).not.toContain('Memory: STATUS')
     const bigMemory = { ...CTX.initialData, memory: { notes: { is: 'x'.repeat(9000) } } }
     expect(buildPlotterInstruction(CTX.flags, bigMemory, 4000)).toContain('Memory: STATUS')
-  })
-
-  it('sets the records and the plan up from the scenario on the opening', () => {
-    const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'bootstrap')
-    expect(opening).toContain('Set up the records from the scenario')
-    expect(opening).toContain('what each person wants')
-    expect(opening).toContain('the player’s character under their name, giving them a name that fits the scenario if it has none')
-    expect(opening).toContain('Write the plan: long-term ideas for where the story is heading')
-    expect(opening).toContain('Steer the opening with `steer`: how the story begins, concretely, carried by the world and its people')
-    // The opening steer named the player's character in the third person.
-    expect(opening).toContain('calling the player’s character “you”')
-    expect(opening).toContain('then `recall_memory`, then `steer`')
-    // There is no reply or player action yet to record or answer.
-    expect(opening).not.toMatch(/last reply|last action/)
-    expect(opening).not.toMatch(/decision|choice|decide|choose/i)
-
-    const noPlan = buildPlotterInstruction(
-      { ...CTX.flags, includePlotOutline: false },
-      CTX.initialData,
-      4000,
-      'bootstrap',
-    )
-    expect(noPlan).not.toMatch(/plan|steer/i)
-    expect(noPlan).toContain('reply with only the word DONE')
-  })
-
-  it('carries on from the last reply on a Continue, without going back to the last move', () => {
-    const continuing = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'continue')
-    expect(continuing).toContain('The player has handed this reply to you with Continue')
-    expect(continuing).toContain('Follow their pace, focus and interest first')
-    expect(continuing).toContain('the world and its people carry the story on from there')
-    expect(continuing).toContain('From where the last reply ended, pick the one development that does most for the story at this point')
-    // Pointing at the player's last action had steers retell it.
-    expect(continuing).not.toContain('last action')
-    expect(buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)).toContain(
-      'the important consequences of the player’s last action land',
-    )
   })
 })

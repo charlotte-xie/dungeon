@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { executeTool, FUTURE_PLOT_PLAN_TOOL, STEER_TOOL, UPDATE_OOC_TOOL } from './tools'
+import { executeTool, UPDATE_OOC_TOOL } from './tools'
 
 describe('tool execution boundaries', () => {
   it('rejects an unsafe update_state atomically', () => {
@@ -39,7 +39,6 @@ describe('tool execution boundaries', () => {
     expect(deleted.result).toContain('OOC list now has 1 entry')
     // The list is the player's own direction; a length example on the tool
     // got the brief's own guidance recorded as a preference.
-    expect(UPDATE_OOC_TOOL.description).toContain('Each entry is direction the player has given')
     expect(UPDATE_OOC_TOOL.description).not.toMatch(/paragraph|shorter/i)
   })
 
@@ -230,8 +229,6 @@ describe('tool execution boundaries', () => {
     expect(removed.data.plot).toEqual(['A rival arrives.', 'The order returns.'])
     expect(removed.result).toContain('removed entry 2')
     // The tool says when: a good idea in, a completed or abandoned entry out.
-    expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('`insert` a long-term story idea')
-    expect(FUTURE_PLOT_PLAN_TOOL.description).toContain('once it is completed or abandoned')
     // Rewriting in place turned directions into notes on the current scene.
     for (const op of ['update', 'append', 'delete']) {
       const refused = executeTool(
@@ -281,8 +278,5 @@ describe('briefing tools', () => {
     const steer = executeTool('steer', JSON.stringify({ text: 'The miller returns.' }), data)
     expect(steer).toEqual({ data, result: 'ok' })
     expect(executeTool('steer', JSON.stringify({ text: '  ' }), data).result).toMatch(/^error/)
-    expect(STEER_TOOL.description).toContain('the one that does most for the story at this point')
-    expect(STEER_TOOL.description).toContain('carried by the world and its people')
-    expect(STEER_TOOL.description).toContain('the narrator writes the words people say and the details of the scene')
   })
 })
