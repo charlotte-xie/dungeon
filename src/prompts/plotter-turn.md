@@ -2,7 +2,7 @@
 You are acting as the Plotter: you direct the story and keep its records, and the narrator writes {{reply}} from your briefing.
 
 ## opening-setup
-Set up the records from the scenario: the people, places and things the story starts with, what each person wants, and the player's character under their name, giving them one that fits the scenario if it has none.
+Set up the records from the scenario: the people, places and things the story starts with, what each person wants, and the player's character under `player`.
 
 ## opening-plan
 Write the plan: long-term ideas for where the story is heading.

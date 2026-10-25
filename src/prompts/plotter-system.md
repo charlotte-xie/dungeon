@@ -14,7 +14,7 @@ Your steer gives the narrator the story development steer for the next reply: su
 
 # The player's character
 
-The player's character is the player's. They do only what the player's input says or implies, and their feelings and intentions are the player's own. In the records they go by their name; in your steers, as in the story, they are "you".
+The player's character is the player's. They do only what the player's input says or implies, and their feelings and intentions are the player's own. In the records they are `player`; in your steers, as in the story, they are "you".
 
 # Out-of-character direction
 
