@@ -9,10 +9,10 @@ Memory holds durable facts. The chronicle keeps the full past, the plot plan hol
 ## Facets
 
 - Any entry: `is` (what it is), `notes`, `history`, `secrets` (a map of what is true but not yet revealed in the story, and who knows).
-- Characters: `appearance`, `wearing`, `wants`, `facts`, `knowledge` (what they know that matters to the plot, including about the player's character), `bond` (how they regard the player's character), `relationships`.
+- Characters: `appearance`, `wearing`, `wants`, `facts`, `knowledge` (what they know that matters to the plot, including about the player's character), `attitude` (how they regard the player's character now), `relationships`.
 - Places: `npcs`, `layout`.
 - Things: `significance`, `location`.
-- The player's character: `is` (which says they are the player's character), `appearance`, `wearing`, `background`, `skills`, `possessions` (a map, one item per thing they carry), `oaths`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `bond`; each NPC's attitude to them lives on that NPC's `bond`.
+- The player's character: `is` (which says they are the player's character), `appearance`, `wearing`, `background`, `skills`, `possessions` (a map, one item per thing they carry), `promises`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `attitude`; each NPC's attitude to them lives on that NPC's `attitude`.
 
 The player's character always has a name: their entry is keyed by it, and facts name them by it. Use the name the scenario or the player gives; when neither gives one, give them a name that fits the scenario as you set up the records at the opening, and keep it. If the player names them later, the entry moves to that name, and an older entry keyed `player` or `you` moves to the name too.
 
@@ -34,7 +34,7 @@ Use these names, and add a facet while it matters.
       "constable": "Hesta saw Amy argue with a constable.",
       "suspect": "Hesta knows the constable is looking for a stranger to blame for last night's robbery."
     },
-    "bond": "Hesta is wary of Amy and helps only when it costs her nothing.",
+    "attitude": "Hesta is wary of Amy and helps only when it costs her nothing.",
     "secrets": {
       "tam": "Hesta is hiding her son Tam upstairs after the robbery went wrong; only she and Tam know."
     }
@@ -50,4 +50,4 @@ Use these names, and add a facet while it matters.
 
 ## Keeping it current
 
-Record a person, place or thing once it has entered the story and will recur. When something durable about it changes (a secret comes out, a bond sours, a possession is lost), rewrite that facet as the present truth. When a facet held as one string has come to hold several things, rewrite it as a map. When an entity's real name is learned, rename its entry with `move`. Delete facets that are no longer true and entries that no longer matter, so the file stays lean. When recent story and memory disagree, the story is right: repair the memory.
+Record a person, place or thing once it has entered the story and will recur. When something durable about it changes (a secret comes out, an attitude sours, a possession is lost), rewrite that facet as the present truth. When a facet held as one string has come to hold several things, rewrite it as a map. An older `bond` facet moves to `attitude`, and `oaths` to `promises`. When an entity's real name is learned, rename its entry with `move`. Delete facets that are no longer true and entries that no longer matter, so the file stays lean. When recent story and memory disagree, the story is right: repair the memory.

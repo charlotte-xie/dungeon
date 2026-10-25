@@ -11,7 +11,7 @@ Write the plan: long-term ideas for where the story is heading.
 Recall with `{{recall}}` the people, places and things the opening involves.
 
 ## opening-steer
-Steer the opening with `{{steer}}`: how the story begins, in a few plain sentences, with the player's character as "you".
+Steer the opening with `{{steer}}`: brief guidance on how the story begins, with the player's character as "you".
 
 ## record
 Record what the last reply established that matters for continuity and the records ({{reads}}) don't hold yet.
@@ -26,7 +26,7 @@ The player pressed Continue: move the story on from where the last reply ended t
 Recall with `{{recall}}` the people, places and things the reply involves.
 
 ## steer
-Steer the reply with `{{steer}}`: what happens, in a few plain sentences. The narrator writes the dialogue and description. The player's character is "you" and does only what the player's input says or implies.
+Steer the reply with `{{steer}}`: brief guidance for the narrator on where the story goes next, something it hasn't had yet. Facts go in the records, and the scene is the narrator's to write. The player's character is "you" and does only what the player's input says or implies.
 
 ## order
 Reply with tool calls alone: {{order}}. Update a record only where something changed.

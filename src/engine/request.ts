@@ -68,6 +68,7 @@ import type {
   AdventureSlots,
   BriefingCall,
   Chronicle,
+  JsonValue,
   Memory,
   SlotDef,
   StoryData,
@@ -356,10 +357,44 @@ function briefingArgs(briefing: BriefingCall[], name: string): Record<string, un
   })
 }
 
+// A plain JSON object, as opposed to an array, a scalar or null.
+function isPlainObject(value: unknown): value is { [key: string]: JsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+// What changed between two versions of a memory value: within objects, only
+// the keys whose values differ, with null for a key that has gone; anything
+// else is replaced whole. Undefined when nothing changed. fromEntries defines
+// own properties, so no key can reach a prototype.
+function diffJson(before: JsonValue, after: JsonValue): JsonValue | undefined {
+  if (JSON.stringify(before) === JSON.stringify(after)) return undefined
+  if (!isPlainObject(before) || !isPlainObject(after)) return after
+  const changes: [string, JsonValue][] = []
+  for (const [key, value] of Object.entries(after)) {
+    const change = Object.hasOwn(before, key) ? diffJson(before[key], value) : value
+    if (change !== undefined) changes.push([key, change])
+  }
+  for (const key of Object.keys(before)) {
+    if (!Object.hasOwn(after, key)) changes.push([key, null])
+  }
+  return Object.fromEntries(changes)
+}
+
+// Applies a change made by diffJson.
+function applyJsonChange(base: JsonValue, change: JsonValue): JsonValue {
+  if (!isPlainObject(base) || !isPlainObject(change)) return change
+  const merged = new Map(Object.entries(base))
+  for (const [key, value] of Object.entries(change)) {
+    if (value === null) merged.delete(key)
+    else merged.set(key, Object.hasOwn(base, key) ? applyJsonChange(base[key], value) : value)
+  }
+  return Object.fromEntries(merged)
+}
+
 // What the turn adds to the narrator's history, from the Plotter's briefing
-// and the records as they stand after its updates: the memory entries it
-// recalled that are new to the narrator's view or changed since it last saw
-// them, any entry already in view that has changed since, and the OOC list
+// and the records as they stand after its updates: memory entries recalled
+// that the narrator doesn't hold, in full; for entries it holds, only what
+// has changed since, so nothing unchanged is said again; and the OOC list
 // when it differs from the latest one in view, or has dropped out of view
 // with compaction. `earlier` is the history in view before this turn.
 // Undefined when there is nothing to add.
@@ -369,39 +404,48 @@ export function buildStoryUpdate(
   data: StoryData,
   flags: ContextFlags,
 ): StoryUpdate | undefined {
-  const seen = new Map<string, string>()
+  // The narrator's view of memory: entries it has been given in full, with
+  // later changes applied. A change to an entry whose full version is out of
+  // view can't be read on its own, so that entry counts as not held.
+  const view = new Map<string, JsonValue>()
   let oocInView: string[] | undefined
   for (const t of earlier) {
     if (t.reply.error || !t.storyUpdate) continue
-    for (const [name, entry] of Object.entries(t.storyUpdate.recalled ?? {})) {
-      seen.set(name, JSON.stringify(entry))
+    for (const [name, entry] of Object.entries(t.storyUpdate.recalled ?? {})) view.set(name, entry)
+    for (const [name, change] of Object.entries(t.storyUpdate.changed ?? {})) {
+      const held = view.get(name)
+      if (held !== undefined) view.set(name, applyJsonChange(held, change))
     }
     if (t.storyUpdate.ooc) oocInView = t.storyUpdate.ooc
   }
   const update: StoryUpdate = {}
   if (flags.includeMemory) {
-    // Newly recalled entries first, then those the narrator already holds:
-    // once recalled, an entry is kept current without being recalled again.
-    const names = new Set([
-      ...briefingArgs(briefing, RECALL_MEMORY_TOOL.name).flatMap((a) =>
-        Array.isArray(a.names) ? a.names.filter((n): n is string => typeof n === 'string') : [],
-      ),
-      ...seen.keys(),
-    ])
-    // fromEntries defines own properties, so no name can reach a prototype.
-    const recalled = Object.fromEntries(
-      [...names]
-        .filter((n) => Object.hasOwn(data.memory, n))
-        .filter((n) => seen.get(n) !== JSON.stringify(data.memory[n]))
-        .map((n) => [n, data.memory[n]]),
+    // Newly recalled entries, then those the narrator already holds: once
+    // recalled, an entry is kept current without being recalled again.
+    const recalledNames = briefingArgs(briefing, RECALL_MEMORY_TOOL.name).flatMap((a) =>
+      Array.isArray(a.names) ? a.names.filter((n): n is string => typeof n === 'string') : [],
     )
-    if (Object.keys(recalled).length) update.recalled = recalled
+    const recalled: [string, JsonValue][] = []
+    const changed: [string, JsonValue][] = []
+    for (const name of new Set([...recalledNames, ...view.keys()])) {
+      if (!Object.hasOwn(data.memory, name)) continue
+      const current = data.memory[name]
+      const held = view.get(name)
+      if (held === undefined) {
+        recalled.push([name, current])
+        continue
+      }
+      const change = diffJson(held, current)
+      if (change !== undefined) changed.push([name, change])
+    }
+    if (recalled.length) update.recalled = Object.fromEntries(recalled)
+    if (changed.length) update.changed = Object.fromEntries(changed)
   }
   if (flags.includeOoc) {
-    const changed = oocInView
+    const oocChanged = oocInView
       ? JSON.stringify(oocInView) !== JSON.stringify(data.ooc)
       : data.ooc.length > 0
-    if (changed) update.ooc = [...data.ooc]
+    if (oocChanged) update.ooc = [...data.ooc]
   }
   return Object.keys(update).length ? update : undefined
 }
@@ -409,6 +453,7 @@ export function buildStoryUpdate(
 export function renderStoryUpdate(update: StoryUpdate): string {
   const sections: string[] = []
   if (update.recalled) sections.push(`# Remembered\n\n${buildMemoryPayload(update.recalled)}`)
+  if (update.changed) sections.push(`# Changed\n\n${buildMemoryPayload(update.changed)}`)
   if (update.ooc) sections.push(`# OOC instructions\n\n${buildOocPayload(update.ooc)}`)
   return sections.join('\n\n')
 }

@@ -233,6 +233,8 @@ describe('turn validation', () => {
     }
     expect(isTurnLike(turn)).toBe(true)
     expect(isTurnLike({ ...turn, storyUpdate: { ooc: [3] } })).toBe(false)
+    expect(isTurnLike({ ...turn, storyUpdate: { changed: { Hesta: { wants: { shop: null } } } } })).toBe(true)
+    expect(isTurnLike({ ...turn, storyUpdate: { changed: 'Hesta' } })).toBe(false)
     expect(isTurnLike({ ...turn, storyUpdate: { ooc: 'short' } })).toBe(false)
     expect(isTurnLike({ ...turn, storyUpdate: { recalled: [] } })).toBe(false)
   })

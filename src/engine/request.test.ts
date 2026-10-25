@@ -452,9 +452,51 @@ describe('buildStoryUpdate', () => {
     expect(buildStoryUpdate(earlier, [recall(['Hesta'])], data, ALL_FLAGS)).toBeUndefined()
     const changed = { ...data, memory: { Hesta: { is: 'The widowed baker.' } }, ooc: [] }
     expect(buildStoryUpdate(earlier, [recall(['Hesta'])], changed, ALL_FLAGS)).toEqual({
-      recalled: { Hesta: { is: 'The widowed baker.' } },
+      changed: { Hesta: { is: 'The widowed baker.' } },
       // A cleared list is news too.
       ooc: [],
+    })
+  })
+
+  it('says only what changed in an entry the narrator holds, never the rest again', () => {
+    // Saoirse's unchanged plans went out again with every new line of her
+    // regard for the player, until "four days" filled the narrator's view.
+    const held = {
+      is: 'a marine biologist',
+      wants: { move: 'take up the post in Tromsø', stay: 'one more night' },
+      regard: 'wary',
+      wearing: { coat: 'yellow raincoat' },
+    }
+    const earlier = [done('t1', { recalled: { Saoirse: held } })]
+    const now = {
+      ...data,
+      ooc: [],
+      memory: { Saoirse: { is: 'a marine biologist', wants: { move: 'take up the post in Tromsø' }, regard: 'warming' } },
+    }
+    expect(buildStoryUpdate(earlier, [recall(['Saoirse'])], now, ALL_FLAGS)).toEqual({
+      changed: { Saoirse: { wants: { stay: null }, regard: 'warming', wearing: null } },
+    })
+  })
+
+  it('reads later changes on top of the entry it was first given', () => {
+    const earlier = [
+      done('t1', { recalled: { Hesta: { is: 'The baker.', wants: { shop: 'keep the bakery open' } } } }),
+      done('t2', { changed: { Hesta: { is: 'The widowed baker.' } } }),
+    ]
+    const now = {
+      ...data,
+      ooc: [],
+      memory: { Hesta: { is: 'The widowed baker.', wants: { shop: 'keep the bakery open' } } },
+    }
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS)).toBeUndefined()
+  })
+
+  it('gives an entry in full again once its full version is out of view', () => {
+    // Compaction dropped the turn that gave it; a change alone can't be read.
+    const earlier = [done('t2', { changed: { Hesta: { is: 'The widowed baker.' } } })]
+    const now = { ...data, ooc: [], memory: { Hesta: { is: 'The widowed baker.', bond: 'wary' } } }
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS)).toEqual({
+      recalled: { Hesta: { is: 'The widowed baker.', bond: 'wary' } },
     })
   })
 
@@ -467,7 +509,7 @@ describe('buildStoryUpdate', () => {
     }
     // Tam changed too, but the narrator has never been given Tam.
     expect(buildStoryUpdate(earlier, [], changed, ALL_FLAGS)).toEqual({
-      recalled: { Hesta: { is: 'The widowed baker.' } },
+      changed: { Hesta: { is: 'The widowed baker.' } },
     })
   })
 

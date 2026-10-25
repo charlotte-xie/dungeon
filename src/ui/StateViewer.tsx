@@ -314,9 +314,9 @@ export function StateViewer({
             <p className="hint">
               The DM maintains this JSON via the <code>update_memory</code> tool — the
               fact file of <strong>people, places, and things</strong> that persist across
-              scenes. Each key is a slug; each value is an object of facets, each a single
-              sentence or a map of them (<code>is</code>, <code>wants</code>,{' '}
-              <code>knowledge</code>, <code>bond</code>, <code>secrets</code>, …). Edits are additive by dotted path, with rename via{' '}
+              scenes. Each key is a name; each value is an object of facets: short values,
+              sentences for facts, or maps of either (<code>is</code>, <code>wants</code>,{' '}
+              <code>knowledge</code>, <code>attitude</code>, <code>secrets</code>, …). Edits are additive by dotted path, with rename via{' '}
               <code>move</code>. Current: {memoryEntries} entr
               {memoryEntries === 1 ? 'y' : 'ies'}.
             </p>

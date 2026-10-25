@@ -44,11 +44,13 @@ export interface BriefingCall {
 
 // What the narrator is told at a turn that holds for the rest of the story,
 // kept with the turn and replayed in history as a `story_update` call between
-// its input and reply: memory entries, as they stood then, that are newly
-// recalled or that it already holds and have changed; and the player's
-// standing OOC instructions, when they changed or have dropped out of view.
+// its input and reply: memory entries newly recalled, in full; for entries it
+// already holds, only what has changed, with null for what no longer holds;
+// and the player's standing OOC instructions, when they changed or have
+// dropped out of view.
 export interface StoryUpdate {
   recalled?: Memory
+  changed?: Memory
   ooc?: string[]
 }
 
