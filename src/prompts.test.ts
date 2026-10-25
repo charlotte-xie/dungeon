@@ -33,6 +33,12 @@ describe('capability-aware prompts', () => {
     )
   })
 
+  it('follows the player’s pace, focus and interest first', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('Their focus and interest come first: what is meaningful is what they engage with')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('When they dwell on a moment and give it detail, play it out with them at that depth')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('when they skim past something or skip ahead, move on with them')
+  })
+
   it('keeps the story moving through consequences grown from what is in play', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('Developments grow out of what is already in play')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('what is set up pays off')

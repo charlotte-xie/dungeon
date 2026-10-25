@@ -581,7 +581,11 @@ describe('buildPlotterInstruction', () => {
     expect(all).not.toMatch(/decision|choice|decide|choose/i)
     // Steers play out consequences through the next development, with no
     // scripted last line: that turned a fight into attack after attack.
-    expect(all).toContain('Pick the next meaningful development')
+    // What is meaningful is what the player engages with: a moment they
+    // dwell on was cut short by an outside interruption.
+    expect(all).toContain('Follow the player’s pace, focus and interest first')
+    expect(all).toContain('the next meaningful development grows inside it')
+    expect(all).toContain('pick the next meaningful development')
     expect(all).toContain('an NPC pursues their goal')
     expect(all).toContain('the story moves on to the next scene')
     expect(all).toContain('what happens in the world, through that development')
@@ -618,7 +622,8 @@ describe('buildPlotterInstruction', () => {
   it('carries on from the last reply on a Continue, without going back to the last move', () => {
     const continuing = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'continue')
     expect(continuing).toContain('The player has handed this reply to you with Continue')
-    expect(continuing).toContain('Pick the next meaningful development from where the last reply ended')
+    expect(continuing).toContain('Follow their pace, focus and interest first')
+    expect(continuing).toContain('Carry it forward from where the last reply ended to its next meaningful development')
     // Pointing at the player's last action had steers retell it.
     expect(continuing).not.toContain('last action')
     expect(buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)).toContain(

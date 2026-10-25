@@ -50,10 +50,12 @@ Prompt changes are checked against these.
 
 ## Story
 
+- The player's pace, focus and interest come first. What is meaningful depends on the player and what they engage with: when they dwell on a moment and give it detail, it plays out with them at that depth; when they skim past something or skip ahead, the story moves on with them. Different players want different amounts of detail.
+  - Without this, an intimate scene the player was dwelling on was cut short twice ("you have sex… Afterwards…"), with the same NPC knocking at the door each time. With the player's OOC request for detail, the same move played out in full.
 - Dramatic story, not life sim.
 - Keep the story moving: write to a point inviting the player to make real decisions, not react to minor annoyances or bookkeeping details.
   - Prompts express this without "decision" or "choice" wording, which pulls models towards ending on a choice (526c859).
-- Play out consequences, including the next meaningful story development.
+- Play out consequences, including the next meaningful story development. While the player dwells on a moment, the development grows inside it: how the people in it respond, and what it changes between them.
 - Leave the player an open opportunity for where to take the story next.
   - Prompts don't script how a reply ends. Closing on an NPC's line or action (8cbe3b8) turned a fight into attack after attack for seven replies.
 - We never want to end on a choice ("Do X or Y?").
@@ -66,7 +68,7 @@ Prompt changes are checked against these.
 - Developments grow out of what's already in play, not new threats from nowhere.
 - Once a planned development happens, it gives way to its consequence; it is never replayed.
 - Once the player has answered a question or met a situation, or let it pass with a Continue, it's settled: the story moves on to what that brings, and no NPC asks again or repeats the same move.
-- Routine passes in a clause; a simple task doesn't sprout a chain of errands.
+- What the player passes over takes a clause; a simple task doesn't sprout a chain of errands.
 - Quiet scenes are fine when something moves beneath them.
 - Respect the player's steering: explicit redirection wins, and a thread they turn away from stays dropped rather than returning in disguise. Brief replies and Continue aren't rejection.
 
@@ -110,6 +112,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - Replies ending on "…waiting".
 - Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
 - Micro actions: a fight running reply after reply, each ending on the next attack.
+- Cutting short a moment the player is dwelling on: an intimate scene compressed to "Afterwards…", then an NPC knocking at the door.
 - Naming the mood instead of showing it: "The psychological tension sharpens.", often repeated.
 - Explaining instead of telling: "It sounds like a practical offer. It also sounds like an invitation…", "…if you leave him, the creature will be on you next."
 - The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
