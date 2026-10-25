@@ -1,131 +1,105 @@
 # Storytelling requirements
 
-Prompt changes are checked against these.
-
-## Narrator
-
-- Does the writing. Nothing else.
-- No reasoning, no tools. It writes from the story, its story updates and its notes for the reply.
-- A story update stays in its history: the memories recalled for the reply, as they stood then, and the player's OOC instructions when they change. An entry it already holds is brought up to date when the records change, so its view never goes stale.
-- The notes for the reply are for that reply only: the scene as it stands and the steer. Past steers don't stay in view to be copied or repeated, and the Plotter's record-keeping stays out of sight.
-- Follows the steer as narrative direction, within its own principles: a steer never has the player's character act or speak beyond the player's input.
-- The player's character does only what the player's input says or implies.
-- Never decides what the player's character thinks, feels, says or chooses.
-- The player's emotions and interiority are their own: never written for them, alone or shared ("something neither of you has named").
-- Opens by narrating what the player did and said, briefly, then plays out what follows: it reads as a story.
-- Uses the player's exact words when given; narrates the gist of their speech without inventing a quote.
-- British/international English, second person, present tense.
-- Stays in the story: the player hears from the world, never from the DM.
-- Clean, vivid prose: no telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
-- No recapping: a remembered fact is mentioned only when the moment makes it newly relevant.
-- Writes fiction, not explanation: what happens and what people do and say, with motives, meaning and mood left to show through them, never named.
-- Fresh each reply: a question, tactic, gesture, image or phrase used once is spent.
-  - Atmosphere comes from fresh, specific detail. A detail of the setting already given stays in the background unless something changes it: rain came back harder in six replies running, often as the last line.
-
-## Plotter
-
-- Runs before the narrator. A few seconds is fine.
-- Has its own system prompt: it directs the story and keeps the records, replying with tool calls alone, and never writes the story. With the narrator's brief as its system prompt, it sometimes wrote the scene itself, or typed its steer out as text, instead of steering.
-- Injects plot ideas.
-- Reminds the narrator of key memories.
-- Stops the narrator being boring or repetitive.
-- Keeps the records: state, memory, plot plan, OOC preferences.
-- Steers every reply: what happens in the world, such as an NPC pursuing a goal, a transition to the next scene, or the consequences of a player action.
-- Maintains continuity by reminding the narrator of key details
-- Memory holds durable facts about people, places and things, each a single complete present-tense sentence that means something on its own, with no implied context: no fragments. The current scene stays out.
-- Characters' appearance and what they are wearing are recorded. Secrets are a map, one per secret, so each goes once the story reveals it.
-- Facets that gather facts (knowledge, possessions, relationships) are maps of short items, each an important, plot-relevant point: not every observation, and not one long string recounting every scene.
-- The player's memory entry has no wants or bond: the player's intent is theirs.
-- The player's character always has a name in the records: the scenario's or the player's, or, when neither gives one, a name that fits the scenario, which the Plotter gives them as it sets up the records at the opening. Their entry says they are the player's character. Steers call them "you", as the story does, and nothing calls them "the player". "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table"), and keying them `you` until named was a needless special case.
-- The plot plan is a private list of long-term story ideas only, never revealed. It changes when the story takes a different direction.
-- The next step goes in the steer, never the plan.
-- Plan changes are optional: the Plotter inserts a good idea that improves the story, and removes an entry once it is completed or abandoned.
-  - Insert and remove only: rewriting entries in place turned medium-term directions into notes on the current scene.
-  - Not a labelled structure: Promise, Question, Stakes and Payoff planned the player's decision, which waited in the plan and came back as NPC ultimatums.
-- The plan and steers are about the world: an NPC pursues a goal, a transition to a new scene, the important consequences of the player's last action. They never set up a choice for the player.
-- Secrets stay hidden until the story reveals them.
-- Sets up what each NPC wants from the opening, so they have something to pursue.
-- Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
-- Records only what is important for future continuity: catalogued details came back as repetition.
-- Steers include the player's character only as the player's input says or implies, and leave their feelings to the player.
-- Each steer carries the one development that does most for the story at this point: concrete and substantial, carried by the world and its people, as plain events with no reasons or commentary ("to gain time for himself", "This advances the deadline pressure", "invites further probing"). They may give mood or style guidance; the narrator shows it and never names it.
-  - The Plotter is better at concrete developments than abstract objectives; what it needs is to pick the most useful one. Back-to-back Continues gave small beats instead, a suspect adding one detail each time.
-  - Asking what a reply should "achieve" drew the player's character into the outcome ("the interview presses on his movements"), and on Continue the narrator wrote the detective's questions for the player.
-- The narrator fills in the telling: the words people say and the details of the scene. Steers that scripted every line were copied word for word, leaving the Plotter writing the dialogue, and a weather line added to every steer became rain in every reply.
+What a good story in this app is. Prompt and design changes are checked against these; how the prompts, tools and records meet them is a matter of design.
 
 ## Story
 
-- The player's pace, focus and interest come first. What is meaningful depends on the player and what they engage with: when they dwell on a moment and give it detail, it plays out with them at that depth; when they skim past something or skip ahead, the story moves on with them. Different players want different amounts of detail.
-  - Without this, an intimate scene the player was dwelling on was cut short twice ("you have sex… Afterwards…"), with the same NPC knocking at the door each time. With the player's OOC request for detail, the same move played out in full.
-- Dramatic story, not life sim.
-- Keep the story moving: write to a point inviting the player to make real decisions, not react to minor annoyances or bookkeeping details.
-  - Prompts express this without "decision" or "choice" wording, which pulls models towards ending on a choice (526c859).
-- Play out consequences, including the next meaningful story development. While the player dwells on a moment, the development grows inside it: how the people in it respond, and what it changes between them.
-- Leave the player an open opportunity for where to take the story next.
-  - Prompts don't script how a reply ends. Closing on an NPC's line or action (8cbe3b8) turned a fight into attack after attack for seven replies.
-- We never want to end on a choice ("Do X or Y?").
-- Never end on a prompt for the player or hand the story back for them to settle: a question (an NPC's included), a list of options, someone or something waiting, or narration pointing at the player's turn. Bring the story to a point where the player can take it on.
-  - Prompts avoid "for the player to respond to" framing, which led models to write the prompt out.
-- Continue is a whole, full turn. Players press it when they think the story hasn't advanced enough: move faster to a meaningful development.
-  - The player's last move was played out in the last reply: Continue carries on from where that reply ended, advancing the story, and never retells it.
-- Continuity is very important. If the player is carrying a dagger in one scene, it shouldn't transform into an axe without a good reason
-- Deliver the kind of story the scenario and style guide promise, in their register.
-- Developments grow out of what's already in play, not new threats from nowhere.
-- Once a planned development happens, it gives way to its consequence; it is never replayed.
-- Once the player has answered a question or met a situation, let it pass with a Continue, or not engaged with it, it's settled: the story moves on to what that brings, and no NPC asks again or repeats the same move.
-- What the player passes over takes a clause; a simple task doesn't sprout a chain of errands.
-- Quiet scenes are fine when something moves beneath them.
-- Respect the player's steering: explicit redirection wins, and a thread they turn away from stays dropped rather than returning in disguise. Brief replies and Continue aren't rejection.
+- The player's pace, focus and interest come first. What is meaningful depends on what the player engages with: a moment they dwell on plays out at the depth they give it, and what they skim past or skip, the story moves past. Players differ in how much detail they want.
+- A dramatic story with momentum, not a life sim.
+- Each reply plays out the consequences of the player's move.
+- Developments grow out of what is established, and what is set up pays off. Foreshadowing delivers.
+- The story must avoid continuity mistakes. Continuity is exact: people, places and possessions stay as established until the story changes them. A dagger doesn't become an axe.
+- Continue is the player asking for more narration. Usually this is a sign that the narrator didn't bring the story far enough for them to provide meaningful input.
+- Every reply brings the story to a point the player can take on, never handed back:
+- Avoid lists of choices "X or Y". This is not a multi-choice exam.
+- Never address player with prompts like "What do you do?"
+- OOC instructions are always followed.
+- The player steers: plot should follow what they show interest in (but NPCs and events may thwart their *character*)
+- The story is the one the scenario and style guide promise, in their register.
+- Mature/NSFW themes appear only when the player has opted in, and then as fully as the player engages with them.
+- Secrets stay hidden until the story reveals them, and what surfaces fits what was established.
 
-## People
+## The player's character
 
-- NPCs follow their own goals, with their own personality and subtext, and keep the initiative. The world doesn't wait for the player; antagonists push on over objections.
-- NPCs speak in their own voice, obliquely. They never explain the plot, recap, or list the player's options.
-- NPCs know only what they would naturally know; their ignorance can show.
+- The character is the player's. They do only what the player's input says or implies, on a Continue too: the story never has them act, speak or decide beyond it.
+- Their thoughts, feelings and intentions are the player's own, never written for them, alone or as something shared with someone else ("something neither of you has named").
+- In the story they are always "you". Others may know them by a name, from the scenario, the player, or one that fits the story from the start, but nothing ever calls them "the player".
+- Each reply opens with the player's move, briefly, in their exact words when they gave them. When the player gives only the gist of what they say, it is told without inventing a quote.
 
-## OOC
+## NPCs
 
-- OOC direction, in (parentheses) or [brackets], is authoritative and applied without mention in the story.
-- "NEXT REPLY ONLY" guidance applies to one reply. Standing preferences hold until the player changes them.
-- The OOC list holds only direction the player has given, each as a standing preference ("Don't have NPCs ask repetitive questions").
-  - A length example on the OOC tool led the Plotter to record the brief's own "two or three paragraphs" as a preference the player never gave.
+- NPCs follow their own goals, with their own personality and subtext, and keep the initiative. The world doesn't wait for the player, and antagonists push on over objections.
+- Each person who matters wants something from the start, so they have something to pursue.
+- They speak in their own voices, in character.
+- They never explain the plot, recap, or set out the player's options.
+- They know only what they would plausibly know, and their ignorance can show.
+
+## Narrator
+
+- Does the writing, and nothing else.
+- Always writes in second person, present tense
+- Writes fiction, not explanation: what happens and what people do and say.
+- Motives and meaning are implied by the story events, never told.
+- High quality prose in British/international English.
+- No telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
+- No recapping: a remembered fact comes up only when the moment makes it newly relevant.
+- A reply usually runs one to four paragraphs, and stays a full reply under any length preference.
+- Stays in the story: the player hears from the world, never from the DM.
+- Follows the Plotter's direction within these principles, and owns the telling: the words people say and the details of the scene.
+- Faithfully writes in a style suitable for the scenario and genre
+
+## Plotter
+
+- Directs the story before each reply, out of the player's sight.
+- A few seconds thinking is fine.
+- Brings plot ideas, and picks for each reply the development that does most for the story at that point: concrete and substantial, carried by the world and its people.
+- Keeps a private sense of where the story is heading, long term, and adapts it when the story takes a new direction. It never plans the player's decisions.
+- Keeps continuity: it remembers the people, places and things that recur, what each person wants and knows, and what is secret, and makes sure the narrator has what each reply needs.
+- Remembers only what matters for continuity. A catalogue of details comes back as repetition.
+- Keeps the story fresh, so the narrator doesn't repeat itself or go flat.
+- Leaves the telling to the narrator.
+
+## OOC direction
+
+- Direction in (parentheses) or [brackets] is the player's, authoritative, and applied without mention in the story.
+- Direction marked "NEXT REPLY ONLY" applies to one reply. Standing preferences hold until the player changes them.
+- Only what the player has actually asked for counts as a standing preference.
 
 ## Prompts
 
 - As simple as possible: storytelling, not mechanics.
-- Context, not strict rules to be analysed.
+- Context and gist, not strict rules to be analysed. A change revisits the whole prompt rather than adding a line.
 - Instruct positively, not "avoid".
-- Revisit the whole prompt; don't just add lines or rules. Overall "gist" is important
 - Principles, not worked examples: models copy an example's shape.
-  - The plan example's bargain, "struck or broken", came back as NPC ultimatums.
-- Storytelling wording, not a multiple-choice adventure game.
-  - "Bargain" and "the player's options" in the brief came back as NPCs pressing the player for an answer.
-- Never bust the prefix cache.
-- Prompts guide; code enforces only safety. Size limits are soft hints, never caps.
-- A switched-off record is never mentioned in any prompt.
-- Not tied to xAI: any OpenAI-compatible provider.
+- Storytelling wording, not a multiple-choice game's: no choices, decisions, options or bargains.
+- A record that is switched off is never mentioned.
+- Not tied to one provider: any OpenAI-compatible endpoint.
 
-## Anti-patterns seen in play
+## Anti-patterns / Failures seen in play
 
-If these are observed regularly, the prompt or tools probably need tweaking
+Each of these breaks a requirement above. Seen regularly, they mean the prompts or tools need another look.
 
 - Ending on a choice: "Take the key or back away?"
 - Ending on a prompt: "…waiting for your answer", "urging you to step through or turn back", "as though the vault itself is pressing you to decide".
-- NPCs using dialogue to present an X-or-Y choice: "Name yourself or bleed.", "Answer, or return what you hold."
-- The same choice re-offered for six turns.
-- An NPC repeating a move the player has already met: Thorne steering them away from the same passage four replies running.
-- An NPC repeating a move the player ignored: Theo knocking three times after "I ignore the footsteps".
-- Replies ending on "…waiting".
-- Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
-- Micro actions: a fight running reply after reply, each ending on the next attack.
-- Cutting short a moment the player is dwelling on: an intimate scene compressed to "Afterwards…", then an NPC knocking at the door.
-- Naming the mood instead of showing it: "The psychological tension sharpens.", often repeated.
+- People using dialogue to offer an X-or-Y: "Name yourself or bleed.", "Answer, or return what you hold.", "Prove you are not thieves… or drown with the rest."
+- The same choice re-offered for multiple turns.
+- An NPC repeating a move the player has already responded to: Thorne steering them away from the same passage four replies running.
+- An NPC repeating a move the player ignored: Theo knocking three times after "I ignore the knocking".
+- Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or a person's "Walk back with me?" as the last line.
+- Micro actions: a fight running reply after reply, each ending on the next attack, or a suspect adding one detail per Continue.
+- Cutting short a moment the player is dwelling on: an intimate scene compressed to "Afterwards…"
+- Naming the mood instead of showing it: "The psychological tension sharpens." (often repeated).
 - Explaining instead of telling: "It sounds like a practical offer. It also sounds like an invitation…", "…if you leave him, the creature will be on you next."
-- The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
+- The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…", "The ticket stub lies between you…".
 - The same detail escalating reply after reply: "The rain drums harder", "drives harder", "beats harder".
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".
-- Third-person narration copied from a steer written about the player: "They finish the drinks".
-- The narrator speaking for the player's character on Continue: "'You telephoned someone from the shop that night,' you say."
+- The player's character told in the third person: "They finish the drinks".
+- The player's character made to speak on a Continue: "'You telephoned someone from the shop that night,' you say." (it's OK if the player previously gave an open ended instruction like "go about my day", but shouldn't make any significant decisions for them)
+- "The player" in the story: "Sam, keep the player on it", "She stops at the player's table" (should be "you" or "your")
 - Foreshadowing that never delivers.
 - Replies shrinking every turn under "keep replies a bit shorter".
-- The Plotter writing prose instead of steering.
+
+## Technical / internal issues
+- The Plotter writing the scene itself instead of directing it.
+- Plotter providing irrelevant details when it should leave description to the narrator
+- Plotter recording short term details in long term memory (narrator can handle these)

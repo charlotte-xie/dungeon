@@ -31,7 +31,7 @@ Modern, dialogue-led and slow-burning. There are no monsters to fight, so the st
 - **Repetition:** the same gesture or closing image reused reply after reply.
 - **Point of view:** the narration stays in the second person ("you"), even when the player and Sam move together.
 - **The plan:** does it gain directions from the people (Margaret, the studio, Sam's past), or sit unchanged?
-- **Length:** standard replies should sit around two or three paragraphs.
+- **Length:** standard replies should run from one to four paragraphs.
 
 ## Results
 
