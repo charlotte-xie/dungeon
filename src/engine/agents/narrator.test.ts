@@ -572,12 +572,15 @@ describe('buildPlotterInstruction', () => {
     expect(all).toContain('Steer every reply')
     // Records name the player's character; steers call them "you", as the
     // story does, so the narrator never takes the name for someone else.
-    expect(all).toContain('calling the player’s character “you”, as the story does')
+    expect(all).toContain('Call the player’s character “you”, as the story does')
     // Steers explaining reasons pulled the narration into explanation.
-    expect(all).toContain('as plain events with no reasons or commentary')
+    expect(all).toContain('as plain outcomes in the world with no reasons or commentary')
+    // Scripted lines were copied word for word, and a weather line in every
+    // steer became rain in every reply: the telling is the narrator's.
+    expect(all).toContain('leaving the words people say and the details of the scene to the narrator')
     // Steers written about the player became third-person narration and
     // moves the player never made.
-    expect(all).toContain('The player’s character does only what the player’s input says or implies, and their feelings are the player’s own')
+    expect(all).toContain('they do only what the player’s input says or implies, and their feelings are the player’s own')
     expect(all).toContain('matters to the plot or its continuity')
     // Next-step beats belong in the steer, not the plan.
     expect(all).toContain('The development itself goes in your steer; change the plan only for a long-term story idea.')
@@ -599,7 +602,7 @@ describe('buildPlotterInstruction', () => {
     expect(all).toContain('pick the next meaningful development')
     expect(all).toContain('an NPC pursues their goal')
     expect(all).toContain('the story moves on to the next scene')
-    expect(all).toContain('what happens in the world, through that development')
+    expect(all).toContain('what the reply should achieve through that development')
     expect(all).not.toMatch(/closes? on|camera|how far/i)
     expect(all).not.toMatch(/respond to/i)
     // Size status rides along; memory's only once it grows long.
@@ -615,7 +618,9 @@ describe('buildPlotterInstruction', () => {
     expect(opening).toContain('what each person wants')
     expect(opening).toContain('the player’s character under their name, giving them a name that fits the scenario if it has none')
     expect(opening).toContain('Write the plan: long-term ideas for where the story is heading')
-    expect(opening).toContain('Steer the opening with `steer`')
+    expect(opening).toContain('Steer the opening with `steer`: what the opening should achieve')
+    // The opening steer named the player's character in the third person.
+    expect(opening).toContain('calling the player’s character “you”')
     expect(opening).toContain('then `recall_memory`, then `steer`')
     // There is no reply or player action yet to record or answer.
     expect(opening).not.toMatch(/last reply|last action/)

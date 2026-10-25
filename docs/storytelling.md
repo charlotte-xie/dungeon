@@ -19,7 +19,8 @@ Prompt changes are checked against these.
 - Clean, vivid prose: no telegraphic fragments, adjectives used as adverbs, stock clichés or purple prose.
 - No recapping: a remembered fact is mentioned only when the moment makes it newly relevant.
 - Writes fiction, not explanation: what happens and what people do and say, with motives, meaning and mood left to show through them, never named.
-- Fresh each reply: a question, tactic, gesture or phrase used once is spent.
+- Fresh each reply: a question, tactic, gesture, image or phrase used once is spent.
+  - Atmosphere comes from fresh, specific detail. A detail of the setting already given stays in the background unless something changes it: rain came back harder in six replies running, often as the last line.
 
 ## Plotter
 
@@ -47,7 +48,8 @@ Prompt changes are checked against these.
 - Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
 - Records only what is important for future continuity: catalogued details came back as repetition.
 - Steers include the player's character only as the player's input says or implies, and leave their feelings to the player.
-- Steers say only what happens, as plain events: no reasons or commentary ("to gain time for himself", "This advances the deadline pressure"). They may give mood or style guidance; the narrator shows it and never names it.
+- Steers say what the reply should achieve: what happens and what changes, as plain outcomes in the world, with no reasons or commentary ("to gain time for himself", "This advances the deadline pressure"). They may give mood or style guidance; the narrator shows it and never names it.
+- The narrator fills in the telling: the words people say and the details of the scene. Steers that scripted every line were copied word for word, leaving the Plotter writing the dialogue, and a weather line added to every steer became rain in every reply.
 
 ## Story
 
@@ -118,6 +120,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - Naming the mood instead of showing it: "The psychological tension sharpens.", often repeated.
 - Explaining instead of telling: "It sounds like a practical offer. It also sounds like an invitation…", "…if you leave him, the creature will be on you next."
 - The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…".
+- The same detail escalating reply after reply: "The rain drums harder", "drives harder", "beats harder".
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".
 - Third-person narration copied from a steer written about the player: "They finish the drinks".
 - Foreshadowing that never delivers.

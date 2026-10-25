@@ -144,7 +144,7 @@ export function buildPlotterInstruction(
       ? [`Recall with \`${RECALL_MEMORY_TOOL.name}\` the people, places and things the opening involves.`]
       : []),
     ...(steers
-      ? [`Steer the opening with \`${STEER_TOOL.name}\`: what happens in the world as the story begins.`]
+      ? [`Steer the opening with \`${STEER_TOOL.name}\`: what the opening should achieve as the story begins, calling the player’s character “you”.`]
       : []),
   ]
   const replySteps = [
@@ -163,7 +163,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development, as plain events with no reasons or commentary, calling the player’s character “you”, as the story does. The player’s character does only what the player’s input says or implies, and their feelings are the player’s own. What the player has answered, let pass or not engaged with is settled: steer what it brings.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what the reply should achieve through that development, as plain outcomes in the world with no reasons or commentary, leaving the words people say and the details of the scene to the narrator. Call the player’s character “you”, as the story does; they do only what the player’s input says or implies, and their feelings are the player’s own. What the player has answered, let pass or not engaged with is settled: steer what it brings.`,
         ]
       : []),
   ]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { executeTool, FUTURE_PLOT_PLAN_TOOL, UPDATE_OOC_TOOL } from './tools'
+import { executeTool, FUTURE_PLOT_PLAN_TOOL, STEER_TOOL, UPDATE_OOC_TOOL } from './tools'
 
 describe('tool execution boundaries', () => {
   it('rejects an unsafe update_state atomically', () => {
@@ -281,5 +281,7 @@ describe('briefing tools', () => {
     const steer = executeTool('steer', JSON.stringify({ text: 'The miller returns.' }), data)
     expect(steer).toEqual({ data, result: 'ok' })
     expect(executeTool('steer', JSON.stringify({ text: '  ' }), data).result).toMatch(/^error/)
+    expect(STEER_TOOL.description).toContain('what it should achieve in the world')
+    expect(STEER_TOOL.description).toContain('the narrator writes the words people say and the details of the scene')
   })
 })

@@ -61,7 +61,11 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain(
       'never write them for the player, alone or as something they share with someone else',
     )
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('a question, tactic, gesture or phrase used once is spent')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('a question, tactic, gesture, image or phrase used once is spent')
+    // Rain came back harder in six replies running.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      'a detail of the setting already given stays in the background until something changes it',
+    )
     // Fiction, not explanation.
     expect(DEFAULT_SYSTEM_PROMPT).toContain('let motives, meaning and mood show through it, never named or explained')
     // An answered question or met situation is settled, not re-asked.
@@ -141,6 +145,10 @@ describe('capability-aware prompts', () => {
     expect(PLOTTER_SYSTEM_PROMPT).toContain('You never write the story yourself; you reply with tool calls alone')
     expect(PLOTTER_SYSTEM_PROMPT).not.toMatch(/You are the DM|second person|paragraphs/)
     expect(PLOTTER_SYSTEM_PROMPT).toContain("Follow the player's pace, focus and interest first")
+    expect(PLOTTER_SYSTEM_PROMPT).toContain('Your steer says what the next reply should achieve')
+    expect(PLOTTER_SYSTEM_PROMPT).toContain(
+      "the words people say and the details of the scene are the narrator's to write",
+    )
     // What the player ignores doesn't come back: Theo knocked three times.
     expect(PLOTTER_SYSTEM_PROMPT).toContain(
       'Whatever the player has answered, let pass or not engaged with is settled, and it doesn\'t come back or repeat.',

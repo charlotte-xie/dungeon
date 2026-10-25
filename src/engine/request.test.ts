@@ -496,7 +496,8 @@ describe('buildStoryUpdate', () => {
 describe('buildNarratorNotesMessage', () => {
   it('has the narrator show a steer’s mood rather than name it', () => {
     const notes = buildNarratorNotesMessage(ALL_FLAGS)
-    expect(notes?.content).toContain('sometimes with a mood or style to aim for')
+    expect(notes?.content).toContain('what this reply should achieve, sometimes with a mood or style to aim for')
+    expect(notes?.content).toContain('the words people say and the details of the scene your own')
     expect(notes?.content).toContain('showing any mood rather than naming it')
   })
 })
