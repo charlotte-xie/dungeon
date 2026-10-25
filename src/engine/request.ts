@@ -7,10 +7,11 @@
 // the reply from the story and that briefing alone. Each request is laid out
 // front to back as:
 //
-//   1. Stable prefix — system prompt, NSFW stance, adventure slots, then the
-//      Plotter's full rules for each enabled record, or the narrator's short
-//      note on reading its notes, then the chronicle. Changes rarely
-//      (settings edits, compactions).
+//   1. Stable prefix — the role's own system prompt (the narrator's writing
+//      brief, or the Plotter's directing brief), NSFW stance, adventure
+//      slots, then the Plotter's full rules for each enabled record, or the
+//      narrator's short note on reading its notes, then the chronicle.
+//      Changes rarely (settings edits, compactions).
 //   2. History — append-only between compactions: each turn's input (player
 //      text, or the fixed bootstrap / Continue directive), its story update,
 //      and its narration prose, so nothing sent once is later removed. The
@@ -35,7 +36,7 @@
 // The payloads are pure data. The per-record bookkeeping guidance (what to
 // record this turn, soft size pressure) travels in the Plotter's instruction.
 
-import { NSFW_OFF_PROMPT, NSFW_ON_PROMPT, buildTurnReminder } from '../prompts'
+import { NSFW_OFF_PROMPT, NSFW_ON_PROMPT, PLOTTER_SYSTEM_PROMPT, buildTurnReminder } from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import { STATE_RULES } from './state'
@@ -294,6 +295,7 @@ export function buildPlotterGuidance(
 }
 
 export interface ModelMessagesArgs {
+  // The narrator's system prompt; the Plotter has its own.
   systemPrompt: string
   slots: AdventureSlots
   chronicle: Chronicle
@@ -326,10 +328,11 @@ export function flattenSections(sections: RequestSections): ModelMessage[] {
   return [...sections.system, ...sections.chronicle, ...sections.history, ...sections.tail]
 }
 
-// The head of both roles' stable prefix.
-function buildFrameMessages(args: ModelMessagesArgs): ModelMessage[] {
+// The head of a role's stable prefix: its own system prompt, then the
+// content stance and the adventure slots both roles share.
+function buildFrameMessages(args: ModelMessagesArgs, systemPrompt: string): ModelMessage[] {
   const messages: ModelMessage[] = [
-    { role: 'system', content: args.systemPrompt },
+    { role: 'system', content: systemPrompt },
     { role: 'system', content: args.nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT },
   ]
   for (const def of ADVENTURE_SLOTS) {
@@ -507,7 +510,7 @@ function directiveMessage(content: string, asSystem: boolean): ModelMessage {
 export function buildNarratorSections(args: ModelMessagesArgs): RequestSections {
   const notes = buildNarratorNotesMessage(args.flags)
   return {
-    system: [...buildFrameMessages(args), ...(notes ? [notes] : [])],
+    system: [...buildFrameMessages(args, args.systemPrompt), ...(notes ? [notes] : [])],
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
     tail: [
@@ -533,7 +536,7 @@ export interface PlotterMessagesArgs extends ModelMessagesArgs {
 // full rules, the records as tool results, then its instruction.
 export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections {
   return {
-    system: [...buildFrameMessages(args), ...buildContextRulesMessages(args.flags)],
+    system: [...buildFrameMessages(args, PLOTTER_SYSTEM_PROMPT), ...buildContextRulesMessages(args.flags)],
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
     tail: [

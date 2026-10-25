@@ -12,11 +12,11 @@ Memory holds durable facts. The chronicle keeps the full past, the plot plan hol
 - Characters: `appearance`, `wearing`, `wants`, `facts`, `knowledge` (what they know that matters to the plot, including about the player's character), `bond` (how they regard the player's character), `relationships`.
 - Places: `npcs`, `layout`.
 - Things: `significance`, `location`.
-- The player's character: `appearance`, `wearing`, `background`, `skills`, `possessions` (a map, one item per thing they carry), `oaths`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `bond`; each NPC's attitude to them lives on that NPC's `bond`.
+- The player's character: `is` (which says they are the player's character), `appearance`, `wearing`, `background`, `skills`, `possessions` (a map, one item per thing they carry), `oaths`, `reputation`. Their intentions and feelings are the player's own, so the entry has no `wants` or `bond`; each NPC's attitude to them lives on that NPC's `bond`.
 
-Key the player's character by their name once the scenario or the player gives one, and `you` until then, as the story calls them, and write about them the same way ("Rook is lean and weathered", "You are new in town"). The name is the player's to give. An older entry keyed `player` moves to the new key.
+The player's character always has a name, and their entry is keyed by it and written about them by it. Use the name the scenario or the player gives; when neither gives one, give them a name that fits the scenario as you set up the records at the opening, and keep it. If the player names them later, the entry moves to that name, and an older entry keyed `player` or `you` moves to the name too.
 
-Use these names, and add a facet while it matters. A facet that gathers several facts (`knowledge`, `possessions`, `relationships`, `secrets`) is a map with one short item for each fact, so each can change or go on its own (`Hesta.knowledge.constable`, `Rook.possessions.money`). It holds only points that matter to the plot, not every observation.
+Use these names, and add a facet while it matters. A facet that gathers several facts (`knowledge`, `possessions`, `relationships`, `secrets`) is a map with one short item for each fact, so each can change or go on its own (`Hesta.knowledge.constable`, `Amy.possessions.money`). It holds only points that matter to the plot, not every observation.
 
 ## Example
 
@@ -28,22 +28,22 @@ Use these names, and add a facet while it matters. A facet that gathers several 
     "wearing": "Hesta wears a flour-dusted apron over a grey wool dress.",
     "wants": "Hesta wants to keep the shop open and her son out of the constabulary's hands.",
     "knowledge": {
-      "constable": "Hesta saw Rook argue with a constable.",
-      "newcomer": "Hesta knows Rook is new in town."
+      "constable": "Hesta saw Amy argue with a constable.",
+      "newcomer": "Hesta knows Amy is new in town."
     },
-    "bond": "Hesta is wary of Rook and helps only when it costs her nothing.",
+    "bond": "Hesta is wary of Amy and helps only when it costs her nothing.",
     "secrets": {
       "tam": "Hesta is hiding her son Tam upstairs after a robbery went wrong; only she and Tam know."
     }
   },
-  "Rook": {
-    "is": "Rook is a drifter, newly arrived in town.",
-    "appearance": "Rook is lean and weathered and walks with a slight limp.",
-    "wearing": "Rook wears a patched army greatcoat.",
-    "background": "Rook is a veteran of the border wars, drifting since discharge.",
+  "Amy": {
+    "is": "Amy is the player's character, a drifter newly arrived in town.",
+    "appearance": "Amy is lean and weathered and walks with a slight limp.",
+    "wearing": "Amy wears a patched army greatcoat.",
+    "background": "Amy is a veteran of the border wars, drifting since discharge.",
     "possessions": {
-      "money": "Rook has 30 pounds.",
-      "sabre": "Rook carries a chipped but serviceable sabre."
+      "money": "Amy has 30 pounds.",
+      "sabre": "Amy carries a chipped but serviceable sabre."
     }
   }
 }

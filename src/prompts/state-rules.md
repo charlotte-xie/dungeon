@@ -13,10 +13,10 @@ Anything in neither is dropped, so each update is a fresh snapshot of the scene.
 {
   "keep": ["scene.location", "npcs.priest.posture"],
   "set": {
-    "you.position": "seated in the high-backed chair across from the priest",
-    "you.holding": "a slim boot-knife, blade flat against the thigh"
+    "Amy.position": "seated in the high-backed chair across from the priest",
+    "Amy.holding": "a slim boot-knife, blade flat against the thigh"
   }
 }
 ```
 
-Here the location and the priest's posture carry forward, your position and what you hold are updated, and anything else from the previous scene is dropped. To clear the state between scenes: `{"keep": [], "set": {}}`.
+Here the location and the priest's posture carry forward, Amy's position and what she holds are updated, and anything else from the previous scene is dropped. To clear the state between scenes: `{"keep": [], "set": {}}`.

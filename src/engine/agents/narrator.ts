@@ -138,7 +138,7 @@ export function buildPlotterInstruction(
   const steers = flags.includePlotOutline
   const recalls = flags.includeMemory
   const openingSteps = [
-    'Set up the records from the scenario: the people, places and things the story starts with, and what each person wants.',
+    'Set up the records from the scenario: the people, places and things the story starts with, what each person wants, and the player’s character under their name, giving them a name that fits the scenario if it has none.',
     ...(steers ? ['Write the plan: long-term ideas for where the story is heading.'] : []),
     ...(recalls
       ? [`Recall with \`${RECALL_MEMORY_TOOL.name}\` the people, places and things the opening involves.`]
@@ -163,7 +163,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development, as plain events with no reasons or commentary, naming the player’s character as the records do. The player’s character does only what the player’s input says or implies, and their feelings are the player’s own. What the player has already answered, or let pass with a Continue, is settled: steer what it brings.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: what happens in the world, through that development, as plain events with no reasons or commentary, calling the player’s character “you”, as the story does. The player’s character does only what the player’s input says or implies, and their feelings are the player’s own. What the player has answered, let pass or not engaged with is settled: steer what it brings.`,
         ]
       : []),
   ]
@@ -338,14 +338,17 @@ export async function runNarrator(
     let error: string | undefined
     // With the plot plan on, every reply is steered. A Plotter that stops
     // without a steer — after a batch of updates, or by writing prose in
-    // the narrator's place — is reminded once.
+    // the narrator's place — is reminded once, and the request after the
+    // reminder has it make a call.
     let steerNudged = false
+    let forceCall = false
     const needsSteerNudge = () =>
       ctx.flags.includePlotOutline &&
       !steerNudged &&
       !briefing.some((c) => c.name === STEER_TOOL.name)
     const nudgeForSteer = () => {
       steerNudged = true
+      forceCall = true
       pushNudge(messages, `Steer the reply now with \`${STEER_TOOL.name}\`, using tool calls alone.`)
     }
     try {
@@ -358,19 +361,23 @@ export async function runNarrator(
             reasoningEffort: ctx.plotterReasoning,
             messages,
             tools,
+            ...(forceCall ? { toolChoice: 'required' as const } : {}),
             temperature: ctx.sampling.temperature,
             label,
           },
           plotterConnection,
           signal,
         )
+        forceCall = false
         recordCompletion(label, completion, Date.now() - startedAt)
         if (completion.text && completion.text.trim().toUpperCase() !== 'DONE') {
           trace.push({ kind: 'thought', text: completion.text })
         }
         if (!completion.toolCalls.length) {
           if (!needsSteerNudge()) break
-          if (completion.text) messages.push({ role: 'assistant', content: completion.text })
+          // Its prose stays out of its conversation: fed back, it was copied
+          // word for word in place of the steer. The request still only
+          // appends, since the prose was never part of it.
           nudgeForSteer()
           continue
         }

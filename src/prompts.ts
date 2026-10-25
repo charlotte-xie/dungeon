@@ -1,4 +1,5 @@
 import dmSystem from './prompts/dm-system.md?raw'
+import plotterSystem from './prompts/plotter-system.md?raw'
 import stateRulesTemplate from './prompts/state-rules.md?raw'
 import memoryRulesTemplate from './prompts/memory-rules.md?raw'
 import plotRulesTemplate from './prompts/plot-rules.md?raw'
@@ -19,6 +20,9 @@ function fill(template: string, vars: Record<string, string | number>): string {
 }
 
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
+// The Plotter's own brief: it directs the story and keeps the records, and
+// never writes the story, so it never reads the narrator's writing brief.
+export const PLOTTER_SYSTEM_PROMPT = plotterSystem.trim()
 export const DEFAULT_SCENARIO = defaultScenario.trim()
 export const REVISER_SYSTEM_PROMPT = reviserSystem.trim()
 // Synthetic user input sent when the player presses Continue (skips their turn).

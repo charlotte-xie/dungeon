@@ -17,6 +17,7 @@ import {
   type ModelMessagesArgs,
 } from './request'
 import type { ModelMessage } from './model/types'
+import { PLOTTER_SYSTEM_PROMPT } from '../prompts'
 import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
 const SLOTS: AdventureSlots = { scenario: 'A haunted mill.', styleGuide: '' }
@@ -380,8 +381,11 @@ describe('buildPlotterMessages layout', () => {
     const p = buildPlotterSections({ ...args(history), pivot: PIVOT })
     expect(p.history).toEqual(n.history)
     expect(p.chronicle).toEqual(n.chronicle)
-    // System prompt, content stance, and scenario come first in both.
-    expect(p.system.slice(0, 3)).toEqual(n.system.slice(0, 3))
+    // Each role has its own system prompt; the content stance and scenario
+    // follow it in both.
+    expect(n.system[0].content).toBe('system prompt')
+    expect(p.system[0].content).toBe(PLOTTER_SYSTEM_PROMPT)
+    expect(p.system.slice(1, 3)).toEqual(n.system.slice(1, 3))
   })
 })
 

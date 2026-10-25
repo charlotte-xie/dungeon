@@ -45,8 +45,9 @@ export interface ModelCompletionRequest {
   messages: ModelMessage[]
   tools?: ModelToolDefinition[]
   // 'none' keeps the tool schemas in the request (they are part of the
-  // provider's cached prefix) while forbidding calls for this completion.
-  toolChoice?: 'auto' | 'none'
+  // provider's cached prefix) while forbidding calls for this completion;
+  // 'required' has the model make at least one call.
+  toolChoice?: 'auto' | 'none' | 'required'
   temperature?: number
   reasoningEffort?: ReasoningEffort
   label?: string

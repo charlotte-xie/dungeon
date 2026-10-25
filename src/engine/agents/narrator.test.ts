@@ -281,21 +281,29 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
   })
 
-  it('reminds the Plotter once to steer when it writes prose instead', async () => {
-    mockedModel.mockResolvedValueOnce(completion({ text: 'Hesta opens the door.' }))
-    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
-    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+  it('reminds the Plotter once to steer when it writes prose instead, and has it make a call', async () => {
+    const snapshots = recordRequests((req, n) =>
+      n === 1
+        ? completion({ text: 'Hesta opens the door.' })
+        : isPlotter(req)
+          ? completion({ toolCalls: [STEER] })
+          : completion({ text: 'Prose.' }),
+    )
 
     const result = await runNarrator(CTX, new AbortController().signal)
 
     expect(mockedModel).toHaveBeenCalledTimes(3)
     expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
-    // Its prose stays in its own conversation, ahead of the reminder. (The
-    // mock holds the live list, which has grown since.)
-    const messages = requests()[1].messages
-    const prose = messages.findIndex((m) => m.role === 'assistant' && m.content === 'Hesta opens the door.')
-    expect(prose).toBeGreaterThan(0)
-    expect(messages[prose + 1].content).toContain('Steer the reply now')
+    // Its prose stays out of its conversation: fed back, it was copied word
+    // for word in place of the steer. The reminder only appends.
+    const [plotter0, plotter1] = snapshots
+    expect(plotter1.slice(0, plotter0.length)).toEqual(plotter0)
+    expect(plotter1).toHaveLength(plotter0.length + 1)
+    expect(plotter1.at(-1)?.content).toContain('Steer the reply now')
+    expect(plotter1.some((m) => m.content === 'Hesta opens the door.')).toBe(false)
+    expect(result.plotting?.trace.some((e) => e.kind === 'thought' && e.text === 'Hesta opens the door.')).toBe(true)
+    // The request after the reminder has it make a call; no other does.
+    expect(requests().map((r) => r.toolChoice)).toEqual([undefined, 'required', undefined])
   })
 
   it('sets the story up on the opening, and records each reply after it', async () => {
@@ -562,7 +570,9 @@ describe('buildPlotterInstruction', () => {
     // reply, after its updates and recalls.
     expect(all).toContain('Deliver what the story has set up')
     expect(all).toContain('Steer every reply')
-    expect(all).toContain('naming the player’s character as the records do')
+    // Records name the player's character; steers call them "you", as the
+    // story does, so the narrator never takes the name for someone else.
+    expect(all).toContain('calling the player’s character “you”, as the story does')
     // Steers explaining reasons pulled the narration into explanation.
     expect(all).toContain('as plain events with no reasons or commentary')
     // Steers written about the player became third-person narration and
@@ -571,7 +581,8 @@ describe('buildPlotterInstruction', () => {
     expect(all).toContain('matters to the plot or its continuity')
     // Next-step beats belong in the steer, not the plan.
     expect(all).toContain('The development itself goes in your steer; change the plan only for a long-term story idea.')
-    expect(all).toContain('What the player has already answered, or let pass with a Continue, is settled: steer what it brings.')
+    // What the player ignores is settled too: Theo knocked three times.
+    expect(all).toContain('What the player has answered, let pass or not engaged with is settled: steer what it brings.')
     // A recalled entry stays with the narrator and is kept current.
     expect(all).toContain('Once recalled, an entry stays with the narrator')
     expect(all).not.toContain('long_term')
@@ -602,6 +613,7 @@ describe('buildPlotterInstruction', () => {
     const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'bootstrap')
     expect(opening).toContain('Set up the records from the scenario')
     expect(opening).toContain('what each person wants')
+    expect(opening).toContain('the player’s character under their name, giving them a name that fits the scenario if it has none')
     expect(opening).toContain('Write the plan: long-term ideas for where the story is heading')
     expect(opening).toContain('Steer the opening with `steer`')
     expect(opening).toContain('then `recall_memory`, then `steer`')

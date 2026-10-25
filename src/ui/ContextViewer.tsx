@@ -72,7 +72,8 @@ export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, o
 
   const { system, chronicle, history, tail: notes } = narrator
   // What the Plotter's request holds beyond the story both roles share: its
-  // rules in place of the narrator's reading notes, and its own tail.
+  // own system prompt, its rules in place of the narrator's reading notes,
+  // and its own tail.
   const plotterPrefix = plotter
     ? plotter.sections.system.filter((m) => !system.some((n) => n.content === m.content))
     : []
@@ -162,8 +163,8 @@ export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, o
           <>
             <p className="hint">
               Sent first, when the player acts (model: {plotter.model}). It shares the
-              system prompt, slots, chronicle, and history with the narrator&apos;s
-              request; shown here is what differs: the full
+              content stance, slots, chronicle, and history with the narrator&apos;s
+              request; shown here is what differs: its own system prompt, the full
               rules for each record in place of the narrator&apos;s note, then its tail —
               the records as check_* tool results and its instruction. The player&apos;s
               next input is a placeholder here.{' '}

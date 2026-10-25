@@ -5,6 +5,7 @@ import {
   rejectsCacheKey,
   rejectsReasoning,
   rejectsTemperature,
+  rejectsToolChoice,
   toResponsesInput,
 } from './openaiCompatible'
 import type { ModelMessage } from './types'
@@ -185,6 +186,11 @@ describe('prompt-cache key', () => {
   it('does not mistake other failures for a rejected key', () => {
     expect(rejectsCacheKey(401, 'invalid API key')).toBe(false)
     expect(rejectsCacheKey(422, '{"detail":"messages must not be empty"}')).toBe(false)
+  })
+
+  it('recognises a provider rejection of the tool choice', () => {
+    expect(rejectsToolChoice(400, '{"error":{"message":"Invalid value for tool_choice: required"}}')).toBe(true)
+    expect(rejectsToolChoice(400, '{"error":{"message":"Invalid value for temperature"}}')).toBe(false)
   })
 
   it('retries without a rejected key and stops sending it', async () => {

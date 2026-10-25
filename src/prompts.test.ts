@@ -7,6 +7,7 @@ import {
   buildTurnReminder,
   CONTINUE_DIRECTIVE,
   DEFAULT_SYSTEM_PROMPT,
+  PLOTTER_SYSTEM_PROMPT,
   SUMMARIZER_SYSTEM_PROMPT,
 } from './prompts'
 
@@ -64,7 +65,9 @@ describe('capability-aware prompts', () => {
     // Fiction, not explanation.
     expect(DEFAULT_SYSTEM_PROMPT).toContain('let motives, meaning and mood show through it, never named or explained')
     // An answered question or met situation is settled, not re-asked.
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('or the player has answered it or let it pass, the story moves on from it')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      'or the player has answered it, let it pass or left it alone, the story moves on from it',
+    )
   })
 
   it('measures length preferences against a full reply', () => {
@@ -107,11 +110,14 @@ describe('capability-aware prompts', () => {
 
   it('records the player’s character by name, as a fact of the story', () => {
     const rules = buildMemoryRules()
-    expect(rules).toContain("Key the player's character by their name")
-    expect(rules).toContain('and `you` until then, as the story calls them')
-    expect(rules).toContain("The name is the player's to give")
-    expect(rules).not.toContain('(key `player`)')
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('in the story they are always "you"')
+    // Always a name: keying them `you` until named was a needless special case.
+    expect(rules).toContain("The player's character always has a name, and their entry is keyed by it")
+    expect(rules).toContain('give them a name that fits the scenario as you set up the records at the opening')
+    expect(rules).toContain('"is": "Amy is the player\'s character, a drifter newly arrived in town."')
+    expect(rules).not.toMatch(/`you` until|key `player`/)
+    // The story still calls them "you"; so do the Plotter's steers.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('in the story they are always "you", whatever name others know them by')
+    expect(PLOTTER_SYSTEM_PROMPT).toContain('In the records they go by their name; in your steers, as in the story, they are "you".')
     // "The player" in the records leaked into dialogue.
     expect(rules).not.toMatch(/saw the player|wary of the player|The player is lean/)
   })
@@ -121,12 +127,25 @@ describe('capability-aware prompts', () => {
     // One long knowledge string recounting every scene was the failure.
     expect(rules).toContain('is a map with one short item for each fact')
     expect(rules).toContain('It holds only points that matter to the plot, not every observation.')
-    expect(rules).toContain('"constable": "Hesta saw Rook argue with a constable."')
+    expect(rules).toContain('"constable": "Hesta saw Amy argue with a constable."')
     // Single complete sentences, never fragments ("30 pounds").
     expect(rules).toContain('a single complete present-tense sentence that names its subject')
-    expect(rules).toContain('"money": "Rook has 30 pounds."')
+    expect(rules).toContain('"money": "Amy has 30 pounds."')
     expect(rules).toContain('`appearance`, `wearing`')
     expect(rules).toContain('`secrets` (a map')
+  })
+
+  it('gives the Plotter a brief of its own, for directing rather than writing', () => {
+    expect(PLOTTER_SYSTEM_PROMPT).toContain('You are the Plotter of an interactive story')
+    // With the narrator's writing brief, it sometimes wrote the scene itself.
+    expect(PLOTTER_SYSTEM_PROMPT).toContain('You never write the story yourself; you reply with tool calls alone')
+    expect(PLOTTER_SYSTEM_PROMPT).not.toMatch(/You are the DM|second person|paragraphs/)
+    expect(PLOTTER_SYSTEM_PROMPT).toContain("Follow the player's pace, focus and interest first")
+    // What the player ignores doesn't come back: Theo knocked three times.
+    expect(PLOTTER_SYSTEM_PROMPT).toContain(
+      'Whatever the player has answered, let pass or not engaged with is settled, and it doesn\'t come back or repeat.',
+    )
+    expect(PLOTTER_SYSTEM_PROMPT).not.toMatch(/decision|choice|decide|choose|bargain|option/i)
   })
 
   it('treats the summary length as a ceiling rather than a quota', () => {

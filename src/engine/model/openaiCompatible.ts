@@ -66,12 +66,13 @@ function authorizationHeaders(apiKey: string): Record<string, string> {
 }
 
 // Capabilities vary by endpoint and model, and names are not reliable signals.
-// Learn unsupported temperature, reasoning and cache-key settings from a
-// provider's validation response once, then omit the field for later calls in
-// this browser session.
+// Learn unsupported temperature, reasoning, cache-key and tool-choice settings
+// from a provider's validation response once, then omit the field for later
+// calls in this browser session.
 const temperatureUnsupported = new Set<string>()
 const reasoningUnsupported = new Set<string>()
 const cacheKeyUnsupported = new Set<string>()
+const toolChoiceUnsupported = new Set<string>()
 
 export const MODEL_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
 const MODEL_LIST_TIMEOUT_MS = 30 * 1000
@@ -95,6 +96,14 @@ export function rejectsCacheKey(status: number, errorBody: string): boolean {
   )
 }
 
+export function rejectsToolChoice(status: number, errorBody: string): boolean {
+  return (
+    (status === 400 || status === 422) &&
+    /tool_choice/i.test(errorBody) &&
+    (UNSUPPORTED_WORDING.test(errorBody) || /extra/i.test(errorBody))
+  )
+}
+
 // Dropping reasoning changes how the model behaves, so it is noted in the
 // call's trace rather than only in the console.
 const REASONING_DROPPED: ProtocolAnomaly = {
@@ -106,11 +115,12 @@ const REJECTABLE_FIELDS = [
   { name: 'temperature', fields: ['temperature'], rejects: rejectsTemperature, unsupported: temperatureUnsupported },
   { name: 'reasoning', fields: ['reasoning_effort', 'reasoning'], rejects: rejectsReasoning, unsupported: reasoningUnsupported },
   { name: 'cache key', fields: ['prompt_cache_key'], rejects: rejectsCacheKey, unsupported: cacheKeyUnsupported },
+  { name: 'tool choice', fields: ['tool_choice'], rejects: rejectsToolChoice, unsupported: toolChoiceUnsupported },
 ]
 
 // Post a completion request. On a rejection of an optional field still in the
 // body, remember that for this endpoint and model, drop the field, and retry;
-// each retry removes a field, so this ends after at most three.
+// each retry removes a field, so this ends after at most four.
 async function postWithFallbacks(
   url: string,
   headers: Record<string, string>,
@@ -211,11 +221,11 @@ async function completeOpenAICompatibleChatWithinTimeout(
     messages: request.messages.map(toWireMessage),
     stream: false,
   }
+  const capabilityKey = `${baseUrl}\u0000${request.model}`
   if (request.tools?.length) {
     body.tools = request.tools.map(toWireTool)
-    if (request.toolChoice) body.tool_choice = request.toolChoice
+    if (request.toolChoice && !toolChoiceUnsupported.has(capabilityKey)) body.tool_choice = request.toolChoice
   }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
   const wantsReasoning = !!request.reasoningEffort && request.reasoningEffort !== 'default'
   if (wantsReasoning && !reasoningUnsupported.has(capabilityKey)) {
     body.reasoning_effort = request.reasoningEffort
@@ -331,7 +341,7 @@ async function completeResponsesWithinTimeout(
   }
   if (request.tools?.length) {
     body.tools = request.tools.map(toResponsesTool)
-    if (request.toolChoice) body.tool_choice = request.toolChoice
+    if (request.toolChoice && !toolChoiceUnsupported.has(capabilityKey)) body.tool_choice = request.toolChoice
   }
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
     body.temperature = request.temperature

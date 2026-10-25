@@ -24,6 +24,7 @@ Prompt changes are checked against these.
 ## Plotter
 
 - Runs before the narrator. A few seconds is fine.
+- Has its own system prompt: it directs the story and keeps the records, replying with tool calls alone, and never writes the story. With the narrator's brief as its system prompt, it sometimes wrote the scene itself, or typed its steer out as text, instead of steering.
 - Injects plot ideas.
 - Reminds the narrator of key memories.
 - Stops the narrator being boring or repetitive.
@@ -34,7 +35,7 @@ Prompt changes are checked against these.
 - Characters' appearance and what they are wearing are recorded. Secrets are a map, one per secret, so each goes once the story reveals it.
 - Facets that gather facts (knowledge, possessions, relationships) are maps of short items, each an important, plot-relevant point: not every observation, and not one long string recounting every scene.
 - The player's memory entry has no wants or bond: the player's intent is theirs.
-- Records and steers call the player's character by their name once the scenario or the player gives one, and "you" until then, as the story does; never "the player". Memory keys the character the same way. "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table").
+- The player's character always has a name in the records: the scenario's or the player's, or, when neither gives one, a name that fits the scenario, which the Plotter gives them as it sets up the records at the opening. Their entry says they are the player's character. Steers call them "you", as the story does, and nothing calls them "the player". "The player" in the records leaked into dialogue ("Sam, keep the player on it") and narration ("She stops at the player's table"), and keying them `you` until named was a needless special case.
 - The plot plan is a private list of long-term story ideas only, never revealed. It changes when the story takes a different direction.
 - The next step goes in the steer, never the plan.
 - Plan changes are optional: the Plotter inserts a good idea that improves the story, and removes an entry once it is completed or abandoned.
@@ -67,7 +68,7 @@ Prompt changes are checked against these.
 - Deliver the kind of story the scenario and style guide promise, in their register.
 - Developments grow out of what's already in play, not new threats from nowhere.
 - Once a planned development happens, it gives way to its consequence; it is never replayed.
-- Once the player has answered a question or met a situation, or let it pass with a Continue, it's settled: the story moves on to what that brings, and no NPC asks again or repeats the same move.
+- Once the player has answered a question or met a situation, let it pass with a Continue, or not engaged with it, it's settled: the story moves on to what that brings, and no NPC asks again or repeats the same move.
 - What the player passes over takes a clause; a simple task doesn't sprout a chain of errands.
 - Quiet scenes are fine when something moves beneath them.
 - Respect the player's steering: explicit redirection wins, and a thread they turn away from stays dropped rather than returning in disguise. Brief replies and Continue aren't rejection.
@@ -109,6 +110,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - NPCs using dialogue to present an X-or-Y choice: "Name yourself or bleed.", "Answer, or return what you hold."
 - The same choice re-offered for six turns.
 - An NPC repeating a move the player has already met: Thorne steering them away from the same passage four replies running.
+- An NPC repeating a move the player ignored: Theo knocking three times after "I ignore the footsteps".
 - Replies ending on "…waiting".
 - Handing back: "leaves the choice entirely yours", "The first step is yours.", "The Vaults wait.", "a pause, the kind that invites reply", or an NPC's "Walk back with me?" as the last line.
 - Micro actions: a fight running reply after reply, each ending on the next attack.
