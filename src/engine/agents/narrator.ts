@@ -144,15 +144,15 @@ export function buildPlotterInstruction(
       ? [`Recall with \`${RECALL_MEMORY_TOOL.name}\` the people, places and things the opening involves.`]
       : []),
     ...(steers
-      ? [`Steer the opening with \`${STEER_TOOL.name}\`: what the opening should achieve as the story begins, calling the player’s character “you”.`]
+      ? [`Steer the opening with \`${STEER_TOOL.name}\`: how the story begins, concretely, carried by the world and its people and calling the player’s character “you”.`]
       : []),
   ]
   const replySteps = [
     `Record only what the last reply established that matters to the plot or its continuity and the records (the ${reads.join(' / ')} results) don’t yet hold.`,
     steers && continuing
-      ? 'The player has handed this reply to you with Continue: their last move was played out in the last reply. Follow their pace, focus and interest first: what is meaningful is what they have been engaging with. Carry it forward from where the last reply ended to its next meaningful development: inside a moment they have been dwelling on, how the people in it respond and what it changes between them; otherwise, moving towards where the plan is heading, an NPC pursues their goal, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development leaves the story somewhere new. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
+      ? 'The player has handed this reply to you with Continue: their last move was played out in the last reply, and the world and its people carry the story on from there. Follow their pace, focus and interest first: what is meaningful is what they have been engaging with. From where the last reply ended, pick the one development that does most for the story at this point, concrete and substantial, so it leaves the story somewhere new: inside a moment they have been dwelling on, how the people in it respond and what it changes between them; otherwise, moving towards where the plan is heading, an NPC pursues their goal, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
       : steers
-        ? 'Follow the player’s pace, focus and interest first: what is meaningful is what they engage with. When they dwell on a moment and give it detail, the next meaningful development grows inside it: how the people in it respond, and what it changes between them. When they move on or hold back, pick the next meaningful development, moving towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up, so the development leaves the story somewhere new. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
+        ? 'Follow the player’s pace, focus and interest first: what is meaningful is what they engage with. Then pick the one development that does most for the story at this point, concrete and substantial, so it leaves the story somewhere new. When the player dwells on a moment and gives it detail, it grows inside that moment: how the people in it respond, and what it changes between them. When they move on or hold back, it moves towards where the plan is heading: an NPC pursues their goal, the important consequences of the player’s last action land, the story moves on to the next scene, a secret surfaces, or a thread from earlier returns. Deliver what the story has set up. Record the changes it brings. The development itself goes in your steer; change the plan only for a long-term story idea.'
         : continuing
           ? 'Work out how the world moves on from where the last reply ended, and record the changes that follow.'
           : 'Work out how the world answers the player, and record the changes that follow.',
@@ -163,7 +163,7 @@ export function buildPlotterInstruction(
       : []),
     ...(steers
       ? [
-          `Steer every reply with \`${STEER_TOOL.name}\`: what the reply should achieve through that development, as plain outcomes in the world with no reasons or commentary, leaving the words people say and the details of the scene to the narrator. Call the player’s character “you”, as the story does; they do only what the player’s input says or implies, and their feelings are the player’s own. What the player has answered, let pass or not engaged with is settled: steer what it brings.`,
+          `Steer every reply with \`${STEER_TOOL.name}\`: that development, concretely, saying what happens in the world and what it changes, carried by the world and its people, as plain events with no reasons or commentary. Leave the words people say and the details of the scene to the narrator. Call the player’s character “you”, as the story does: they do only what the player’s input says or implies, so the direction takes them no further, and their feelings are the player’s own. What the player has answered, let pass or not engaged with is settled: steer what it brings.`,
         ]
       : []),
   ]

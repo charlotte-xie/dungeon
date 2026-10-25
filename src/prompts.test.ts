@@ -145,7 +145,10 @@ describe('capability-aware prompts', () => {
     expect(PLOTTER_SYSTEM_PROMPT).toContain('You never write the story yourself; you reply with tool calls alone')
     expect(PLOTTER_SYSTEM_PROMPT).not.toMatch(/You are the DM|second person|paragraphs/)
     expect(PLOTTER_SYSTEM_PROMPT).toContain("Follow the player's pace, focus and interest first")
-    expect(PLOTTER_SYSTEM_PROMPT).toContain('Your steer says what the next reply should achieve')
+    expect(PLOTTER_SYSTEM_PROMPT).toContain(
+      'Your steer gives the narrator the development for the next reply: the one that does most for the story at this point',
+    )
+    expect(PLOTTER_SYSTEM_PROMPT).toContain('carried by the world and its people')
     expect(PLOTTER_SYSTEM_PROMPT).toContain(
       "the words people say and the details of the scene are the narrator's to write",
     )

@@ -496,9 +496,14 @@ describe('buildStoryUpdate', () => {
 describe('buildNarratorNotesMessage', () => {
   it('has the narrator show a steer’s mood rather than name it', () => {
     const notes = buildNarratorNotesMessage(ALL_FLAGS)
-    expect(notes?.content).toContain('what this reply should achieve, sometimes with a mood or style to aim for')
-    expect(notes?.content).toContain('the words people say and the details of the scene your own')
-    expect(notes?.content).toContain('showing any mood rather than naming it')
+    expect(notes?.content).toContain('narrative direction for this reply, sometimes with a mood or style to aim for')
+    expect(notes?.content).toContain('the words people say and the details of the scene are yours')
+    // The steer is direction, never licence to act for the player.
+    expect(notes?.content).toContain(
+      'Take it as direction within your principles',
+    )
+    expect(notes?.content).toContain('the player’s character still does only what the player’s input says or implies')
+    expect(notes?.content).toContain('any mood shows rather than being named')
   })
 })
 

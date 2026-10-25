@@ -8,7 +8,7 @@ Prompt changes are checked against these.
 - No reasoning, no tools. It writes from the story, its story updates and its notes for the reply.
 - A story update stays in its history: the memories recalled for the reply, as they stood then, and the player's OOC instructions when they change. An entry it already holds is brought up to date when the records change, so its view never goes stale.
 - The notes for the reply are for that reply only: the scene as it stands and the steer. Past steers don't stay in view to be copied or repeated, and the Plotter's record-keeping stays out of sight.
-- Follows the steer.
+- Follows the steer as narrative direction, within its own principles: a steer never has the player's character act or speak beyond the player's input.
 - The player's character does only what the player's input says or implies.
 - Never decides what the player's character thinks, feels, says or chooses.
 - The player's emotions and interiority are their own: never written for them, alone or shared ("something neither of you has named").
@@ -48,7 +48,9 @@ Prompt changes are checked against these.
 - Plan entries are developments someone will bring about, not themes ("A slow-burn attraction develops").
 - Records only what is important for future continuity: catalogued details came back as repetition.
 - Steers include the player's character only as the player's input says or implies, and leave their feelings to the player.
-- Steers say what the reply should achieve: what happens and what changes, as plain outcomes in the world, with no reasons or commentary ("to gain time for himself", "This advances the deadline pressure"). They may give mood or style guidance; the narrator shows it and never names it.
+- Each steer carries the one development that does most for the story at this point: concrete and substantial, carried by the world and its people, as plain events with no reasons or commentary ("to gain time for himself", "This advances the deadline pressure", "invites further probing"). They may give mood or style guidance; the narrator shows it and never names it.
+  - The Plotter is better at concrete developments than abstract objectives; what it needs is to pick the most useful one. Back-to-back Continues gave small beats instead, a suspect adding one detail each time.
+  - Asking what a reply should "achieve" drew the player's character into the outcome ("the interview presses on his movements"), and on Continue the narrator wrote the detective's questions for the player.
 - The narrator fills in the telling: the words people say and the details of the scene. Steers that scripted every line were copied word for word, leaving the Plotter writing the dialogue, and a weather line added to every steer became rain in every reply.
 
 ## Story
@@ -123,6 +125,7 @@ If these are observed regularly, the prompt or tools probably need tweaking
 - The same detail escalating reply after reply: "The rain drums harder", "drives harder", "beats harder".
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".
 - Third-person narration copied from a steer written about the player: "They finish the drinks".
+- The narrator speaking for the player's character on Continue: "'You telephoned someone from the shop that night,' you say."
 - Foreshadowing that never delivers.
 - Replies shrinking every turn under "keep replies a bit shorter".
 - The Plotter writing prose instead of steering.

@@ -182,7 +182,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Plot plan',
     rulesMessage: `${PLOT_RULES}\n\nThe current plan arrives as \`${CHECK_PLOT_PLAN_TOOL.name}\` results.`,
     narratorNote:
-      'Steer, in the reply notes: what this reply should achieve, sometimes with a mood or style to aim for. Bring it about in your own telling, with the words people say and the details of the scene your own, showing any mood rather than naming it.',
+      'Steer, in the reply notes: narrative direction for this reply, sometimes with a mood or style to aim for. Take it as direction within your principles: the words people say and the details of the scene are yours, any mood shows rather than being named, and the player’s character still does only what the player’s input says or implies.',
     buildPayload: (data) => buildPlotPayload(data.plot),
     buildGuidance: () => '',
   },
