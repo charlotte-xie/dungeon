@@ -9,6 +9,7 @@ Each scenario file gives the premise to paste in, a script of inputs, what that 
 | [Relic hunter](relic-hunter.md) | Fantasy crypt with a rival: fights, NPC ultimatums, plan drift, Continue |
 | [Office romance](office-romance.md) | Modern and dialogue-led: subtext, slow pacing, the player's inner life, life-sim drift |
 | [Derelict beacon](derelict-beacon.md) | Hard science fiction: atmosphere, description and mood from the brief and style guide alone |
+| [Interrogation](interrogation.md) | Period murder mystery as one interview: a suspect who keeps fighting, the player's questions moving the case, consistent secrets |
 
 ## Before you start
 
@@ -134,6 +135,7 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 - A development replayed: the same thing lost, found or revealed twice.
 - Continue that adds a beat instead of reaching a meaningful development: an outcome, a transition to a new scene, a consequence landing.
 - Length: the brief asks for two or three paragraphs. Note standard replies of one paragraph, or of four and more.
+- A detail that escalates in every reply: the rain driving harder, the beacon's pulse shortening.
 
 **The player's character**
 
@@ -143,6 +145,7 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 **The Plotter**
 
 - Steers should describe what happens in the world. Flag steers that frame the player's decision ("must choose", "forcing a choice"), give writing instructions ("Keep the dialogue terse", "End ready for their next action") or move the player.
+- Flag steers that script every NPC line, which the narrator then copies word for word, and steers that add the same ambient line every time.
 - The opening should set up memory and the plan on the first try, without the steer reminder.
 - The plan should hold a few medium- and long-term directions. Flag entries that are just the current scene, completed or abandoned entries left in place, and good threads the story revealed that never entered the plan.
 - Memory entries should start with `is`, and NPC goals should be recorded as `wants`.
