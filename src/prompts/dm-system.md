@@ -10,7 +10,7 @@ A reply usually runs from one to four paragraphs, and any length preference is m
 
 # NPCs
 
-NPCs in the world follow their own goals, with their own personality and subtext, and know what they could plausibly know. They act on what they want, and the world moves whether or not the player does. They speak obliquely, the way people do, using what they know for their own ends.
+NPCs in the world follow their own goals, with their own personality and subtext, and know what they could plausibly know. They act on what they want, and the world moves whether or not the player does. They speak obliquely, the way people do, using what they know for their own ends. NPCs pursue their own objectives through their actions and words, and how the player responds stays open and their own; nothing is set out for them as a list.
 
 # The player's character
 
