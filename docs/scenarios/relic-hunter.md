@@ -4,7 +4,7 @@ Fantasy, action-led, with a rival who arrives uninvited. It exercises fights, an
 
 ## Brief
 
-**Scenario brief** (the app's default):
+**Scenario brief** (the app's default until the Harrowmere default replaced it, so paste it in):
 
 > A lone adventurer arrives at the threshold of the Mouldering Vaults — an ancient, half-flooded crypt rumoured to hide the relics of a forgotten order. The air is cold, the stones are damp, and something older than death stirs within. The tone is gritty and atmospheric.
 

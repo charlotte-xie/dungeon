@@ -53,7 +53,7 @@ export const ADVENTURE_SLOTS: SlotDef[] = [
     framing:
       'The premise, setting and tone of this adventure.',
     hint: 'Premise, setting, and opening situation. Sets where and what the adventure is.',
-    placeholder: 'e.g. A lone adventurer arrives at the threshold of the Mouldering Vaults...',
+    placeholder: 'e.g. You are a relic hunter who has spent your last coin on a guide to the Mouldering Vaults...',
     defaultValue: DEFAULT_SCENARIO,
     storageKey: 'dm.scenario',
     rows: 5,
