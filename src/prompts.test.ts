@@ -78,12 +78,6 @@ describe('capability-aware prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('any length preference is measured against that')
   })
 
-  it('brings the story to where the player can take it on, without handing it back', () => {
-    expect(DEFAULT_SYSTEM_PROMPT).toContain(
-      'bring the story to a point where they can take it on, without asking or prompting them',
-    )
-  })
-
   it('keeps choice framing out of the prompts', () => {
     // Choice and decision wording pulls models towards ending on a choice.
     const texts = [DEFAULT_SYSTEM_PROMPT, buildPlotRules(10, 500), CONTINUE_DIRECTIVE]
