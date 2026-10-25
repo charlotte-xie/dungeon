@@ -405,7 +405,7 @@ function App() {
               title={
                 game.unanswered
                   ? 'Have the DM reply to the last turn'
-                  : 'Have the DM keep narrating — time passes, NPCs act — until the player faces a concrete decision'
+                  : 'Have the DM carry the story on to its next development — time passes, NPCs act'
               }
             >
               Continue

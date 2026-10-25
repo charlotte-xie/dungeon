@@ -65,6 +65,15 @@ function authorizationHeaders(apiKey: string): Record<string, string> {
   return apiKey ? { Authorization: `Bearer ${apiKey}` } : {}
 }
 
+// xAI routes a request to the server holding its cached prefix by this header,
+// on Chat Completions and Responses alike. Its CORS policy allows any request
+// header.
+function requestHeaders(connection: ModelConnection, baseUrl: string): Record<string, string> {
+  const headers = authorizationHeaders(connection.apiKey)
+  if (connection.cacheKey && isXaiHost(baseUrl)) headers['x-grok-conv-id'] = connection.cacheKey
+  return headers
+}
+
 // Capabilities vary by endpoint and model, and names are not reliable signals.
 // Learn unsupported temperature, reasoning, cache-key and tool-choice settings
 // from a provider's validation response once, then omit the field for later
@@ -236,10 +245,7 @@ async function completeOpenAICompatibleChatWithinTimeout(
   if (connection.cacheKey && !cacheKeyUnsupported.has(capabilityKey)) {
     body.prompt_cache_key = connection.cacheKey
   }
-  // xAI routes Chat Completions to its prompt cache by header rather than by
-  // the body field. Its CORS policy allows any request header.
-  const headers = authorizationHeaders(connection.apiKey)
-  if (connection.cacheKey && isXaiHost(baseUrl)) headers['x-grok-conv-id'] = connection.cacheKey
+  const headers = requestHeaders(connection, baseUrl)
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
   const url = `${baseUrl}/chat/completions`
@@ -354,7 +360,7 @@ async function completeResponsesWithinTimeout(
   const url = `${baseUrl}/responses`
   const response = await postWithFallbacks(
     url,
-    authorizationHeaders(connection.apiKey),
+    requestHeaders(connection, baseUrl),
     body,
     signal,
     capabilityKey,

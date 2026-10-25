@@ -160,20 +160,25 @@ describe('prompt-cache key', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('prompt_cache_key')
   })
 
-  it('adds the routing header for xAI Chat Completions only', async () => {
-    const fetchMock = vi.fn().mockImplementation(async () => chatReply())
+  it('adds the routing header for xAI only, on both APIs', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) =>
+      url.endsWith('/responses') ? new Response(JSON.stringify({ output: [] }), { status: 200 }) : chatReply())
     vi.stubGlobal('fetch', fetchMock)
-    for (const baseUrl of ['https://api.x.ai/v1', 'https://api.mistral.ai/v1']) {
-      await completeOpenAICompatibleChat(
-        { model: 'some-model', messages: [] },
-        { baseUrl, apiKey: 'test', cacheKey: 'adventure-1' },
-        new AbortController().signal,
-      )
+    for (const complete of [completeOpenAICompatibleChat, completeOpenAICompatibleResponses]) {
+      for (const baseUrl of ['https://api.x.ai/v1', 'https://api.mistral.ai/v1']) {
+        await complete(
+          { model: 'some-model', messages: [] },
+          { baseUrl, apiKey: 'test', cacheKey: 'adventure-1' },
+          new AbortController().signal,
+        )
+      }
     }
-    const [xai, other] = fetchMock.mock.calls.map((call) => call[1])
-    expect(xai.headers).toHaveProperty('x-grok-conv-id', 'adventure-1')
-    expect(other.headers).not.toHaveProperty('x-grok-conv-id')
-    expect(JSON.parse(other.body)).toHaveProperty('prompt_cache_key', 'adventure-1')
+    const [chatXai, chatOther, responsesXai, responsesOther] = fetchMock.mock.calls.map((call) => call[1])
+    expect(chatXai.headers).toHaveProperty('x-grok-conv-id', 'adventure-1')
+    expect(responsesXai.headers).toHaveProperty('x-grok-conv-id', 'adventure-1')
+    expect(chatOther.headers).not.toHaveProperty('x-grok-conv-id')
+    expect(responsesOther.headers).not.toHaveProperty('x-grok-conv-id')
+    expect(JSON.parse(chatOther.body)).toHaveProperty('prompt_cache_key', 'adventure-1')
   })
 
   it.each([
