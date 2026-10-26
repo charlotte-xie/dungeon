@@ -34,6 +34,7 @@ describe('prompts', () => {
       buildOocRules(8, 300),
       buildTurnReminder(),
       buildTurnReminder('player'),
+      buildTurnReminder('player', '(OOC: more of the pub)'),
       buildTurnReminder('continue'),
       CONTINUE_DIRECTIVE,
       buildNewAdventureBootstrap(),
@@ -59,6 +60,11 @@ describe('prompts', () => {
     expect(buildTurnReminder('player')).toContain(reminder)
     // On a Continue the last move was already told.
     expect(buildTurnReminder('continue')).not.toBe(reminder)
+    // Out-of-character direction alone has no move to tell.
+    expect(buildTurnReminder('player', 'I wave. (OOC: slowly)')).toBe(buildTurnReminder('player'))
+    const direction = buildTurnReminder('player', '(OOC: more of the pub)')
+    expect(direction).not.toBe(buildTurnReminder('player'))
+    expect(direction).not.toBe(reminder)
   })
 
   it('sends the opening and Continue as the player’s out-of-character direction', () => {

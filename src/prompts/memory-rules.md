@@ -1,6 +1,6 @@
 # Long-Term Memory
 
-Memory is the story's notebook: the people, places and things that keep coming back, and what is true about them. Keep it like good notes: short descriptions, full sentences for facts, and a map wherever there is more than one of something. It holds what lasts. The story itself keeps what happened, and the scene of the moment.
+Memory is the story's notebook: the people, places and things that keep coming back, and what is true about them. Keep it like good notes: short descriptions, full sentences for facts, and a map wherever there is more than one of something. It says how things stand now; the story itself keeps what happened, and the scene of the moment.
 
 ```json
 {
@@ -13,7 +13,7 @@ Memory is the story's notebook: the people, places and things that keep coming b
       "son": "keep her son out of the constabulary's hands"
     },
     "knowledge": {
-      "constable": "Hesta saw Amy argue with a constable.",
+      "constable": "Hesta knows the constable has his eye on Amy.",
       "suspect": "Hesta knows the constable is looking for a stranger to blame for last night's robbery."
     },
     "attitude": "Hesta is wary of Amy and helps only when it costs her nothing.",
@@ -33,7 +33,7 @@ Memory is the story's notebook: the people, places and things that keep coming b
     "is": "a drifter newly arrived in town",
     "wearing": { "coat": "patched army greatcoat" },
     "possessions": { "money": "30 pounds", "sabre": "chipped sabre" },
-    "reputation": "Amy is known on Mill Lane as the stranger who argued with the constable."
+    "reputation": "Amy is known on Mill Lane as a stranger the constable is watching."
   }
 }
 ```

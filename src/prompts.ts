@@ -14,6 +14,7 @@ import newAdventureBootstrapTemplate from './prompts/new-adventure-bootstrap.md?
 import reviserSystem from './prompts/reviser.md?raw'
 import continueDirective from './prompts/continue-directive.md?raw'
 import type { TurnKind } from './engine/types'
+import { isOutOfCharacterOnly } from './engine/steering'
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
@@ -62,7 +63,7 @@ export const narratorNotesText = sectionReader<
   'intro' | 'story-update' | 'reply-notes' | 'close' | 'memory' | 'plot' | 'state' | 'ooc'
 >('narrator-notes.md', narratorNotes)
 
-const turnReminderText = sectionReader<'default' | 'player' | 'continue'>('turn-reminder.md', turnReminder)
+const turnReminderText = sectionReader<'default' | 'player' | 'ooc' | 'continue'>('turn-reminder.md', turnReminder)
 const nsfwText = sectionReader<'on' | 'off'>('nsfw.md', nsfw)
 
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
@@ -79,10 +80,11 @@ export const CONTINUE_DIRECTIVE = continueDirective.trim()
 // guidance. Restating it here would invite a rule-by-rule check every turn,
 // and this tail is never cached.
 // After the player's own input, the reply opens by telling what they did
-// and said. On a Continue their last move was told in the last reply, so the
-// story carries on from there; an opening has no move to tell.
-export function buildTurnReminder(kind?: TurnKind): string {
-  if (kind === 'player') return turnReminderText('player')
+// and said. Input that is only out-of-character direction has no move to
+// tell, and on a Continue their last move was told in the last reply, so the
+// story carries on from there; an opening has no move to tell either.
+export function buildTurnReminder(kind?: TurnKind, input?: string): string {
+  if (kind === 'player') return turnReminderText(input && isOutOfCharacterOnly(input) ? 'ooc' : 'player')
   if (kind === 'continue') return turnReminderText('continue')
   return turnReminderText('default')
 }

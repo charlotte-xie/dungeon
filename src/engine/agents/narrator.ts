@@ -476,7 +476,7 @@ export async function runNarrator(
         reasoningTokens - plotterReasoningTokens || undefined,
       )
     }
-    pushNudge(narratorMessages, buildTurnReminder(ctx.history.at(-1)?.kind))
+    pushNudge(narratorMessages, buildTurnReminder(ctx.history.at(-1)?.kind, ctx.history.at(-1)?.input))
   }
 
   return {

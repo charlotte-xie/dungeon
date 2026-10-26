@@ -560,7 +560,7 @@ export function buildNarratorSections(args: ModelMessagesArgs): RequestSections 
     tail: [
       ...buildReplyNotesMessages(buildReplyNotes(args.briefing ?? [], args.data, args.flags)),
       directiveMessage(
-        buildTurnReminder(args.history.at(-1)?.kind),
+        buildTurnReminder(args.history.at(-1)?.kind, args.history.at(-1)?.input),
         args.reminderAsSystem,
       ),
     ],

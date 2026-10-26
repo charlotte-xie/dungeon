@@ -14,13 +14,13 @@ Recall with `{{recall}}` the people, places and things the opening involves.
 Steer the opening with `{{steer}}`: brief guidance on how the story begins, with the player's character as "you".
 
 ## record
-Record what the last reply established that matters for continuity and the records ({{reads}}) don't hold yet.
+Record important events that will shape the story and ensure future continuity, if the records ({{reads}}) don't hold them yet.
 
 ## develop
 Work out what happens next: the development that does most for the story right now. If the player is dwelling on a moment, let it develop; if not, move the story on. Record what changes.
 
 ## develop-continue
-The player pressed Continue: move the story on from where the last reply ended to its next development. Record what changes.
+The player pressed Continue: they want more of the story, carried on from where the last reply ended to a point where they can act again. Their character carries on as before. Record what changes.
 
 ## recall
 Recall with `{{recall}}` the people, places and things the reply involves.

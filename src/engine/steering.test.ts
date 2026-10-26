@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { carryOocEdits, withRetryGuidance } from './steering'
+import { carryOocEdits, isOutOfCharacterOnly, withRetryGuidance } from './steering'
+
+describe('out-of-character input', () => {
+  it("recognises direction with no move of the player's own", () => {
+    expect(isOutOfCharacterOnly('(OOC: more of the pub itself)')).toBe(true)
+    expect(isOutOfCharacterOnly('  [slow down] (and more about Sam (her past))  ')).toBe(true)
+  })
+
+  it("treats any move alongside the direction as the player's input", () => {
+    expect(isOutOfCharacterOnly('I wave. (OOC: slowly)')).toBe(false)
+    expect(isOutOfCharacterOnly('(OOC: slowly) I wave.')).toBe(false)
+    expect(isOutOfCharacterOnly('I wait.')).toBe(false)
+    expect(isOutOfCharacterOnly('  ')).toBe(false)
+  })
+})
 
 describe('rewrite guidance', () => {
   it('keeps the action and attaches one-reply guidance', () => {

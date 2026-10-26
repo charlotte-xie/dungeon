@@ -7,6 +7,17 @@ function nextReplyOnly(text: string): string {
   return `${NEXT_REPLY_ONLY}${text})`
 }
 
+// Input holding only out-of-character direction, in (parentheses) or
+// [brackets]: the player gave direction but made no move of their own.
+export function isOutOfCharacterOnly(input: string): boolean {
+  let rest = input
+  for (let before = ''; before !== rest; ) {
+    before = rest
+    rest = rest.replace(/\([^()]*\)|\[[^[\]]*\]/g, '')
+  }
+  return input.trim() !== '' && !/[\p{L}\p{N}]/u.test(rest)
+}
+
 // Rewrite: attach one-reply guidance to the input being retried. It replaces
 // one-reply guidance already ending that input, since the player is
 // re-steering the same reply; anything else in the input is kept.
