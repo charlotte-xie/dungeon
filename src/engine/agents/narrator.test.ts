@@ -612,3 +612,59 @@ describe('buildPlotterInstruction', () => {
     expect(buildPlotterInstruction(CTX.flags, bigMemory, 4000)).toContain('Memory: STATUS')
   })
 })
+
+describe('runNarrator: live updates', () => {
+  beforeEach(() => {
+    mockedModel.mockReset()
+  })
+
+  it("streams the Plotter's stage and thinking, and the reply so far, when asked", async () => {
+    mockedModel.mockImplementation(async (req) => {
+      if (isPlotter(req)) {
+        req.onStream?.({ kind: 'reasoning', delta: 'Weigh ' })
+        req.onStream?.({ kind: 'reasoning', delta: 'the door.' })
+        req.onStream?.({ kind: 'call', name: 'update_memory' })
+        req.onStream?.({ kind: 'call', name: 'recall_memory' })
+        req.onStream?.({ kind: 'call', name: 'steer' })
+        return completion({ toolCalls: [STEER] })
+      }
+      req.onStream?.({ kind: 'text', delta: 'The door ' })
+      req.onStream?.({ kind: 'text', delta: 'opens.' })
+      return completion({ text: 'The door opens.' })
+    })
+    const stages: string[] = []
+    const thinking: string[] = []
+    const narration: string[] = []
+    const result = await runNarrator(CTX, new AbortController().signal, {
+      onPlotterStage: (stage) => stages.push(stage),
+      onPlotterThinking: (text) => thinking.push(text),
+      onNarration: (text) => narration.push(text),
+    })
+    expect(stages).toEqual(['planning', 'records', 'recall', 'steer'])
+    expect(thinking).toEqual(['Weigh ', 'Weigh the door.'])
+    expect(narration).toEqual(['', 'The door ', 'The door opens.'])
+    expect(result.text).toBe('The door opens.')
+  })
+
+  it('asks for no stream without a listener', async () => {
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
+    mockedModel.mockResolvedValueOnce(completion({ text: 'Prose.' }))
+    await runNarrator(CTX, new AbortController().signal)
+    expect(requests().map((req) => req.onStream)).toEqual([undefined, undefined])
+  })
+
+  it('starts the reply shown again when an empty reply is retried', async () => {
+    mockedModel.mockResolvedValueOnce(completion({ toolCalls: [STEER] }))
+    mockedModel.mockImplementationOnce(async (req) => {
+      req.onStream?.({ kind: 'text', delta: '   ' })
+      return completion({ text: '' })
+    })
+    mockedModel.mockImplementationOnce(async (req) => {
+      req.onStream?.({ kind: 'text', delta: 'Whole.' })
+      return completion({ text: 'Whole.' })
+    })
+    const narration: string[] = []
+    await runNarrator(CTX, new AbortController().signal, { onNarration: (text) => narration.push(text) })
+    expect(narration).toEqual(['', '   ', '', 'Whole.'])
+  })
+})

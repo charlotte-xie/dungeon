@@ -8,6 +8,7 @@
 
 import { XAI_BASE_URL } from '../config'
 import { normalizeOpenAIChatCompletion, normalizeResponsesApiResponse } from './normalize'
+import { isEventStream, readChatStream, readResponsesStream } from './stream'
 import type {
   ModelCompletion,
   ModelCompletionRequest,
@@ -75,13 +76,15 @@ function requestHeaders(connection: ModelConnection, baseUrl: string): Record<st
 }
 
 // Capabilities vary by endpoint and model, and names are not reliable signals.
-// Learn unsupported temperature, reasoning, cache-key and tool-choice settings
-// from a provider's validation response once, then omit the field for later
-// calls in this browser session.
+// Learn unsupported temperature, reasoning, cache-key, tool-choice and
+// streaming settings from a provider's validation response once, then omit
+// the field for later calls in this browser session.
 const temperatureUnsupported = new Set<string>()
 const reasoningUnsupported = new Set<string>()
 const cacheKeyUnsupported = new Set<string>()
 const toolChoiceUnsupported = new Set<string>()
+const streamOptionsUnsupported = new Set<string>()
+const streamingUnsupported = new Set<string>()
 
 export const MODEL_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
 const MODEL_LIST_TIMEOUT_MS = 30 * 1000
@@ -113,6 +116,24 @@ export function rejectsToolChoice(status: number, errorBody: string): boolean {
   )
 }
 
+export function rejectsStreamOptions(status: number, errorBody: string): boolean {
+  return (
+    (status === 400 || status === 422) &&
+    /stream_options/i.test(errorBody) &&
+    (UNSUPPORTED_WORDING.test(errorBody) || /extra/i.test(errorBody))
+  )
+}
+
+// Streaming itself, as distinct from its options: "stream_options" has no
+// word break after "stream", so it doesn't count here.
+export function rejectsStreaming(status: number, errorBody: string): boolean {
+  return (
+    (status === 400 || status === 422) &&
+    /\bstream\b/i.test(errorBody) &&
+    (UNSUPPORTED_WORDING.test(errorBody) || /extra/i.test(errorBody))
+  )
+}
+
 // Dropping reasoning changes how the model behaves, so it is noted in the
 // call's trace rather than only in the console.
 const REASONING_DROPPED: ProtocolAnomaly = {
@@ -125,11 +146,13 @@ const REJECTABLE_FIELDS = [
   { name: 'reasoning', fields: ['reasoning_effort', 'reasoning'], rejects: rejectsReasoning, unsupported: reasoningUnsupported },
   { name: 'cache key', fields: ['prompt_cache_key'], rejects: rejectsCacheKey, unsupported: cacheKeyUnsupported },
   { name: 'tool choice', fields: ['tool_choice'], rejects: rejectsToolChoice, unsupported: toolChoiceUnsupported },
+  { name: 'stream options', fields: ['stream_options'], rejects: rejectsStreamOptions, unsupported: streamOptionsUnsupported },
+  { name: 'streaming', fields: ['stream', 'stream_options'], rejects: rejectsStreaming, unsupported: streamingUnsupported },
 ]
 
 // Post a completion request. On a rejection of an optional field still in the
 // body, remember that for this endpoint and model, drop the field, and retry;
-// each retry removes a field, so this ends after at most four.
+// each retry removes a field, so this ends after one retry per optional field.
 async function postWithFallbacks(
   url: string,
   headers: Record<string, string>,
@@ -225,12 +248,16 @@ async function completeOpenAICompatibleChatWithinTimeout(
       'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
     )
   }
+  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  const streams = !!request.onStream && !streamingUnsupported.has(capabilityKey)
   const body: Record<string, unknown> = {
     model: request.model,
     messages: request.messages.map(toWireMessage),
-    stream: false,
+    stream: streams,
   }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  if (streams && !streamOptionsUnsupported.has(capabilityKey)) {
+    body.stream_options = { include_usage: true }
+  }
   if (request.tools?.length) {
     body.tools = request.tools.map(toWireTool)
     if (request.toolChoice && !toolChoiceUnsupported.has(capabilityKey)) body.tool_choice = request.toolChoice
@@ -250,7 +277,10 @@ async function completeOpenAICompatibleChatWithinTimeout(
   console.debug(`[model:${label}] request`, { baseUrl, body })
   const url = `${baseUrl}/chat/completions`
   const response = await postWithFallbacks(url, headers, body, signal, capabilityKey, label)
-  const raw = (await response.json()) as unknown
+  // A provider that ignores the stream flag answers with a single JSON body.
+  const raw = isEventStream(response)
+    ? await readChatStream(response, request.onStream)
+    : ((await response.json()) as unknown)
   console.debug(`[model:${label}] response`, { raw })
   const completion = normalizeOpenAIChatCompletion(
     raw,
@@ -333,14 +363,14 @@ async function completeResponsesWithinTimeout(
       'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
     )
   }
+  const capabilityKey = `${baseUrl}\u0000${request.model}`
   const body: Record<string, unknown> = {
     model: request.model,
     input: toResponsesInput(request.messages),
-    stream: false,
+    stream: !!request.onStream && !streamingUnsupported.has(capabilityKey),
     // Stateless by design: never rely on (or pay for) server-side storage.
     store: false,
   }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
   const wantsReasoning = !!request.reasoningEffort && request.reasoningEffort !== 'default'
   if (wantsReasoning && !reasoningUnsupported.has(capabilityKey)) {
     body.reasoning = { effort: request.reasoningEffort }
@@ -366,7 +396,9 @@ async function completeResponsesWithinTimeout(
     capabilityKey,
     label,
   )
-  const raw = (await response.json()) as unknown
+  const raw = isEventStream(response)
+    ? await readResponsesStream(response, request.onStream)
+    : ((await response.json()) as unknown)
   console.debug(`[model:${label}] response`, { raw })
   const completion = normalizeResponsesApiResponse(
     raw,

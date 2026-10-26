@@ -4,13 +4,119 @@ import {
   completeOpenAICompatibleResponses,
   rejectsCacheKey,
   rejectsReasoning,
+  rejectsStreamOptions,
+  rejectsStreaming,
   rejectsTemperature,
   rejectsToolChoice,
   toResponsesInput,
 } from './openaiCompatible'
-import type { ModelMessage } from './types'
+import type { ModelMessage, ModelStreamEvent } from './types'
 
 afterEach(() => vi.unstubAllGlobals())
+
+function sseResponse(events: unknown[], done = false): Response {
+  const text = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + (done ? 'data: [DONE]\n\n' : '')
+  return new Response(text, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+}
+
+describe('streaming', () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>, n: number) => JSON.parse(fetchMock.mock.calls[n][1].body)
+
+  it('streams a Responses request only when asked, and returns the same completion', async () => {
+    const final = {
+      status: 'completed',
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'The door opens.' }] }],
+      usage: { input_tokens: 10, input_tokens_details: { cached_tokens: 4 } },
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponse([
+        { type: 'response.output_text.delta', delta: 'The door opens.' },
+        { type: 'response.completed', response: final },
+      ]))
+      .mockResolvedValueOnce(new Response(JSON.stringify(final), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const seen: ModelStreamEvent[] = []
+    const connection = { baseUrl: 'https://api.x.ai/v1', apiKey: 'test' }
+    const streamed = await completeOpenAICompatibleResponses(
+      { model: 'grok-4.3', messages: [], onStream: (e) => seen.push(e) },
+      connection,
+      new AbortController().signal,
+    )
+    const plain = await completeOpenAICompatibleResponses({ model: 'grok-4.3', messages: [] }, connection, new AbortController().signal)
+    expect(bodyOf(fetchMock, 0)).toMatchObject({ stream: true })
+    expect(bodyOf(fetchMock, 1)).toMatchObject({ stream: false })
+    expect(seen).toEqual([{ kind: 'text', delta: 'The door opens.' }])
+    expect(streamed).toMatchObject({ text: 'The door opens.', promptTokens: 10, cachedTokens: 4 })
+    expect(plain).toMatchObject({ text: streamed.text, cachedTokens: streamed.cachedTokens })
+  })
+
+  it('streams Chat Completions with usage, and keeps only advertised tool calls', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse([
+      { choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'steer', arguments: '{}' } }] } }] },
+      { choices: [{ index: 0, delta: { tool_calls: [{ index: 1, id: 'c2', function: { name: 'delete_world', arguments: '{}' } }] } }] },
+      { choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] },
+      { choices: [], usage: { prompt_tokens: 12, prompt_tokens_details: { cached_tokens: 8 } } },
+    ], true))
+    vi.stubGlobal('fetch', fetchMock)
+    const completion = await completeOpenAICompatibleChat(
+      {
+        model: 'stream-chat',
+        messages: [],
+        tools: [{ name: 'steer', description: 'Steer.', parameters: {} }],
+        onStream: () => undefined,
+      },
+      { baseUrl: 'http://localhost:4400/v1', apiKey: '' },
+      new AbortController().signal,
+    )
+    expect(bodyOf(fetchMock, 0)).toMatchObject({ stream: true, stream_options: { include_usage: true } })
+    expect(completion.toolCalls.map((c) => c.name)).toEqual(['steer'])
+    expect(completion.anomalies.map((a) => a.kind)).toEqual(['unadvertised_tool_call'])
+    expect(completion).toMatchObject({ finishReason: 'tool_calls', promptTokens: 12, cachedTokens: 8 })
+  })
+
+  it('reads a single JSON reply from a provider that ignores the stream flag', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const seen: ModelStreamEvent[] = []
+    const completion = await completeOpenAICompatibleChat(
+      { model: 'ignores-stream', messages: [], onStream: (e) => seen.push(e) },
+      { baseUrl: 'http://localhost:4401/v1', apiKey: '' },
+      new AbortController().signal,
+    )
+    expect(completion.text).toBe('Done.')
+    expect(seen).toEqual([])
+  })
+
+  it('drops stream options, then streaming, when the provider rejects them, and remembers', async () => {
+    const reply = () => new Response(JSON.stringify({ choices: [{ message: { content: 'Done.' } }] }), { status: 200 })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{"error":{"message":"Unrecognized request argument supplied: stream_options"}}', { status: 400 }))
+      .mockResolvedValueOnce(new Response('{"error":{"message":"stream is not supported for this model"}}', { status: 400 }))
+      .mockImplementation(async () => reply())
+    vi.stubGlobal('fetch', fetchMock)
+    const request = { model: 'no-stream', messages: [], onStream: () => undefined }
+    const connection = { baseUrl: 'http://localhost:4402/v1', apiKey: '' }
+    const first = await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    expect(first.text).toBe('Done.')
+    expect(bodyOf(fetchMock, 1)).toMatchObject({ stream: true })
+    expect(bodyOf(fetchMock, 1)).not.toHaveProperty('stream_options')
+    expect(bodyOf(fetchMock, 2)).not.toHaveProperty('stream')
+    expect(bodyOf(fetchMock, 3)).toMatchObject({ stream: false })
+    expect(bodyOf(fetchMock, 3)).not.toHaveProperty('stream_options')
+  })
+
+  it('tells a rejection of stream options from a rejection of streaming', () => {
+    const options = '{"error":{"message":"Unrecognized request argument supplied: stream_options"}}'
+    const streaming = '{"error":{"message":"\\"stream\\" is not supported"}}'
+    expect(rejectsStreamOptions(400, options)).toBe(true)
+    expect(rejectsStreaming(400, options)).toBe(false)
+    expect(rejectsStreaming(400, streaming)).toBe(true)
+    expect(rejectsStreaming(401, streaming)).toBe(false)
+  })
+})
 
 describe('reasoning settings on the wire', () => {
   it.each(['low', 'none'] as const)('sends Responses reasoning effort %s', async (effort) => {

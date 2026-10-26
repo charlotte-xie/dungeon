@@ -134,6 +134,43 @@ function App() {
       <div className="msg-body">{statusLine}</div>
     </div>
   )
+  // The turn in hand before its reply is saved: the reply as the narrator
+  // writes it, with what the DM is doing under it, and beside it, with the
+  // trace on, the Plotter's thinking as it comes.
+  const liveRow = (t: Turn) => {
+    const { narration, plotterThinking } = game.streamed
+    const calls: ModelCallView[] = t.plotter
+      ? traceCalls(t)
+      : plotterThinking
+        ? [{ label: 'plotter', call: { id: `${t.id}-live`, model: '', trace: [{ kind: 'reasoning', text: plotterThinking }] } }]
+        : []
+    const aside = showTrace && calls.length > 0 && (
+      <div className="msg-aside">
+        <TraceView calls={calls} expanded={expandedTraces.has(t.id)} onToggle={() => toggleTrace(t.id)} />
+      </div>
+    )
+    if (!narration) {
+      return (
+        <div className="msg msg-dm thinking" role="status">
+          <span className="who">DM</span>
+          <div className="msg-body">{statusLine}</div>
+          {aside}
+        </div>
+      )
+    }
+    return (
+      <div className="msg msg-dm">
+        <span className="who">DM</span>
+        <div className="msg-body">
+          <p className="msg-text">{narration}</p>
+          <p className="msg-status msg-status-working" role="status">
+            {statusLine}
+          </p>
+        </div>
+        {aside}
+      </div>
+    )
+  }
 
   return (
     <main className={`app ${showTrace ? 'app-wide' : ''}`}>
@@ -352,7 +389,7 @@ function App() {
                     )}
                   </div>
                 )}
-                {pending && !showReply && thinkingRow}
+                {pending && !showReply && liveRow(t)}
               </div>
             </Fragment>
           )

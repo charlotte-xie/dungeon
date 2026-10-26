@@ -34,8 +34,15 @@ window.fetch = async (url, init) => {
   window.__run.push(entry)
   const started = performance.now()
   const res = await realFetch(url, init)
-  entry.ms = Math.round(performance.now() - started)
-  try { entry.response = await res.clone().json() } catch {}
+  // Replies stream, ending with the whole response in a response.completed
+  // event; it is read from a copy, so the app still shows the reply as it comes.
+  res.clone().text().then((raw) => {
+    entry.ms = Math.round(performance.now() - started)
+    const completed = raw.split('\n').filter((l) => l.startsWith('data: '))
+      .map((l) => { try { return JSON.parse(l.slice(6)) } catch { return null } })
+      .find((d) => d?.type === 'response.completed')
+    entry.response = completed ? completed.response : JSON.parse(raw)
+  }).catch(() => {})
   return res
 }
 const args = (c) => { try { return JSON.parse(c.arguments) } catch { return {} } }

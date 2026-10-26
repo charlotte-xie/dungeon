@@ -45,6 +45,7 @@ import type {
   ApiProtocol,
   ModelCompletion,
   ModelMessage,
+  ModelStreamEvent,
   ModelToolCall,
   ReasoningEffort,
 } from '../model/types'
@@ -108,8 +109,26 @@ export interface NarratorResult {
   plotting?: Plotting
 }
 
+// What the Plotter is doing, as its calls arrive: generic, so a status line
+// built from it gives nothing of the story away.
+export type PlotterStage = 'planning' | 'records' | 'recall' | 'steer'
+
 export interface NarratorHooks {
   onPlotted?: (plotting: Plotting) => void
+  // Live updates, each asking for its requests to stream. The Plotter's stage
+  // and its thinking so far, and the reply so far as the narrator writes it.
+  onPlotterStage?: (stage: PlotterStage) => void
+  onPlotterThinking?: (text: string) => void
+  onNarration?: (text: string) => void
+}
+
+const RECORD_TOOL_NAMES: ReadonlySet<string> = new Set(CONTEXT_SUBSYSTEMS.map((s) => s.updateTool.name))
+
+export function plotterStage(toolName: string): PlotterStage | undefined {
+  if (toolName === STEER_TOOL.name) return 'steer'
+  if (toolName === RECALL_MEMORY_TOOL.name) return 'recall'
+  if (RECORD_TOOL_NAMES.has(toolName)) return 'records'
+  return undefined
 }
 
 export const MAX_PLOTTER_ITERATIONS = 4
@@ -338,10 +357,31 @@ export async function runNarrator(
       forceCall = true
       pushNudge(messages, plotterTurnText('nudge-steer', { steer: STEER_TOOL.name }))
     }
+    // Live updates stream the Plotter's requests: its stage as each call
+    // begins, and its thinking so far across the phase, a blank line between
+    // requests.
+    let thinking = ''
+    let newRequest = true
+    const streamPlotter =
+      hooks.onPlotterStage || hooks.onPlotterThinking
+        ? (event: ModelStreamEvent) => {
+            if (event.kind === 'reasoning') {
+              if (newRequest && thinking) thinking += '\n\n'
+              newRequest = false
+              thinking += event.delta
+              hooks.onPlotterThinking?.(thinking)
+            } else if (event.kind === 'call') {
+              const stage = plotterStage(event.name)
+              if (stage) hooks.onPlotterStage?.(stage)
+            }
+          }
+        : undefined
     try {
       for (let iter = 0; iter < MAX_PLOTTER_ITERATIONS; iter++) {
         const label = `plotter:${iter}`
         const startedAt = Date.now()
+        newRequest = true
+        hooks.onPlotterStage?.('planning')
         const completion = await completeModel(
           {
             model: ctx.plotterModel?.trim() || ctx.model,
@@ -351,6 +391,7 @@ export async function runNarrator(
             ...(forceCall ? { toolChoice: 'required' as const } : {}),
             temperature: ctx.sampling.temperature,
             label,
+            onStream: streamPlotter,
           },
           plotterConnection,
           signal,
@@ -428,6 +469,19 @@ export async function runNarrator(
   // A provider that won't take a replayed tool call without schemas gets the
   // schemas of the narrator's own calls, with calls forbidden.
   const capabilityKey = `${ctx.baseUrl}\u0000${ctx.model}`
+  // Live updates stream the reply. Each attempt streams afresh, so the reply
+  // shown starts again with it.
+  const streamNarration = (): ((event: ModelStreamEvent) => void) | undefined => {
+    const onNarration = hooks.onNarration
+    if (!onNarration) return undefined
+    let text = ''
+    onNarration(text)
+    return (event) => {
+      if (event.kind !== 'text') return
+      text += event.delta
+      onNarration(text)
+    }
+  }
   const narrate = async (label: string): Promise<ModelCompletion> => {
     const attempt = (withSchemas: boolean) =>
       completeModel(
@@ -440,6 +494,7 @@ export async function runNarrator(
             : {}),
           temperature: ctx.sampling.temperature,
           label,
+          onStream: streamNarration(),
         },
         narratorConnection,
         signal,

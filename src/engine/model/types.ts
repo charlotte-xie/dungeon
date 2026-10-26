@@ -51,7 +51,17 @@ export interface ModelCompletionRequest {
   temperature?: number
   reasoningEffort?: ReasoningEffort
   label?: string
+  // Asks for the completion to stream, and hears it as it arrives. The
+  // completion returned at the end is the same either way.
+  onStream?: (event: ModelStreamEvent) => void
 }
+
+// What a streamed completion reports while it arrives: pieces of its text and
+// of its reasoning, and each tool call as it begins.
+export type ModelStreamEvent =
+  | { kind: 'text'; delta: string }
+  | { kind: 'reasoning'; delta: string }
+  | { kind: 'call'; name: string }
 
 export type ProtocolAnomalyKind =
   | 'reasoning_in_content'

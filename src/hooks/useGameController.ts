@@ -4,6 +4,7 @@ import {
   EmptyNarrativeError,
   runNarrator,
   type NarratorResult,
+  type PlotterStage,
   type Plotting,
 } from '../engine/agents/narrator'
 import { runReviser } from '../engine/agents/reviser'
@@ -90,6 +91,22 @@ function withReviserFailureNote(trace: TraceEvent[], err: unknown): TraceEvent[]
   ]
 }
 
+// The turn in hand as it streams: the reply so far, and the Plotter's
+// thinking so far, which only the trace shows.
+export interface StreamedTurn {
+  narration?: string
+  plotterThinking?: string
+}
+
+// The status line while the Plotter works. Generic, so it gives nothing of
+// the story away.
+const PLOTTER_STATUS: Record<PlotterStage, string> = {
+  planning: 'DM is planning…',
+  records: 'DM is updating the records…',
+  recall: 'DM is recalling…',
+  steer: 'DM is steering…',
+}
+
 // The game controller: owns all adventure state (slots, world state, plot,
 // memory, chronicle, turns, recovery state) and the turn engine that mutates it.
 // App.tsx is a pure view over what this returns.
@@ -115,6 +132,11 @@ export function useGameController(settings: GameSettings) {
   // What the running operation is doing, and since when, so the player can
   // see which phase is taking the time.
   const [status, setStatus] = useState({ text: 'DM is thinking…', since: Date.now() })
+  // What the DM has written and thought so far on the turn in hand: shown as
+  // it streams and never saved, since the turn takes its reply once written.
+  const [streamed, setStreamed] = useState<StreamedTurn>({})
+  const streamedRef = useRef<StreamedTurn>({})
+  const streamedFlush = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [compactionError, setCompactionError] = useState<string | null>(null)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
     recoveryForLog(loadStoredRecovery(), log),
@@ -164,6 +186,24 @@ export function useGameController(settings: GameSettings) {
   // A new phase restarts the clock; the same phase keeps counting.
   function setStatusText(text: string) {
     setStatus((current) => (current.text === text ? current : { text, since: Date.now() }))
+  }
+
+  // A stream arrives a few words at a time; the screen catches up at most
+  // every 50 ms.
+  function showStreamed(patch: StreamedTurn) {
+    streamedRef.current = { ...streamedRef.current, ...patch }
+    if (streamedFlush.current) return
+    streamedFlush.current = setTimeout(() => {
+      streamedFlush.current = null
+      setStreamed(streamedRef.current)
+    }, 50)
+  }
+
+  function clearStreamed() {
+    if (streamedFlush.current) clearTimeout(streamedFlush.current)
+    streamedFlush.current = null
+    streamedRef.current = {}
+    setStreamed({})
   }
 
   function beginOperation(replaceExisting = false, label = 'DM is thinking…'): ActiveOperation | null {
@@ -323,6 +363,7 @@ export function useGameController(settings: GameSettings) {
       restoreCancelled()
       return
     }
+    clearStreamed()
     const { controller } = operation
     // The turn is the player's once its reply is written, and nothing runs
     // after that. Until then, Stop undoes it.
@@ -479,8 +520,24 @@ export function useGameController(settings: GameSettings) {
           onPlotted: (p) => {
             if (!operationCanCommit(operation)) return
             recordPlotting(p)
+            showStreamed({ plotterThinking: undefined })
             setStatusText('DM is writing…')
           },
+          onPlotterStage: (stage) => {
+            if (operationCanCommit(operation)) setStatusText(PLOTTER_STATUS[stage])
+          },
+          onPlotterThinking: (text) => {
+            if (operationCanCommit(operation)) showStreamed({ plotterThinking: text })
+          },
+          // The reviser replaces the draft, so a draft shown as it streams
+          // would change under the player at the end.
+          ...(context.useReviser
+            ? {}
+            : {
+                onNarration: (text: string) => {
+                  if (operationCanCommit(operation)) showStreamed({ narration: text })
+                },
+              }),
         },
       )
       if (!operationCanCommit(operation)) return stopIfCancelled()
@@ -519,6 +576,8 @@ export function useGameController(settings: GameSettings) {
         ),
       )
     } finally {
+      // A superseded turn leaves its replacement's streamed text alone.
+      if (isCurrentOperation(operation)) clearStreamed()
       finishOperation(operation)
     }
   }
@@ -730,6 +789,7 @@ export function useGameController(settings: GameSettings) {
     thinking,
     statusText: status.text,
     statusSince: status.since,
+    streamed,
     canCompact,
     compactionError,
     dismissCompactionError: () => setCompactionError(null),

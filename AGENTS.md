@@ -77,7 +77,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
 ## Layout
 
 - `src/engine/`: the game engine, free of React and unit-tested.
-  - `model/`: the provider boundary. `client.ts` is the entry point, `openaiCompatible.ts` the transport, and `normalize.ts` repairs malformed tool calls and refuses tools that weren't advertised. Provider quirks stay in here.
+  - `model/`: the provider boundary. `client.ts` is the entry point, `openaiCompatible.ts` the transport, `stream.ts` reads streamed replies back into whole ones, and `normalize.ts` repairs malformed tool calls and refuses tools that weren't advertised. A request streams only when its caller listens: the narrator's reply as it is written (not with the reviser on), and the Plotter's stage and thinking. Provider quirks stay in here.
   - `agents/`: `narrator.ts` (a plotter phase that plans the turn with tools, then a narrate phase with no tools that writes the reply), `reviser.ts`, `summarizer.ts`.
   - `request.ts`: composes the plotter and narrator requests, each as a stable prefix, append-only history, and a volatile tail. The plotter gets a system prompt of its own (it directs and records, and never writes the story), the record-keeping rules, the tools, and the records as a seeded tool exchange. Each turn's story update (recalled memories, entries it holds that have changed, and the OOC list when it changed) is saved with the turn and replayed in history as a tool call; the narrator's notes for the current reply (the scene and the steer) are one tool call in its tail, never replayed.
   - `tools.ts`: tool schemas and the game-state executor. `state.ts`: path operations on world state.
