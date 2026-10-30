@@ -1,6 +1,6 @@
 # Long-Term Memory
 
-Memory is the story's notebook: the people, places and things that keep coming back, and what is true about them. Keep it like good notes: short descriptions, full sentences for facts, and a map wherever there is more than one of something. It says how things stand now; the story itself keeps what happened, and the scene of the moment.
+Memory is the story's notebook: the people, places and things that keep coming back, and what is true about them. Keep it like good notes: short descriptions, full sentences for facts, and a map wherever there is more than one of something. It records established facts; the story itself keeps what happened, and the scene of the moment.
 
 ```json
 {
@@ -11,10 +11,6 @@ Memory is the story's notebook: the people, places and things that keep coming b
     "wants": {
       "shop": "keep the bakery open",
       "son": "keep her son out of the constabulary's hands"
-    },
-    "knowledge": {
-      "constable": "Hesta knows the constable has his eye on Amy.",
-      "suspect": "Hesta knows the constable is looking for a stranger to blame for last night's robbery."
     },
     "attitude": "Hesta is wary of Amy and helps only when it costs her nothing.",
     "secrets": {
@@ -31,13 +27,13 @@ Memory is the story's notebook: the people, places and things that keep coming b
   "player": {
     "name": "Amy",
     "is": "a drifter newly arrived in town",
-    "wearing": { "coat": "patched army greatcoat" },
+    "wearing": { "coat": "patched army greatcoat" , "boots":"stout leather walking boots"},
     "possessions": { "money": "30 pounds", "sabre": "chipped sabre" },
     "reputation": "Amy is known on Mill Lane as a stranger the constable is watching."
   }
 }
 ```
 
-The player's character is `player`. Their name comes as it would in any story: from the scenario, from the player introducing themselves, or from someone who knows them. Their wants and feelings are the player's own.
+The player's character is `player`. Their name may come from the scenario, from the player introducing themselves, or from someone who knows them. Their wants and feelings are the player's own.
 
-When something changes, write it as it now stands, and let go of what no longer matters. If the story and the notes disagree, the story is right. Older notes may still say `bond` or `oaths`, or file the player's character under their name or `you`: move these to `attitude`, `promises` and `player`.
+When something changes, write it as it now stands. Remove what no longer matters. If the story and the notes disagree, the story is right.
