@@ -28,15 +28,17 @@ import {
   buildPlotterTools,
   buildReplyNotes,
   buildStoryUpdate,
-  renderStoryUpdate,
+  oocInView,
+  storyUpdateCalls,
   type ContextFlags,
 } from '../request'
 import {
   BRIEFING_TOOLS,
+  GET_OOC_INSTRUCTIONS_TOOL,
+  GET_STEER_TOOL,
+  RECALL_MEMORIES_TOOL,
   RECALL_MEMORY_TOOL,
-  REPLY_NOTES_TOOL,
   STEER_TOOL,
-  STORY_UPDATE_TOOL,
   executeEnabledTool,
 } from '../tools'
 import { roleCacheKey } from '../model/cacheKey'
@@ -456,16 +458,12 @@ export async function runNarrator(
   })
   // The story update and the notes show in the narrator's trace, which is
   // never replayed into either role's context.
-  if (storyUpdate) {
-    trace.push({
-      kind: 'call',
-      name: STORY_UPDATE_TOOL.name,
-      arguments: '{}',
-      result: renderStoryUpdate(storyUpdate),
-    })
+  const oocBefore = oocInView(ctx.history.slice(0, latest))
+  for (const call of storyUpdate ? storyUpdateCalls(storyUpdate, oocBefore) : []) {
+    trace.push({ kind: 'call', name: call.name, arguments: '{}', result: call.result })
   }
   const notes = buildReplyNotes(briefing, data, ctx.flags)
-  if (notes) trace.push({ kind: 'call', name: REPLY_NOTES_TOOL.name, arguments: '{}', result: notes })
+  if (notes) trace.push({ kind: 'call', name: GET_STEER_TOOL.name, arguments: '{}', result: notes })
   // A provider that won't take a replayed tool call without schemas gets the
   // schemas of the narrator's own calls, with calls forbidden.
   const capabilityKey = `${ctx.baseUrl}\u0000${ctx.model}`
@@ -490,7 +488,7 @@ export async function runNarrator(
           reasoningEffort: ctx.reasoningEffort,
           messages: narratorMessages,
           ...(withSchemas
-            ? { tools: [STORY_UPDATE_TOOL, REPLY_NOTES_TOOL], toolChoice: 'none' as const }
+            ? { tools: [RECALL_MEMORIES_TOOL, GET_OOC_INSTRUCTIONS_TOOL, GET_STEER_TOOL], toolChoice: 'none' as const }
             : {}),
           temperature: ctx.sampling.temperature,
           label,

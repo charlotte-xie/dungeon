@@ -12,7 +12,7 @@ import {
   buildReplyNotes,
   buildStateGuidance,
   buildStoryUpdate,
-  renderStoryUpdate,
+  storyUpdateCalls,
   buildStatePayload,
   type ContextFlags,
   type ModelMessagesArgs,
@@ -117,7 +117,9 @@ describe('buildNarratorMessages layout', () => {
     const notes = messages.filter((m, i) => i < firstUser && m.content === note?.content)
     expect(notes).toHaveLength(1)
     // It names the narrator's own calls, and holds each record's line.
-    for (const call of ['`story_update`', '`reply_notes`']) expect(notes[0].content).toContain(call)
+    for (const call of ['`recall_memories`', '`get_ooc_instructions`', '`get_steer`']) {
+      expect(notes[0].content).toContain(call)
+    }
     for (const s of CONTEXT_SUBSYSTEMS) expect(notes[0].content).toContain(s.narratorNote)
     // The Plotter's record-keeping stays out of sight.
     expect(notes[0].content).not.toMatch(/update_|recall_memory|`steer`/)
@@ -147,11 +149,16 @@ describe('buildNarratorMessages layout', () => {
       'tool',
       'system',
     ])
-    expect(story[1].toolCalls).toEqual([{ id: 'dm-t1-update', name: 'story_update', arguments: '{}' }])
-    expect(story[2]).toEqual({ role: 'tool', toolCallId: 'dm-t1-update', content: renderStoryUpdate(UPDATE) })
-    expect(story[6].content).toBe('# OOC instructions\n\n1. Keep replies short.')
-    expect(story[7].toolCalls).toEqual([{ id: 'dm-reply-notes', name: 'reply_notes', arguments: '{}' }])
-    expect(story[8]).toMatchObject({ role: 'tool', toolCallId: 'dm-reply-notes' })
+    expect(story[1].toolCalls).toEqual([{ id: 'dm-t1-recall-memories', name: 'recall_memories', arguments: '{}' }])
+    expect(story[2]).toEqual({
+      role: 'tool',
+      toolCallId: 'dm-t1-recall-memories',
+      content: storyUpdateCalls(UPDATE, undefined)[0].result,
+    })
+    expect(story[5].toolCalls?.map((c) => c.name)).toEqual(['get_ooc_instructions'])
+    expect(story[6].content).toBe('1. Keep replies short.')
+    expect(story[7].toolCalls).toEqual([{ id: 'dm-get-steer', name: 'get_steer', arguments: '{}' }])
+    expect(story[8]).toMatchObject({ role: 'tool', toolCallId: 'dm-get-steer' })
     expect(story[8].content).toContain('Nobody answers.')
   })
 
@@ -159,7 +166,7 @@ describe('buildNarratorMessages layout', () => {
     const messages = narrator([playerTurn('t1', 'I enter the mill.')])
     const [input, call, notes, reminder] = messages.slice(-4)
     expect(input).toMatchObject({ role: 'user', content: 'I enter the mill.' })
-    expect(call.toolCalls?.map((c) => c.name)).toEqual(['reply_notes'])
+    expect(call.toolCalls?.map((c) => c.name)).toEqual(['get_steer'])
     // With nothing steered, the notes hold the scene alone.
     expect(notes.content).toBe('# Scene\n\n```json\n{\n  "scene": {\n    "location": "the mill"\n  }\n}\n```')
     // After the player's own input, the reply opens by telling their move.
@@ -187,7 +194,7 @@ describe('buildNarratorMessages layout', () => {
       if (s.label === 'Live state') expect(notes?.content).toContain(s.narratorNote)
       else expect(notes?.content).not.toContain(s.narratorNote)
     }
-    expect(notes?.content).not.toContain('`story_update`')
+    expect(notes?.content).not.toMatch(/`recall_memories`|`get_ooc_instructions`/)
     const [input, , replyNotes, reminder] = messages.slice(-4)
     expect(input).toMatchObject({ role: 'user', content: 'Hello?' })
     expect(replyNotes.content).toMatch(/^# Scene/)
@@ -255,7 +262,7 @@ describe('buildNarratorMessages layout', () => {
     // update. Request 2 must reproduce everything before them byte-for-byte,
     // so the provider's prefix cache stays valid.
     const shared = first.slice(0, -3)
-    expect(shared[shared.length - 1]).toMatchObject({ role: 'tool', toolCallId: 'dm-t1-update' })
+    expect(shared[shared.length - 1]).toMatchObject({ role: 'tool', toolCallId: 'dm-t1-recall-memories' })
     expect(second.slice(0, shared.length)).toEqual(shared)
     expect(second.some((m) => m.content.includes('Nobody answers.'))).toBe(false)
   })
@@ -320,6 +327,16 @@ describe('buildPlotterMessages layout', () => {
     }
   })
 
+  it('gets the scenario but leaves the style guide to the narrator', () => {
+    const slots = { scenario: 'A haunted mill.', styleGuide: 'Spare, wry prose.' }
+    const both = { ...args([playerTurn('t1', 'I enter the mill.')]), slots }
+    const said = (messages: ModelMessage[], text: string) => messages.some((m) => m.content.includes(text))
+    const plotterMessages = buildPlotterMessages({ ...both, pivot: PIVOT })
+    expect(said(plotterMessages, 'A haunted mill.')).toBe(true)
+    expect(said(plotterMessages, 'Spare, wry prose.')).toBe(false)
+    expect(said(buildNarratorMessages(both), 'Spare, wry prose.')).toBe(true)
+  })
+
   it('ends with the latest input, the seeded tool exchange, then its instruction', () => {
     const messages = plotter([playerTurn('t1', 'I enter the mill.')])
     const [input, call, ...rest] = messages.slice(-7)
@@ -360,7 +377,7 @@ describe('buildPlotterMessages layout', () => {
     const history = [playerTurn('t1', 'I knock.', 'No answer.', UPDATE), playerTurn('t2', 'I wait.')]
     const messages = buildPlotterMessages({ ...args(history, undefined, true, BRIEFING), pivot: PIVOT })
     const ids = messages.flatMap((m) => m.toolCalls?.map((c) => c.id) ?? [])
-    expect(ids.filter((id) => id.startsWith('dm-'))).toEqual(['dm-t1-update'])
+    expect(ids.filter((id) => id.startsWith('dm-'))).toEqual(['dm-t1-recall-memories'])
     expect(messages.some((m) => m.content.includes('Nobody answers.'))).toBe(false)
   })
 
@@ -442,9 +459,11 @@ describe('buildStoryUpdate', () => {
     // Entries come from the records, not the recall's result; unknown names
     // and unrecalled entries stay out, and the steer is for the reply alone.
     expect(update).toEqual({ recalled: { Hesta: { is: 'The baker.' } }, ooc: ['Keep replies short.'] })
-    const text = renderStoryUpdate(update ?? {})
-    expect(text).toMatch(/^# Remembered\n\n```json\n[\s\S]*The baker\.[\s\S]*```\n\n# OOC instructions\n\n1\. Keep replies short\.$/)
-    expect(text).not.toMatch(/stale|Nobody|A drifter|The miller|Hesta looks up/)
+    const calls = storyUpdateCalls(update ?? {}, undefined)
+    expect(calls.map((c) => c.name)).toEqual(['recall_memories', 'get_ooc_instructions'])
+    expect(calls[0].result).toMatch(/^# Remembered\n\n```json\n[\s\S]*The baker\.[\s\S]*```$/)
+    expect(calls[1].result).toBe('1. Keep replies short.')
+    for (const c of calls) expect(c.result).not.toMatch(/stale|Nobody|A drifter|The miller|Hesta looks up/)
   })
 
   it('adds only what is new to the narrator’s view or changed', () => {
@@ -523,6 +542,21 @@ describe('buildStoryUpdate', () => {
       ooc: ['Keep replies short.'],
     })
     expect(buildStoryUpdate([], [], { ...data, ooc: [] }, ALL_FLAGS)).toBeUndefined()
+  })
+
+  it('tells the narrator the whole OOC list first, then only what is added or withdrawn', () => {
+    const t1 = playerTurn('t1', 'I knock.', 'No answer.', { ooc: ['Keep replies short.', 'No gore.'] })
+    const t2 = playerTurn('t2', 'I wait.', 'Still nothing.', { ooc: ['Keep replies short.', 'Slow the pace.'] })
+    const told = (turns: Turn[]) =>
+      narrator(turns)
+        .filter((m) => m.toolCallId?.endsWith('-get-ooc-instructions'))
+        .map((m) => m.content)
+    expect(told([t1, t2])).toEqual([
+      '1. Keep replies short.\n2. No gore.',
+      '# Added\n\n- Slow the pace.\n\n# Withdrawn\n\n- No gore.',
+    ])
+    // Once compaction folds the first away, the next is told in full.
+    expect(told([t2])).toEqual(['1. Keep replies short.\n2. Slow the pace.'])
   })
 
   it('leaves out what is switched off', () => {

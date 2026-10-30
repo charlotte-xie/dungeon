@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carryOocEdits, isOutOfCharacterOnly, withRetryGuidance } from './steering'
+import { carryOocEdits, isOutOfCharacterOnly, oocListFromText, withRetryGuidance } from './steering'
 
 describe('out-of-character input', () => {
   it("recognises direction with no move of the player's own", () => {
@@ -16,25 +16,35 @@ describe('out-of-character input', () => {
 })
 
 describe('rewrite guidance', () => {
-  it('keeps the action and attaches one-reply guidance', () => {
+  it('keeps the action and attaches the rewrite request', () => {
     expect(withRetryGuidance('I draw my sword.', ' Make the guard back down. '))
-      .toBe('I draw my sword.\n\n(OOC: NEXT REPLY ONLY — Make the guard back down.)')
+      .toBe('I draw my sword.\n\n(OOC: Rewrite requested: Make the guard back down.)')
   })
 
-  it('replaces one-reply guidance already ending the input', () => {
+  it('replaces a rewrite request already ending the input, in either label', () => {
+    expect(withRetryGuidance('I draw my sword.\n\n(OOC: Rewrite requested: Old.)', 'New.'))
+      .toBe('I draw my sword.\n\n(OOC: Rewrite requested: New.)')
+    expect(withRetryGuidance('(OOC: Rewrite requested: Old.)', 'New.'))
+      .toBe('(OOC: Rewrite requested: New.)')
+    // Turns saved before carry the older label.
     expect(withRetryGuidance('I draw my sword.\n\n(OOC: NEXT REPLY ONLY — Old.)', 'New.'))
-      .toBe('I draw my sword.\n\n(OOC: NEXT REPLY ONLY — New.)')
-    expect(withRetryGuidance('(OOC: NEXT REPLY ONLY — Old.)', 'New.'))
-      .toBe('(OOC: NEXT REPLY ONLY — New.)')
+      .toBe('I draw my sword.\n\n(OOC: Rewrite requested: New.)')
   })
 
   it("keeps the player's own OOC text", () => {
     expect(withRetryGuidance('I wait. (OOC: keep it short)', 'New.'))
-      .toBe('I wait. (OOC: keep it short)\n\n(OOC: NEXT REPLY ONLY — New.)')
+      .toBe('I wait. (OOC: keep it short)\n\n(OOC: Rewrite requested: New.)')
   })
 
   it('leaves the input unchanged without guidance', () => {
     expect(withRetryGuidance('I wait.', '  ')).toBe('I wait.')
+  })
+})
+
+describe('default OOC instructions', () => {
+  it('takes one instruction per non-empty line', () => {
+    expect(oocListFromText(' Keep replies short. \n\n  No gore.\r\n')).toEqual(['Keep replies short.', 'No gore.'])
+    expect(oocListFromText('')).toEqual([])
   })
 })
 

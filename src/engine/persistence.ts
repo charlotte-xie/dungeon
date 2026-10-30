@@ -528,6 +528,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.includeOoc === 'boolean'
           ? parsed.includeOoc
           : DEFAULT_CONTEXT.includeOoc,
+      defaultOoc:
+        typeof parsed.defaultOoc === 'string'
+          ? parsed.defaultOoc
+          : DEFAULT_CONTEXT.defaultOoc,
       useReviser:
         typeof parsed.useReviser === 'boolean'
           ? parsed.useReviser

@@ -16,7 +16,7 @@ import {
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
-import { carryOocEdits, withRetryGuidance } from '../engine/steering'
+import { carryOocEdits, oocListFromText, withRetryGuidance } from '../engine/steering'
 import {
   recoveryForLog,
   removeFromBox,
@@ -723,17 +723,19 @@ export function useGameController(settings: GameSettings) {
     commitSlots(nextSlots)
     setInput('')
     const freshState = structuredClone(DEFAULT_STATE)
+    // The adventure starts with the standing instructions from the settings.
+    const startOoc = context.includeOoc ? oocListFromText(context.defaultOoc) : []
     commitState(freshState)
     commitPlot([])
     commitMemory({})
-    commitEngineOoc([])
+    commitEngineOoc(startOoc)
     commitChronicle([])
     commitCompactCutoff(0)
     setCompactionError(null)
     await runTurn({
       pendingTurn: makePendingTurn('bootstrap', buildNewAdventureBootstrap()),
       baseTurns: [],
-      world: { state: freshState, plot: [], memory: {}, ooc: [], chronicle: [], compactCutoff: 0 },
+      world: { state: freshState, plot: [], memory: {}, ooc: [...startOoc], chronicle: [], compactCutoff: 0 },
       slots: nextSlots,
       replaceExisting: true,
     })

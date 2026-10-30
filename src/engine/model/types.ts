@@ -68,6 +68,7 @@ export type ProtocolAnomalyKind =
   | 'recovered_tool_call'
   | 'duplicate_tool_call'
   | 'unadvertised_tool_call'
+  | 'json5_arguments'
   | 'unsupported_reasoning'
 
 export interface ProtocolAnomaly {

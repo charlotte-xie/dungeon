@@ -255,3 +255,71 @@ describe('prompt usage', () => {
     expect(result.cachedTokens).toBe(4096)
   })
 })
+
+describe('arguments written as JSON5', () => {
+  it('reads them as JSON, and leaves JSON as it came', () => {
+    const json5 = `{
+      // the baker
+      set: { 'Hesta.wants.shop': 'keep the bakery open', },
+    }`
+    const result = normalizeResponsesApiResponse(
+      {
+        status: 'completed',
+        output: [
+          { type: 'function_call', call_id: 'call-1', name: 'update_memory', arguments: json5 },
+          { type: 'function_call', call_id: 'call-2', name: 'future_plot_plan', arguments: '{"op": "remove", "position": 1}' },
+        ],
+      },
+      allowed,
+    )
+
+    expect(result.toolCalls.map((call) => call.arguments)).toEqual([
+      '{"set":{"Hesta.wants.shop":"keep the bakery open"}}',
+      '{"op": "remove", "position": 1}',
+    ])
+    expect(result.anomalies.map((entry) => entry.kind)).toEqual(['json5_arguments'])
+  })
+
+  it('recovers a call typed as JSON5 in a json5 fence', () => {
+    const result = normalizeOpenAIChatCompletion(
+      response({
+        content: "```json5\n{name: 'future_plot_plan', parameters: {op: 'remove', position: 2,},}\n```",
+      }),
+      allowed,
+    )
+
+    expect(result.text).toBe('')
+    expect(result.toolCalls.map((call) => [call.name, call.arguments])).toEqual([
+      ['future_plot_plan', '{"op":"remove","position":2}'],
+    ])
+  })
+
+  it('keeps a __proto__ key as data, for the executors to refuse', () => {
+    const result = normalizeOpenAIChatCompletion(
+      response({
+        content: '',
+        tool_calls: [
+          { id: 'call-1', function: { name: 'update_memory', arguments: "{set: {__proto__: {polluted: 'yes'}}}" } },
+        ],
+      }),
+      allowed,
+    )
+
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+    const args = JSON.parse(result.toolCalls[0].arguments) as { set: object }
+    expect(Object.hasOwn(args.set, '__proto__')).toBe(true)
+  })
+
+  it('passes on what is neither JSON nor JSON5', () => {
+    const result = normalizeOpenAIChatCompletion(
+      response({
+        content: '',
+        tool_calls: [{ id: 'call-1', function: { name: 'update_memory', arguments: '{set: ' } }],
+      }),
+      allowed,
+    )
+
+    expect(result.toolCalls[0].arguments).toBe('{set: ')
+    expect(result.anomalies).toEqual([])
+  })
+})

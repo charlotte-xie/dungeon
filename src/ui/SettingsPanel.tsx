@@ -398,6 +398,16 @@ export function SettingsPanel({
             />
           </label>
         ))}
+        <label title="Standing out-of-character instructions every new adventure starts with, one per line. The DM keeps them, and any you give in play, in the adventure's OOC list.">
+          <span>Default OOC instructions</span>
+          <textarea
+            value={draftContext.defaultOoc}
+            onChange={(e) => setContextField('defaultOoc', e.target.value)}
+            rows={3}
+            placeholder="e.g. Keep replies to two or three paragraphs."
+            disabled={!draftContext.includeOoc}
+          />
+        </label>
 
         <div className="sampling-grid">
           <label

@@ -118,7 +118,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(narratorReq.messages.some((m) => m.content.includes('# Live State'))).toBe(false)
     const inputIdx = narratorReq.messages.findIndex((m) => m.role === 'user' && m.content === 'I knock.')
     const call = narratorReq.messages[inputIdx + 1]
-    expect(call.toolCalls?.map((c) => c.name)).toEqual(['reply_notes'])
+    expect(call.toolCalls?.map((c) => c.name)).toEqual(['get_steer'])
     const notes = narratorReq.messages[inputIdx + 2]
     expect(notes.role).toBe('tool')
     expect(notes.content).toContain('"location": "the mill"')
@@ -131,7 +131,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
     // The narrator's trace shows the notes it was given, and nothing else.
     expect(result.trace.filter((e) => e.kind === 'call')).toEqual([
-      { kind: 'call', name: 'reply_notes', arguments: '{}', result: notes.content },
+      { kind: 'call', name: 'get_steer', arguments: '{}', result: notes.content },
     ])
   })
 
@@ -159,7 +159,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.plotting?.storyUpdate).toEqual({ ooc: ['Keep replies short.'] })
     const narratorReq = requests()[2]
     const shown = narratorReq.messages.flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
-    expect(shown).toEqual(['story_update', 'reply_notes'])
+    expect(shown).toEqual(['get_ooc_instructions', 'get_steer'])
     expect(narratorReq.messages.some((m) => m.content.includes('The miller returns.'))).toBe(false)
     expect(narratorReq.messages.some((m) => m.content.includes('1. Keep replies short.'))).toBe(true)
   })
@@ -182,7 +182,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
 
     const narratorReq = requests()[1]
-    const update = narratorReq.messages.find((m) => m.role === 'tool' && m.toolCallId?.endsWith('-update'))
+    const update = narratorReq.messages.find((m) => m.role === 'tool' && m.toolCallId?.endsWith('-recall-memories'))
     expect(update?.content).toContain('The widowed baker.')
     expect(update?.content).not.toContain('The baker.')
     expect(update?.content).not.toContain('Nobody')
@@ -429,7 +429,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     const [, firstNarrator, secondPlotter, secondNarrator] = snapshots
     // Everything up to the first request's story update is reused; its notes
     // and reminder were its tail.
-    const notesAt = firstNarrator.findIndex((m) => m.toolCalls?.[0]?.name === 'reply_notes')
+    const notesAt = firstNarrator.findIndex((m) => m.toolCalls?.[0]?.name === 'get_steer')
     const shared = firstNarrator.slice(0, notesAt)
     expect(shared[shared.length - 1].content).toContain('Baker 1.')
     expect(secondNarrator.slice(0, shared.length)).toEqual(shared)
@@ -437,10 +437,10 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(secondNarrator.some((m) => m.content.includes('Steer 1.'))).toBe(false)
     expect(secondNarrator.some((m) => m.content.includes('Steer 3.'))).toBe(true)
     // Hesta changed without a recall: the narrator, who holds her, is told.
-    const updates = secondNarrator.filter((m) => m.toolCallId?.endsWith('-update'))
+    const updates = secondNarrator.filter((m) => m.toolCallId?.endsWith('-recall-memories'))
     expect(updates.map((m) => m.content.includes('Baker 3.'))).toEqual([false, true])
     // The Plotter sees the story updates the narrator was given.
-    expect(secondPlotter.some((m) => m.toolCallId?.endsWith('-update'))).toBe(true)
+    expect(secondPlotter.some((m) => m.toolCallId?.endsWith('-recall-memories'))).toBe(true)
   })
 
   it('never executes a call the narrator returns, and nudges it for prose', async () => {
@@ -491,7 +491,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.text).toBe('Quiet.')
     const narratorReqs = requests().filter((r) => !isPlotter(r))
     expect(narratorReqs[0].tools).toBeUndefined()
-    expect(narratorReqs[1].tools?.map((t) => t.name)).toEqual(['story_update', 'reply_notes'])
+    expect(narratorReqs[1].tools?.map((t) => t.name)).toEqual(['recall_memories', 'get_ooc_instructions', 'get_steer'])
     expect(narratorReqs[1].toolChoice).toBe('none')
     // Remembered for the session: the next turn sends them straight away.
     expect(narratorReqs[2].toolChoice).toBe('none')

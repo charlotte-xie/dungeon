@@ -43,7 +43,7 @@ export interface BriefingCall {
 }
 
 // What the narrator is told at a turn that holds for the rest of the story,
-// kept with the turn and replayed in history as a `story_update` call between
+// kept with the turn and replayed in history as the narrator's own calls between
 // its input and reply: memory entries newly recalled, in full; for entries it
 // already holds, only what has changed, with null for what no longer holds;
 // and the player's standing OOC instructions, when they changed or have
@@ -126,6 +126,9 @@ export interface SlotDef {
   defaultValue: string
   storageKey: string
   rows: number
+  // Writing guidance for the narrator alone. The Plotter directs the story
+  // and leaves the writing to the narrator, so it never gets this slot.
+  narratorOnly?: boolean
 }
 
 export interface ContextConfig {
@@ -158,6 +161,9 @@ export interface ContextConfig {
   includePlotOutline: boolean
   includeMemory: boolean
   includeOoc: boolean
+  // The standing OOC instructions every new adventure starts with, one per
+  // line.
+  defaultOoc: string
   // When true, run a second model pass after the narrator to polish its draft
   // into clean English. The revised text replaces the narrator output as the
   // visible reply; the original draft is preserved on Turn.narrator.

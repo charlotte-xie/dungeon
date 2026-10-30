@@ -3,6 +3,7 @@
 // quarantined here so game orchestration never parses wire payloads or
 // model-specific text protocols.
 
+import JSON5 from 'json5'
 import type {
   ModelCompletion,
   ModelToolCall,
@@ -59,9 +60,47 @@ function argumentsToString(value: unknown): string | null {
   return null
 }
 
+// Models shown JSON5 may write it: comments, trailing commas, unquoted keys,
+// single quotes. JSON is read first, JSON5 only when that fails.
+function parseJsonOrJson5(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return JSON5.parse(text)
+  }
+}
+
+// Arguments written as JSON5, rewritten as JSON for the executors. Undefined
+// for JSON, which passes on byte for byte, and for anything unreadable,
+// which the executor rejects as before.
+function json5AsJson(value: string): string | undefined {
+  try {
+    JSON.parse(value)
+    return undefined
+  } catch {
+    try {
+      return JSON.stringify(JSON5.parse(value))
+    } catch {
+      return undefined
+    }
+  }
+}
+
+function readJson5Arguments(calls: ModelToolCall[], anomalies: ProtocolAnomaly[]): ModelToolCall[] {
+  return calls.map((call) => {
+    const json = json5AsJson(call.arguments)
+    if (json === undefined) return call
+    anomalies.push({
+      kind: 'json5_arguments',
+      detail: `Read arguments to ${call.name} written as JSON5.`,
+    })
+    return { ...call, arguments: json }
+  })
+}
+
 function canonicalArguments(value: string): string {
   try {
-    return JSON.stringify(JSON.parse(value))
+    return JSON.stringify(parseJsonOrJson5(value))
   } catch {
     return value.trim()
   }
@@ -164,7 +203,7 @@ function callsFromEnvelope(value: unknown, allowedNames: ReadonlySet<string>): E
 
 function parseEnvelopeText(text: string, allowedNames: ReadonlySet<string>): EnvelopeResult | null {
   try {
-    const parsed = JSON.parse(text.trim()) as unknown
+    const parsed = parseJsonOrJson5(text.trim())
     const result = callsFromEnvelope(parsed, allowedNames)
     return result.toolLikeNames.length ? result : null
   } catch {
@@ -249,7 +288,7 @@ function recoverTextToolCalls(
     },
   )
 
-  cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (match, body: string) => {
+  cleaned = cleaned.replace(/```(?:json5?)?\s*([\s\S]*?)```/gi, (match, body: string) => {
     const result = parseEnvelopeText(body, allowedNames)
     return result && accept(result) ? '' : match
   })
@@ -336,7 +375,7 @@ export function normalizeResponsesApiResponse(
   return {
     text: content,
     reasoning,
-    toolCalls,
+    toolCalls: readJson5Arguments(toolCalls, anomalies),
     finishReason:
       incompleteReason ?? (typeof raw.status === 'string' ? raw.status : undefined),
     reasoningTokens:
@@ -388,7 +427,7 @@ export function normalizeOpenAIChatCompletion(
   return {
     text: content,
     reasoning,
-    toolCalls,
+    toolCalls: readJson5Arguments(toolCalls, anomalies),
     finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : undefined,
     reasoningTokens:
       typeof reasoningTokens === 'number' && reasoningTokens > 0 ? reasoningTokens : undefined,

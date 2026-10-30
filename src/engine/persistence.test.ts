@@ -145,6 +145,7 @@ describe('legacy data tolerance', () => {
     expect(ctx.includeWorldState).toBe(true)
     // New fields fall back to defaults…
     expect(ctx.includeOoc).toBe(DEFAULT_CONTEXT.includeOoc)
+    expect(ctx.defaultOoc).toBe(DEFAULT_CONTEXT.defaultOoc)
     expect(ctx.apiProtocol).toBe('chat-completions')
     expect(ctx.plotterModel).toBe('')
     expect(ctx.summarizerModel).toBe('')

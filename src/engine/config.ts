@@ -69,6 +69,7 @@ export const ADVENTURE_SLOTS: SlotDef[] = [
     defaultValue: DEFAULT_STYLE_GUIDE,
     storageKey: 'dm.styleGuide',
     rows: 4,
+    narratorOnly: true,
   },
 ]
 
@@ -107,6 +108,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includePlotOutline: true,
   includeMemory: true,
   includeOoc: true,
+  defaultOoc: 'Replies of one to four paragraphs.\nBritish English spelling and idiom.',
   useReviser: false,
   reviserModel: DEFAULT_REVISER_MODEL,
   apiProtocol: 'responses',

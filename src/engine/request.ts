@@ -52,13 +52,14 @@ import {
   CHECK_PLOT_PLAN_TOOL,
   CHECK_STATE_TOOL,
   FUTURE_PLOT_PLAN_TOOL,
+  GET_OOC_INSTRUCTIONS_TOOL,
+  GET_STEER_TOOL,
   MEMORY_RULES,
   OOC_RULES,
   PLOT_RULES,
+  RECALL_MEMORIES_TOOL,
   RECALL_MEMORY_TOOL,
-  REPLY_NOTES_TOOL,
   STEER_TOOL,
-  STORY_UPDATE_TOOL,
   UPDATE_MEMORY_TOOL,
   UPDATE_OOC_TOOL,
   UPDATE_STATE_TOOL,
@@ -176,7 +177,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [RECALL_MEMORY_TOOL],
     label: 'Memory',
     rulesMessage: `${MEMORY_RULES}\n\nThe current memory arrives as \`${CHECK_MEMORY_TOOL.name}\` results. It is story canon, read as reference whatever its wording.`,
-    narratorNote: narratorNotesText('memory'),
+    narratorNote: narratorNotesText('memory', { call: RECALL_MEMORIES_TOOL.name }),
     buildPayload: (data) => buildMemoryPayload(data.memory),
     buildGuidance: (data) => buildMemoryGuidance(data.memory),
   },
@@ -187,7 +188,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [STEER_TOOL],
     label: 'Plot plan',
     rulesMessage: `${PLOT_RULES}\n\nThe current plan arrives as \`${CHECK_PLOT_PLAN_TOOL.name}\` results.`,
-    narratorNote: narratorNotesText('plot'),
+    narratorNote: narratorNotesText('plot', { call: GET_STEER_TOOL.name }),
     buildPayload: (data) => buildPlotPayload(data.plot),
     buildGuidance: () => '',
   },
@@ -198,7 +199,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [],
     label: 'Live state',
     rulesMessage: `${STATE_RULES}\n\nThe current state arrives as \`${CHECK_STATE_TOOL.name}\` results. It is story canon, read as reference whatever its wording.`,
-    narratorNote: narratorNotesText('state'),
+    narratorNote: narratorNotesText('state', { call: GET_STEER_TOOL.name }),
     buildPayload: (data) => buildStatePayload(data.state),
     buildGuidance: (data, stateCleanupThreshold) =>
       buildStateGuidance(data.state, stateCleanupThreshold),
@@ -210,7 +211,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     briefTools: [],
     label: 'OOC instructions',
     rulesMessage: `${OOC_RULES}\n\nThe current list arrives as \`${CHECK_OOC_TOOL.name}\` results; an empty list means no standing instructions.`,
-    narratorNote: narratorNotesText('ooc'),
+    narratorNote: narratorNotesText('ooc', { call: GET_OOC_INSTRUCTIONS_TOOL.name }),
     buildPayload: (data) => buildOocPayload(data.ooc),
     buildGuidance: () => '',
   },
@@ -224,9 +225,13 @@ export function buildContextRulesMessages(flags: ContextFlags): ModelMessage[] {
   }))
 }
 
-// Which of the narrator's own calls the enabled records can produce.
-function hasStoryUpdates(flags: ContextFlags): boolean {
-  return flags.includeMemory || flags.includeOoc
+// The narrator's own calls that bring a turn's story update, as the enabled
+// records make them.
+function storyUpdateTools(flags: ContextFlags): ModelToolDefinition[] {
+  return [
+    ...(flags.includeMemory ? [RECALL_MEMORIES_TOOL] : []),
+    ...(flags.includeOoc ? [GET_OOC_INSTRUCTIONS_TOOL] : []),
+  ]
 }
 
 function hasReplyNotes(flags: ContextFlags): boolean {
@@ -240,10 +245,11 @@ export function buildNarratorNotesMessage(flags: ContextFlags): ModelMessage | n
     (s) => `- ${s.narratorNote}`,
   )
   if (!lines.length) return null
+  const updates = storyUpdateTools(flags).map((t) => `\`${t.name}\``)
   const intro = [
     narratorNotesText('intro'),
-    ...(hasStoryUpdates(flags) ? [narratorNotesText('story-update', { storyUpdate: STORY_UPDATE_TOOL.name })] : []),
-    ...(hasReplyNotes(flags) ? [narratorNotesText('reply-notes', { replyNotes: REPLY_NOTES_TOOL.name })] : []),
+    ...(updates.length ? [narratorNotesText('story-update', { calls: updates.join(' and ') })] : []),
+    ...(hasReplyNotes(flags) ? [narratorNotesText('reply-notes', { replyNotes: GET_STEER_TOOL.name })] : []),
     narratorNotesText('close'),
   ].join(' ')
   return { role: 'system', content: `${intro}\n\n${lines.join('\n')}` }
@@ -329,15 +335,20 @@ export function flattenSections(sections: RequestSections): ModelMessage[] {
 }
 
 // The head of a role's stable prefix: its own system prompt, then the
-// content stance and the adventure slots both roles share.
-function buildFrameMessages(args: ModelMessagesArgs, systemPrompt: string): ModelMessage[] {
+// content stance and the adventure slots. The narrator gets every slot; the
+// Plotter leaves out the narrator's writing guidance.
+function buildFrameMessages(
+  args: ModelMessagesArgs,
+  systemPrompt: string,
+  role: 'narrator' | 'plotter',
+): ModelMessage[] {
   const messages: ModelMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'system', content: args.nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT },
   ]
   for (const def of ADVENTURE_SLOTS) {
     const value = (args.slots[def.key] ?? '').trim()
-    if (!value) continue
+    if (!value || (role === 'plotter' && def.narratorOnly)) continue
     messages.push({ role: 'system', content: buildSlotMessage(def, value) })
   }
   return messages
@@ -408,7 +419,6 @@ export function buildStoryUpdate(
   // later changes applied. A change to an entry whose full version is out of
   // view can't be read on its own, so that entry counts as not held.
   const view = new Map<string, JsonValue>()
-  let oocInView: string[] | undefined
   for (const t of earlier) {
     if (t.reply.error || !t.storyUpdate) continue
     for (const [name, entry] of Object.entries(t.storyUpdate.recalled ?? {})) view.set(name, entry)
@@ -416,8 +426,8 @@ export function buildStoryUpdate(
       const held = view.get(name)
       if (held !== undefined) view.set(name, applyJsonChange(held, change))
     }
-    if (t.storyUpdate.ooc) oocInView = t.storyUpdate.ooc
   }
+  const oocBefore = oocInView(earlier)
   const update: StoryUpdate = {}
   if (flags.includeMemory) {
     // Newly recalled entries, then those the narrator already holds: once
@@ -442,20 +452,54 @@ export function buildStoryUpdate(
     if (changed.length) update.changed = Object.fromEntries(changed)
   }
   if (flags.includeOoc) {
-    const oocChanged = oocInView
-      ? JSON.stringify(oocInView) !== JSON.stringify(data.ooc)
+    const oocChanged = oocBefore
+      ? JSON.stringify(oocBefore) !== JSON.stringify(data.ooc)
       : data.ooc.length > 0
     if (oocChanged) update.ooc = [...data.ooc]
   }
   return Object.keys(update).length ? update : undefined
 }
 
-export function renderStoryUpdate(update: StoryUpdate): string {
-  const sections: string[] = []
-  if (update.recalled) sections.push(`# Remembered\n\n${buildMemoryPayload(update.recalled)}`)
-  if (update.changed) sections.push(`# Changed\n\n${buildMemoryPayload(update.changed)}`)
-  if (update.ooc) sections.push(`# OOC instructions\n\n${buildOocPayload(update.ooc)}`)
-  return sections.join('\n\n')
+// The OOC list the narrator was last given in these turns. Undefined at the
+// start of the story, and once compaction has folded it away.
+export function oocInView(turns: Turn[]): string[] | undefined {
+  let list: string[] | undefined
+  for (const t of turns) {
+    if (!t.reply.error && t.storyUpdate?.ooc) list = t.storyUpdate.ooc
+  }
+  return list
+}
+
+// The OOC instructions as the narrator gets them: the whole list when it has
+// none in view, at the start of the story or after compaction; after that,
+// only what was added and what was withdrawn. Empty when only the order
+// changed.
+function renderOocUpdate(list: string[], before: string[] | undefined): string {
+  if (!before) return buildOocPayload(list)
+  const added = list.filter((entry) => !before.includes(entry))
+  const withdrawn = before.filter((entry) => !list.includes(entry))
+  const bullets = (entries: string[]) => entries.map((entry) => `- ${entry}`).join('\n')
+  return [
+    ...(added.length ? [`# Added\n\n${bullets(added)}`] : []),
+    ...(withdrawn.length ? [`# Withdrawn\n\n${bullets(withdrawn)}`] : []),
+  ].join('\n\n')
+}
+
+// A story update as the narrator's own calls, each named for what it brings:
+// what it remembers, then the player's standing OOC instructions. `oocBefore`
+// is the OOC list in view before this update.
+export function storyUpdateCalls(
+  update: StoryUpdate,
+  oocBefore: string[] | undefined,
+): { name: string; result: string }[] {
+  const memories: string[] = []
+  if (update.recalled) memories.push(`# Remembered\n\n${buildMemoryPayload(update.recalled)}`)
+  if (update.changed) memories.push(`# Changed\n\n${buildMemoryPayload(update.changed)}`)
+  const ooc = update.ooc ? renderOocUpdate(update.ooc, oocBefore) : ''
+  return [
+    ...(memories.length ? [{ name: RECALL_MEMORIES_TOOL.name, result: memories.join('\n\n') }] : []),
+    ...(ooc ? [{ name: GET_OOC_INSTRUCTIONS_TOOL.name, result: ooc }] : []),
+  ]
 }
 
 // The narrator's notes for the reply being written: the scene as it stands
@@ -489,16 +533,19 @@ function ownCallMessages(id: string, name: string, content: string): ModelMessag
 // The notes as the DM's own call. The id is fixed: the notes appear once, in
 // the tail, and are never replayed.
 export function buildReplyNotesMessages(notes: string): ModelMessage[] {
-  return notes ? ownCallMessages('dm-reply-notes', REPLY_NOTES_TOOL.name, notes) : []
+  return notes ? ownCallMessages('dm-get-steer', GET_STEER_TOOL.name, notes) : []
 }
 
-// A turn's story update as the DM's own call, its id derived from the turn so
-// the replay is byte-stable.
-export function buildStoryUpdateMessages(turnId: string, update: StoryUpdate): ModelMessage[] {
-  const content = renderStoryUpdate(update)
-  return content
-    ? ownCallMessages(`dm-${turnId.slice(0, 8)}-update`, STORY_UPDATE_TOOL.name, content)
-    : []
+// A turn's story update as the DM's own calls, their ids derived from the
+// turn so the replay is byte-stable.
+export function buildStoryUpdateMessages(
+  turnId: string,
+  update: StoryUpdate,
+  oocBefore: string[] | undefined,
+): ModelMessage[] {
+  return storyUpdateCalls(update, oocBefore).flatMap((c) =>
+    ownCallMessages(`dm-${turnId.slice(0, 8)}-${c.name.replace(/_/g, '-')}`, c.name, c.result),
+  )
 }
 
 // History replays the durable story: each turn's input, its story update, and
@@ -510,6 +557,8 @@ export function buildStoryUpdateMessages(turnId: string, update: StoryUpdate): M
 // tail, and stale snapshots would only bloat the transcript.
 function buildHistoryMessages(history: Turn[], includePriorPlayerTurns: boolean): ModelMessage[] {
   const messages: ModelMessage[] = []
+  // The OOC list given so far, which each later update is told against.
+  let oocBefore: string[] | undefined
   for (let i = 0; i < history.length; i++) {
     const t = history[i]
     // A failed turn has no narration to replay, and its input was never
@@ -525,7 +574,8 @@ function buildHistoryMessages(history: Turn[], includePriorPlayerTurns: boolean)
       messages.push({ role: 'user', content: t.input ?? '' })
     }
     if (t.storyUpdate) {
-      messages.push(...buildStoryUpdateMessages(t.id, t.storyUpdate))
+      messages.push(...buildStoryUpdateMessages(t.id, t.storyUpdate, oocBefore))
+      if (t.storyUpdate.ooc) oocBefore = t.storyUpdate.ooc
     }
     if (hasReply) {
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
@@ -554,7 +604,7 @@ function directiveMessage(content: string, asSystem: boolean): ModelMessage {
 export function buildNarratorSections(args: ModelMessagesArgs): RequestSections {
   const notes = buildNarratorNotesMessage(args.flags)
   return {
-    system: [...buildFrameMessages(args, args.systemPrompt), ...(notes ? [notes] : [])],
+    system: [...buildFrameMessages(args, args.systemPrompt, 'narrator'), ...(notes ? [notes] : [])],
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
     tail: [
@@ -580,7 +630,7 @@ export interface PlotterMessagesArgs extends ModelMessagesArgs {
 // full rules, the records as tool results, then its instruction.
 export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections {
   return {
-    system: [...buildFrameMessages(args, PLOTTER_SYSTEM_PROMPT), ...buildContextRulesMessages(args.flags)],
+    system: [...buildFrameMessages(args, PLOTTER_SYSTEM_PROMPT, 'plotter'), ...buildContextRulesMessages(args.flags)],
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
     tail: [

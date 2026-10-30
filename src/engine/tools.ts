@@ -185,7 +185,7 @@ export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
 export const STEER_TOOL: ModelToolDefinition = {
     name: 'steer',
     description:
-      'Guide the narrator’s reply: brief guidance on where the story goes next, such as an NPC pursuing their goal, a move to the next scene, or the consequences of a player action, with a mood if it helps. Facts go in the records; the narrator writes the scene itself.',
+      'Guide the narrator’s reply: brief guidance on where the story goes next, such as an NPC pursuing their goal, a move to the next scene, or the consequences of a player action. Facts go in the records; the narrator writes the scene itself.',
     parameters: {
       type: 'object',
       properties: {
@@ -203,20 +203,27 @@ export const STEER_TOOL: ModelToolDefinition = {
 // and the read tools stay the Plotter's own.
 export const BRIEFING_TOOLS: ReadonlySet<string> = new Set([RECALL_MEMORY_TOOL.name, STEER_TOOL.name])
 
-// The narrator's own calls. A story update is kept with its turn and stays in
-// the narrator's history; the reply notes are for the reply being written
-// alone. Their schemas are sent only to a provider that won't take a replayed
-// call without them, with calls forbidden.
-export const STORY_UPDATE_TOOL: ModelToolDefinition = {
-    name: 'story_update',
+// The narrator's own calls, each named for what it brings. A turn's story
+// update is kept with the turn and replayed in the narrator's history as the
+// memory and OOC calls; the steer is for the reply being written alone.
+// Their schemas are sent only to a provider that won't take a replayed call
+// without them, with calls forbidden.
+export const RECALL_MEMORIES_TOOL: ModelToolDefinition = {
+    name: 'recall_memories',
     description:
-      'What holds for the story from this point on: what you remember about those in play, and the player’s standing OOC instructions.',
+      'What you remember about the people, places and things in play: in full when first recalled, then only what has changed, with null for what no longer holds.',
     parameters: { type: 'object', properties: {} },
 }
 
-export const REPLY_NOTES_TOOL: ModelToolDefinition = {
-    name: 'reply_notes',
-    description: 'Your notes for the reply you are writing: the scene as it stands, and how to steer the reply.',
+export const GET_OOC_INSTRUCTIONS_TOOL: ModelToolDefinition = {
+    name: 'get_ooc_instructions',
+    description: 'The player’s standing out-of-character instructions: the whole list first, then only what is added or withdrawn. Each applies to every reply until it is withdrawn.',
+    parameters: { type: 'object', properties: {} },
+}
+
+export const GET_STEER_TOOL: ModelToolDefinition = {
+    name: 'get_steer',
+    description: 'The steer for the reply you are writing: what happens next in the story.',
     parameters: { type: 'object', properties: {} },
 }
 

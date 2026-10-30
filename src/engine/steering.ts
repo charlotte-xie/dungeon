@@ -1,10 +1,12 @@
-// One-reply guidance travels with the player's input, so retry, undo and
-// cancel preserve its scope along with the action. The NEXT REPLY ONLY label
-// keeps the plotter from recording it as a standing OOC directive.
-const NEXT_REPLY_ONLY = '(OOC: NEXT REPLY ONLY — '
+// Rewrite guidance travels with the player's input, so retry, undo and
+// cancel preserve its scope along with the action. Labelled as a rewrite
+// request, it reads as direction for that reply, not a standing OOC
+// directive. Turns saved before carry the older NEXT REPLY ONLY label.
+const REWRITE_REQUESTED = '(OOC: Rewrite requested: '
+const GUIDANCE_LABELS = [REWRITE_REQUESTED, '(OOC: NEXT REPLY ONLY — ']
 
-function nextReplyOnly(text: string): string {
-  return `${NEXT_REPLY_ONLY}${text})`
+function rewriteRequested(text: string): string {
+  return `${REWRITE_REQUESTED}${text})`
 }
 
 // Input holding only out-of-character direction, in (parentheses) or
@@ -24,15 +26,21 @@ export function isOutOfCharacterOnly(input: string): boolean {
 export function withRetryGuidance(input: string, guidance: string): string {
   const text = guidance.trim()
   if (!text) return input
-  return [withoutTrailingGuidance(input), nextReplyOnly(text)].filter(Boolean).join('\n\n')
+  return [withoutTrailingGuidance(input), rewriteRequested(text)].filter(Boolean).join('\n\n')
 }
 
 function withoutTrailingGuidance(input: string): string {
   const trimmed = input.trim()
-  const at = trimmed.lastIndexOf(NEXT_REPLY_ONLY)
+  const at = Math.max(...GUIDANCE_LABELS.map((label) => trimmed.lastIndexOf(label)))
   if (at < 0 || !trimmed.endsWith(')')) return trimmed
   if (at > 0 && !trimmed.slice(0, at).endsWith('\n\n')) return trimmed
   return trimmed.slice(0, at).trim()
+}
+
+// The standing OOC instructions a new adventure starts with, from the
+// settings' text: one per line.
+export function oocListFromText(text: string): string[] {
+  return text.split('\n').map((line) => line.trim()).filter(Boolean)
 }
 
 // Retry, Undo and Redo restore the OOC list saved with a turn checkpoint,

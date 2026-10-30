@@ -2,7 +2,7 @@
 
 The plot plan is your private notebook of long-term story ideas: a short list of where the story is heading. It stays out of the story itself, and the next step goes in your steer, not the plan.
 
-Each entry is a long-term development the world will bring about: something a person will do, a pressure that will land, a secret that will surface, where a thread leads. Keep one short entry for each thread, within {{maxPlotItemChars}} characters (the plan holds at most {{maxPlotItems}} entries).
+Each entry is something specific the world will bring about, with the people involved: what someone will do and why, what will land on whom, which secret will come out. The plan says where the story is heading, and each steer takes it a step closer, or follows the player somewhere better. Keep one short entry for each thread, within {{maxPlotItemChars}} characters (the plan holds at most {{maxPlotItems}} entries).
 
 The plan serves the story. Set it up from the premise and the opening; after that, change it only when that improves the story or based on OOC direction.
 
