@@ -88,7 +88,7 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         delete: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Paths to remove: a facet, an item, or a whole entry.',
+          description: 'Remove what no longer matters: paths to a facet, an item, or a whole entry.',
         },
         set: {
           type: 'object',
