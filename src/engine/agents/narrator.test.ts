@@ -96,7 +96,8 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     )
     mockedModel.mockResolvedValueOnce(completion({ text: 'The door creaks open.' }))
 
-    const result = await runNarrator(CTX, new AbortController().signal)
+    const ctx = { ...CTX, initialData: { ...CTX.initialData, state: { scene: { location: 'the lane' } } } }
+    const result = await runNarrator(ctx, new AbortController().signal)
 
     expect(result.text).toBe('The door creaks open.')
     expect(result.data.state).toEqual({ scene: { location: 'the mill' } })

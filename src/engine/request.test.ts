@@ -572,10 +572,16 @@ describe('buildStoryUpdate', () => {
 })
 
 describe('buildContextInjectionMessages', () => {
+  const fullData = {
+    state: { scene: 'the mill' },
+    plot: ['The miller returns.'],
+    memory: { Hesta: { is: 'the baker' } },
+    ooc: ['Keep replies short.'],
+  }
+
   it('uses stable ids so identical data produces identical bytes', () => {
-    const emptyData = { state: {}, plot: [], memory: {}, ooc: [] }
-    const a = buildContextInjectionMessages(emptyData, ALL_FLAGS)
-    const b = buildContextInjectionMessages({ ...emptyData }, ALL_FLAGS)
+    const a = buildContextInjectionMessages(fullData, ALL_FLAGS)
+    const b = buildContextInjectionMessages(structuredClone(fullData), ALL_FLAGS)
     expect(a).toEqual(b)
     expect(a[0].toolCalls?.map((c) => c.id)).toEqual([
       'ctx-check-memory',
@@ -585,11 +591,20 @@ describe('buildContextInjectionMessages', () => {
     ])
   })
 
+  it('leaves out the records that hold nothing', () => {
+    const someEmpty = { ...fullData, plot: [], ooc: [] }
+    expect(buildContextInjectionMessages(someEmpty, ALL_FLAGS)[0].toolCalls?.map((c) => c.name)).toEqual([
+      'check_memory',
+      'check_state',
+    ])
+    expect(buildContextInjectionMessages({ state: {}, plot: [], memory: {}, ooc: [] }, ALL_FLAGS)).toEqual([])
+  })
+
   it('serves payloads as pure data, and per-turn guidance only as size status', () => {
     expect(buildStatePayload({ a: 1 })).not.toMatch(/update_state|STATUS|Plotter/)
     expect(buildMemoryPayload({})).toBe('(no memory yet)')
     const emptyData = { state: {}, plot: [], memory: {}, ooc: [] }
-    for (const m of buildContextInjectionMessages(emptyData, ALL_FLAGS)) {
+    for (const m of buildContextInjectionMessages(fullData, ALL_FLAGS)) {
       expect(m.content).not.toMatch(/update_|Plotter/)
     }
     // What to record lives in the cached rules; the tail carries only status.

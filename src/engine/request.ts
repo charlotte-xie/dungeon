@@ -157,6 +157,9 @@ export interface ContextSubsystem {
   // The tool-result content for the check tool: the current data, nothing
   // else. Served in the seeded injection and for live re-reads.
   buildPayload(data: StoryData): string
+  // An empty record is left out of the seeded injection: there is nothing
+  // to read.
+  isEmpty(data: StoryData): boolean
   // Soft size hints for the Plotter this turn; empty when there are none.
   buildGuidance(data: StoryData, stateCleanupThreshold: number): string
 }
@@ -170,6 +173,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Memory',
     narratorNote: narratorNotesText('memory', { call: RECALL_MEMORIES_TOOL.name }),
     buildPayload: (data) => buildMemoryPayload(data.memory),
+    isEmpty: (data) => Object.keys(data.memory).length === 0,
     buildGuidance: (data) => buildMemoryGuidance(data.memory),
   },
   {
@@ -180,6 +184,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Plot plan',
     narratorNote: narratorNotesText('plot', { call: GET_STEER_TOOL.name }),
     buildPayload: (data) => buildPlotPayload(data.plot),
+    isEmpty: (data) => data.plot.length === 0,
     buildGuidance: () => '',
   },
   {
@@ -190,6 +195,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'Live state',
     narratorNote: narratorNotesText('state', { call: GET_STEER_TOOL.name }),
     buildPayload: (data) => buildStatePayload(data.state),
+    isEmpty: (data) => Object.keys(data.state).length === 0,
     buildGuidance: (data, stateCleanupThreshold) =>
       buildStateGuidance(data.state, stateCleanupThreshold),
   },
@@ -201,6 +207,7 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     label: 'OOC instructions',
     narratorNote: narratorNotesText('ooc', { call: GET_OOC_INSTRUCTIONS_TOOL.name }),
     buildPayload: (data) => buildOocPayload(data.ooc),
+    isEmpty: (data) => data.ooc.length === 0,
     buildGuidance: () => '',
   },
 ]
@@ -245,10 +252,10 @@ export function buildPlotterTools(flags: ContextFlags): ModelToolDefinition[] {
   ])
 }
 
-// The Plotter's seeded tool exchange delivering the volatile working data.
-// Call ids are fixed: the injection appears exactly once per request and is
-// never persisted or replayed, and stable bytes maximise provider prefix-cache
-// hits.
+// The Plotter's seeded tool exchange delivering the volatile working data,
+// for each enabled record that holds something. Call ids are fixed: the
+// injection appears exactly once per request and is never persisted or
+// replayed, and stable bytes maximise provider prefix-cache hits.
 export function buildContextInjectionMessages(
   data: StoryData,
   flags: ContextFlags,
@@ -256,7 +263,7 @@ export function buildContextInjectionMessages(
   const calls: ModelToolCall[] = []
   const results: ModelMessage[] = []
   for (const s of CONTEXT_SUBSYSTEMS) {
-    if (!s.enabled(flags)) continue
+    if (!s.enabled(flags) || s.isEmpty(data)) continue
     const name = s.checkTool.name
     const id = `ctx-${name.replace(/_/g, '-')}`
     calls.push({ id, name, arguments: '{}' })
