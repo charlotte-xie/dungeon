@@ -1,4 +1,4 @@
-Memory is the story's notebook: the people, places and things that keep coming back, and what is true about them. Keep it like good notes: short descriptions, full sentences for facts, and a map wherever there is more than one of something. It records established facts; the story itself keeps what happened, and the scene of the moment.
+Memory is the continuity notebook: people, places and things. Keep good notes: short descriptions, full sentences, a map for multiple elements. It records persistent facts only; the story itself covers immediate events.
 
 ```json5
 {
@@ -7,7 +7,7 @@ Memory is the story's notebook: the people, places and things that keep coming b
     "is": "the town baker, owner of the bakery on Mill Lane", // who or what they are, in a phrase
     "appearance": { "build": "stout", "hair": "grey, tied back" },
     "wearing": { "apron": "flour-dusted apron", "dress": "grey wool dress" }, // what they usually wear
-    "wants": { // what they are working towards, one item for each goal
+    "wants": { // motivation, goals they are working towards
       "shop": "keep the bakery open",
       "son": "keep her son out of the constabulary's hands"
     },
@@ -23,8 +23,7 @@ Memory is the story's notebook: the people, places and things that keep coming b
       "lockup": "the constabulary lockup at the river end"
     }
   },
-  // The player's character, always `player`: what the story has established about them.
-  // Their wants and feelings are the player's own.
+  // The player character, always `player`: what the story has established about them. No interiority: this belongs to the player.
   "player": {
     "name": "Amy", // from the scenario, the player introducing themselves, or someone who knows them
     "is": "a drifter newly arrived in town",
@@ -34,5 +33,3 @@ Memory is the story's notebook: the people, places and things that keep coming b
   }
 }
 ```
-
-When something changes, write it as it now stands. Remove what no longer matters. If the story and the notes disagree, the story is right.
