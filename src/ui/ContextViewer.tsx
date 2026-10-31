@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { WireRequest } from '../engine/model/types'
-import { InspectSwitch, type InspectView } from './InspectSwitch'
+import { InspectScreen } from './InspectScreen'
+import type { InspectView } from './InspectSwitch'
 
 export interface NextRequest {
   role: 'plotter' | 'narrator' | 'reviser'
@@ -88,10 +89,10 @@ function JsonNode({ name, value }: { name: string; value: JsonValue }) {
 }
 
 export function ContextViewer({ requests, onClose, onInspect }: ContextViewerProps) {
-  const [selected, setSelected] = useState(0)
+  const [selected, setSelected] = useState<NextRequest['role']>(requests[0]?.role ?? 'narrator')
   const [raw, setRaw] = useState(false)
   const [copied, setCopied] = useState(false)
-  const current = requests[Math.min(selected, requests.length - 1)]
+  const current = requests.find((r) => r.role === selected) ?? requests[0]
   const json = current ? JSON.stringify(current.wire.body, null, 2) : ''
 
   const copy = () => {
@@ -102,55 +103,39 @@ export function ContextViewer({ requests, onClose, onInspect }: ContextViewerPro
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal modal-wide">
-        <div className="ctx-head-block">
-          <div className="modal-header">
-            <h2>Next requests</h2>
-            <InspectSwitch view="context" onChange={onInspect} />
-            <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
+    <InspectScreen
+      view="context"
+      title="Next requests"
+      sections={requests.map((r) => ({ id: r.role, label: ROLE_LABELS[r.role] }))}
+      selected={current?.role ?? ''}
+      onSelect={(id) => setSelected(id as NextRequest['role'])}
+      onInspect={onInspect}
+      onClose={onClose}
+    >
+      {current && (
+        <>
+          <p className="hint">
+            {ROLE_NOTES[current.role]} Built by the code that sends it; the text in the input box
+            stands in for your next input.
+          </p>
+          <div className="wire-bar">
+            <code>POST {current.wire.url}</code>
+            <span className="wire-meta">{json.length.toLocaleString()} chars of JSON</span>
+            <span className="spacer" />
+            <button className="ghost" onClick={() => setRaw((r) => !r)}>{raw ? 'Readable' : 'Raw JSON'}</button>
+            <button className="ghost" onClick={copy}>{copied ? 'Copied' : 'Copy JSON'}</button>
           </div>
-          <div className="ctx-tabs">
-            {requests.map((r, i) => (
-              <button
-                key={r.role}
-                className={`ctx-tab ${r === current ? 'active' : ''}`}
-                onClick={() => setSelected(i)}
-              >
-                {ROLE_LABELS[r.role]}
-              </button>
-            ))}
-          </div>
-        </div>
-        {current && (
-          <>
-            <p className="hint">
-              {ROLE_NOTES[current.role]} Built by the code that sends it; the text in the input box
-              stands in for your next input.
-            </p>
-            <div className="wire-bar">
-              <code>POST {current.wire.url}</code>
-              <span className="wire-meta">{json.length.toLocaleString()} chars of JSON</span>
-              <span className="spacer" />
-              <button onClick={() => setRaw((r) => !r)}>{raw ? 'Readable' : 'Raw JSON'}</button>
-              <button onClick={copy}>{copied ? 'Copied' : 'Copy JSON'}</button>
+          {raw ? (
+            <pre className="state-json wire-raw">{json}</pre>
+          ) : (
+            <div className="wire-tree">
+              {Object.entries(current.wire.body as Record<string, JsonValue>).map(([key, value]) => (
+                <JsonNode key={key} name={key} value={value} />
+              ))}
             </div>
-            {raw ? (
-              <pre className="state-json wire-raw">{json}</pre>
-            ) : (
-              <div className="wire-tree">
-                {Object.entries(current.wire.body as Record<string, JsonValue>).map(([key, value]) => (
-                  <JsonNode key={key} name={key} value={value} />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-        <div className="modal-actions pinned">
-          <span className="spacer" />
-          <button onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
+          )}
+        </>
+      )}
+    </InspectScreen>
   )
 }

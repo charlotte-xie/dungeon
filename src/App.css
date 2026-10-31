@@ -515,12 +515,134 @@ header h1 {
   width: min(960px, 100%);
 }
 
-.ctx-tabs {
+/* The Inspect screen fills the window: its bar across the top, its sections
+   down the side, the content scrolling in the middle, and the section's
+   actions along the bottom. */
+.inspect-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'bar bar'
+    'nav main'
+    'nav actions';
+  background: #121212;
+  color: #e6e6e6;
+}
+
+.inspect-bar {
+  grid-area: bar;
   display: flex;
-  gap: 0.4rem;
-  margin-bottom: 0.6rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  background: #161616;
   border-bottom: 1px solid #2a2a2a;
-  padding-bottom: 0.4rem;
+}
+
+.inspect-bar h2 {
+  margin: 0;
+  font-family: 'Cinzel', 'Georgia', serif;
+  letter-spacing: 0.04em;
+  font-size: 1.2rem;
+}
+
+.inspect-bar .inspect-switch {
+  margin-left: 0.5rem;
+}
+
+.inspect-bar .spacer {
+  flex: 1;
+}
+
+.inspect-nav {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.5rem;
+  overflow-y: auto;
+  background: #141414;
+  border-right: 1px solid #2a2a2a;
+}
+
+.inspect-nav button {
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: #aaa;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inspect-nav button:hover:not(.active) {
+  color: #d8d2c0;
+  background: #1a1a1a;
+}
+
+.inspect-nav button.active {
+  color: #d8d2c0;
+  background: #222;
+}
+
+.inspect-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 1rem 1.5rem;
+  overflow-y: auto;
+}
+
+.inspect-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 1.5rem;
+  background: #161616;
+  border-top: 1px solid #2a2a2a;
+}
+
+.inspect-actions .spacer {
+  flex: 1;
+}
+
+/* Narrow windows: the sections run across the top instead. */
+@media (max-width: 700px) {
+  .inspect-screen {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'bar'
+      'nav'
+      'main'
+      'actions';
+  }
+
+  .inspect-bar,
+  .inspect-main,
+  .inspect-actions {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .inspect-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.4rem 0.75rem;
+    border-right: 0;
+    border-bottom: 1px solid #2a2a2a;
+  }
 }
 
 .ctx-tab {
@@ -541,29 +663,6 @@ header h1 {
 
 .ctx-tab:hover:not(.active) {
   color: #d8d2c0;
-}
-
-/* Header + tabs stick together above the scrolling content, spanning the
-   modal's full width over its padding. */
-.ctx-head-block {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background: #161616;
-  margin: 0 -1.25rem;
-  padding: 0 1.25rem;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.ctx-head-block .modal-header {
-  position: static;
-  padding: 1rem 0 0.5rem;
-}
-
-.ctx-head-block .ctx-tabs {
-  margin-bottom: 0;
-  border-bottom: 0;
-  padding-bottom: 0.6rem;
 }
 
 /* A request as posted: the endpoint, then its JSON body whole, every key in
@@ -692,7 +791,8 @@ header h1 {
   text-transform: uppercase;
 }
 
-.modal textarea {
+.modal textarea,
+.inspect-main textarea {
   font: inherit;
   padding: 0.6rem;
   background: #1a1a1a;
@@ -738,14 +838,16 @@ header h1 {
   }
 }
 
-.modal .hint {
+.modal .hint,
+.inspect-main .hint {
   margin: 0;
   font-size: 0.8rem;
   opacity: 0.7;
   line-height: 1.4;
 }
 
-.modal .hint code {
+.modal .hint code,
+.inspect-main .hint code {
   background: #222;
   padding: 0.05rem 0.3rem;
   border-radius: 3px;
@@ -774,11 +876,13 @@ textarea.state-json-editor {
   resize: vertical;
 }
 
-/* Tabbed engine-state dialog: the editor is the tab's sole content, so it
-   can use most of the modal's height. */
+/* An Inspect section whose editor is its whole content: the editor fills the
+   height the screen gives it. */
 textarea.state-json-editor.tab-editor {
-  min-height: 50vh;
-  max-height: 65vh;
+  flex: 1;
+  min-height: 16rem;
+  max-height: none;
+  resize: none;
 }
 
 .error-text {
@@ -1231,7 +1335,8 @@ textarea.state-json-editor.tab-editor {
   flex-wrap: wrap;
 }
 
-.modal-actions > button:not(.ghost) {
+.modal-actions > button:not(.ghost),
+.inspect-actions > button:not(.ghost) {
   padding: 0.45rem 1rem;
   font: inherit;
   background: #c9a959;

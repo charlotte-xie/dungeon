@@ -6,7 +6,8 @@ import {
   MAX_PLOT_ITEM_CHARS,
 } from '../engine/tools'
 import type { Chronicle, ContextConfig, Memory, WorldState } from '../engine/types'
-import { InspectSwitch, type InspectView } from './InspectSwitch'
+import { InspectScreen } from './InspectScreen'
+import type { InspectView } from './InspectSwitch'
 
 interface StateViewerProps {
   state: WorldState
@@ -275,191 +276,19 @@ export function StateViewer({
   ]
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal modal-wide">
-        <div className="ctx-head-block">
-          <div className="modal-header">
-            <h2>Engine state</h2>
-            <InspectSwitch
-              view="state"
-              onChange={(next) => {
-                if (anyDirty && !confirm('Discard your unsaved state edits?')) return
-                onInspect(next)
-              }}
-            />
-            <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
-          </div>
-          <div className="ctx-tabs">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                className={`ctx-tab ${tab === t.id ? 'active' : ''}`}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-                {t.dirty ? ' •' : ''}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {busy && (
-          <p className="hint">
-            Generation is continuing in the background. State data is view-only until it finishes or is cancelled.
-          </p>
-        )}
-
-        {tab === 'memory' && context.includeMemory && (
-          <>
-            <p className="hint">
-              The DM maintains this JSON via the <code>update_memory</code> tool — the
-              fact file of <strong>people, places, things and threads</strong> that persist across
-              scenes. Each key is a name; each value is an object of facets: short values,
-              sentences for facts, or maps of either (<code>is</code>, <code>wants</code>,{' '}
-              <code>attitude</code>, <code>secrets</code>, …). Edits go by dotted path: <code>set</code> replaces
-              the entire value at a path, <code>merge</code> adds keys to an object, and <code>move</code> renames.
-              Current: {memoryEntries} entr
-              {memoryEntries === 1 ? 'y' : 'ies'}.
-            </p>
-            <textarea
-              className="state-json state-json-editor tab-editor"
-              spellCheck={false}
-              value={memoryDraft}
-              onChange={(e) => setMemoryDraft(e.target.value)}
-              readOnly={busy}
-              placeholder="(no memory yet — call update_memory or paste JSON here)"
-            />
-            {memoryError && <p className="error-text">{memoryError}</p>}
-          </>
-        )}
-
-        {tab === 'state' && context.includeWorldState && (
-          <>
-            <p className="hint">
-              The DM maintains this JSON via the <code>update_state</code> tool — the{' '}
-              <strong>current scene only</strong>. Player's immediate position, what NPCs
-              are present right now, the active stimulus. On scene change, stale keys are
-              deleted.
-            </p>
-            <textarea
-              className="state-json state-json-editor tab-editor"
-              spellCheck={false}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              readOnly={busy}
-            />
-            {parseError && <p className="error-text">{parseError}</p>}
-          </>
-        )}
-
-        {tab === 'plot' && context.includePlotOutline && (
-          <>
-            <p className="hint">
-              The plotter's private plan: long-term ideas for where the story is
-              heading. The plotter inserts a good idea for the story, and removes an
-              entry once it is completed or abandoned. One entry per line;
-              leading <code>-</code>, <code>*</code>, or{' '}
-              <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
-              each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
-              {plot.length === 1 ? 'y' : 'ies'}.
-            </p>
-            <textarea
-              className="state-json state-json-editor tab-editor"
-              spellCheck={false}
-              value={plotDraft}
-              onChange={(e) => setPlotDraft(e.target.value)}
-              readOnly={busy}
-              placeholder="(no future plot plan yet — one entry per line)"
-            />
-            {plotError && <p className="error-text">{plotError}</p>}
-          </>
-        )}
-
-        {tab === 'ooc' && context.includeOoc && (
-          <>
-            <p className="hint">
-              The DM maintains this numbered list via the <code>update_ooc</code> tool
-              (append/insert/update/delete by 1-indexed position) — the player's{' '}
-              <strong>standing out-of-character directives</strong>: style and pacing
-              preferences, boundaries, and corrections that should keep applying. Entries
-              are deleted when withdrawn, completed, or no longer relevant. One entry per
-              line; leading <code>-</code>, <code>*</code>, or <code>1.</code> numbering
-              is stripped on save. Max {MAX_OOC_ITEMS} entries, each up to{' '}
-              {MAX_OOC_ITEM_CHARS} chars. Current: {ooc.length} entr
-              {ooc.length === 1 ? 'y' : 'ies'}.
-            </p>
-            <textarea
-              className="state-json state-json-editor tab-editor"
-              spellCheck={false}
-              value={oocDraft}
-              onChange={(e) => setOocDraft(e.target.value)}
-              readOnly={busy}
-              placeholder="(no standing OOC instructions — one entry per line)"
-            />
-            {oocError && <p className="error-text">{oocError}</p>}
-          </>
-        )}
-
-        {tab === 'chronicle' && (
-          <>
-            <p className="hint">
-              Auto-generated levels of compaction. When the live tail reaches{' '}
-              {context.compactionThreshold} turns, the oldest {context.compactionBatch} are
-              folded into one chronicle entry of roughly 1/{context.compactionBatch} the
-              combined input length. When a level reaches {context.compactionThreshold}{' '}
-              entries, the oldest {context.compactionBatch} are promoted into one entry at
-              the next level up, recursively. Entries shown oldest-first; newest at the
-              bottom. Entries are editable — clear an entry&apos;s text to delete it on save.
-              {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
-              {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
-            </p>
-            {totalEntries === 0 ? (
-              <p className="hint"><em>(empty — no compaction has happened yet)</em></p>
-            ) : (
-              <div className="chronicle-levels">
-                {[...chronicle]
-                  .map((entries, level) => ({ entries, level }))
-                  .reverse()
-                  .map(({ entries, level }) => {
-                    if (entries.length === 0) return null
-                    const isTop = level === chronicle.length - 1
-                    return (
-                      <div key={level} className="chronicle-level">
-                        <h3 className="chronicle-level-head">
-                          {isTop ? 'Top level' : 'More recent'}
-                          <span className="chronicle-level-meta">
-                            {' '}
-                            — level {level}, {entries.length} entr
-                            {entries.length === 1 ? 'y' : 'ies'}
-                          </span>
-                        </h3>
-                        {entries.map((e) => (
-                          <div key={e.id} className="chronicle-entry">
-                            <div className="chronicle-entry-meta">
-                              covers {e.turnsCovered} turn{e.turnsCovered === 1 ? '' : 's'} ·{' '}
-                              {entryText(e.id, e.text).length.toLocaleString()} chars
-                              {entryText(e.id, e.text) !== e.text && ' · edited'}
-                            </div>
-                            <textarea
-                              className="state-json state-json-editor chronicle-entry-edit"
-                              spellCheck={false}
-                              value={entryText(e.id, e.text)}
-                              onChange={(ev) =>
-                                setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
-                              }
-                              readOnly={busy}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-          </>
-        )}
-
-        <div className="modal-actions pinned">
+    <InspectScreen
+      view="state"
+      title="Engine state"
+      sections={tabs}
+      selected={tab}
+      onSelect={(id) => setTab(id as Tab)}
+      onInspect={(next) => {
+        if (anyDirty && !confirm('Discard your unsaved state edits?')) return
+        onInspect(next)
+      }}
+      onClose={onClose}
+      actions={
+        <>
           {tab === 'memory' && (
             <button
               className="ghost"
@@ -526,12 +355,167 @@ export function StateViewer({
             </button>
           )}
           <span className="spacer" />
-          <button onClick={onClose}>Close</button>
           <button onClick={handleSaveChanges} disabled={busy || !anyDirty}>
             Save Changes
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {busy && (
+        <p className="hint">
+          Generation is continuing in the background. State data is view-only until it finishes or is cancelled.
+        </p>
+      )}
+
+      {tab === 'memory' && context.includeMemory && (
+        <>
+          <p className="hint">
+            The DM maintains this JSON via the <code>update_memory</code> tool — the
+            fact file of <strong>people, places, things and threads</strong> that persist across
+            scenes. Each key is a name; each value is an object of facets: short values,
+            sentences for facts, or maps of either (<code>is</code>, <code>wants</code>,{' '}
+            <code>attitude</code>, <code>secrets</code>, …). Edits go by dotted path: <code>set</code> replaces
+            the entire value at a path, <code>merge</code> adds keys to an object, and <code>move</code> renames.
+            Current: {memoryEntries} entr
+            {memoryEntries === 1 ? 'y' : 'ies'}.
+          </p>
+          <textarea
+            className="state-json state-json-editor tab-editor"
+            spellCheck={false}
+            value={memoryDraft}
+            onChange={(e) => setMemoryDraft(e.target.value)}
+            readOnly={busy}
+            placeholder="(no memory yet — call update_memory or paste JSON here)"
+          />
+          {memoryError && <p className="error-text">{memoryError}</p>}
+        </>
+      )}
+
+      {tab === 'state' && context.includeWorldState && (
+        <>
+          <p className="hint">
+            The DM maintains this JSON via the <code>update_state</code> tool — the{' '}
+            <strong>current scene only</strong>. Player's immediate position, what NPCs
+            are present right now, the active stimulus. On scene change, stale keys are
+            deleted.
+          </p>
+          <textarea
+            className="state-json state-json-editor tab-editor"
+            spellCheck={false}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            readOnly={busy}
+          />
+          {parseError && <p className="error-text">{parseError}</p>}
+        </>
+      )}
+
+      {tab === 'plot' && context.includePlotOutline && (
+        <>
+          <p className="hint">
+            The plotter's private plan: long-term ideas for where the story is
+            heading. The plotter inserts a good idea for the story, and removes an
+            entry once it is completed or abandoned. One entry per line;
+            leading <code>-</code>, <code>*</code>, or{' '}
+            <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
+            each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
+            {plot.length === 1 ? 'y' : 'ies'}.
+          </p>
+          <textarea
+            className="state-json state-json-editor tab-editor"
+            spellCheck={false}
+            value={plotDraft}
+            onChange={(e) => setPlotDraft(e.target.value)}
+            readOnly={busy}
+            placeholder="(no future plot plan yet — one entry per line)"
+          />
+          {plotError && <p className="error-text">{plotError}</p>}
+        </>
+      )}
+
+      {tab === 'ooc' && context.includeOoc && (
+        <>
+          <p className="hint">
+            The DM maintains this numbered list via the <code>update_ooc</code> tool
+            (append/insert/update/delete by 1-indexed position) — the player's{' '}
+            <strong>standing out-of-character directives</strong>: style and pacing
+            preferences, boundaries, and corrections that should keep applying. Entries
+            are deleted when withdrawn, completed, or no longer relevant. One entry per
+            line; leading <code>-</code>, <code>*</code>, or <code>1.</code> numbering
+            is stripped on save. Max {MAX_OOC_ITEMS} entries, each up to{' '}
+            {MAX_OOC_ITEM_CHARS} chars. Current: {ooc.length} entr
+            {ooc.length === 1 ? 'y' : 'ies'}.
+          </p>
+          <textarea
+            className="state-json state-json-editor tab-editor"
+            spellCheck={false}
+            value={oocDraft}
+            onChange={(e) => setOocDraft(e.target.value)}
+            readOnly={busy}
+            placeholder="(no standing OOC instructions — one entry per line)"
+          />
+          {oocError && <p className="error-text">{oocError}</p>}
+        </>
+      )}
+
+      {tab === 'chronicle' && (
+        <>
+          <p className="hint">
+            Auto-generated levels of compaction. When the live tail reaches{' '}
+            {context.compactionThreshold} turns, the oldest {context.compactionBatch} are
+            folded into one chronicle entry of roughly 1/{context.compactionBatch} the
+            combined input length. When a level reaches {context.compactionThreshold}{' '}
+            entries, the oldest {context.compactionBatch} are promoted into one entry at
+            the next level up, recursively. Entries shown oldest-first; newest at the
+            bottom. Entries are editable — clear an entry&apos;s text to delete it on save.
+            {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
+            {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
+          </p>
+          {totalEntries === 0 ? (
+            <p className="hint"><em>(empty — no compaction has happened yet)</em></p>
+          ) : (
+            <div className="chronicle-levels">
+              {[...chronicle]
+                .map((entries, level) => ({ entries, level }))
+                .reverse()
+                .map(({ entries, level }) => {
+                  if (entries.length === 0) return null
+                  const isTop = level === chronicle.length - 1
+                  return (
+                    <div key={level} className="chronicle-level">
+                      <h3 className="chronicle-level-head">
+                        {isTop ? 'Top level' : 'More recent'}
+                        <span className="chronicle-level-meta">
+                          {' '}
+                          — level {level}, {entries.length} entr
+                          {entries.length === 1 ? 'y' : 'ies'}
+                        </span>
+                      </h3>
+                      {entries.map((e) => (
+                        <div key={e.id} className="chronicle-entry">
+                          <div className="chronicle-entry-meta">
+                            covers {e.turnsCovered} turn{e.turnsCovered === 1 ? '' : 's'} ·{' '}
+                            {entryText(e.id, e.text).length.toLocaleString()} chars
+                            {entryText(e.id, e.text) !== e.text && ' · edited'}
+                          </div>
+                          <textarea
+                            className="state-json state-json-editor chronicle-entry-edit"
+                            spellCheck={false}
+                            value={entryText(e.id, e.text)}
+                            onChange={(ev) =>
+                              setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
+                            }
+                            readOnly={busy}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </>
+      )}
+    </InspectScreen>
   )
 }
