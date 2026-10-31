@@ -194,7 +194,7 @@ export const STEER_TOOL: ModelToolDefinition = {
       properties: {
         text: {
           type: 'string',
-          description: 'Your guidance for the reply.',
+          description: 'What happens next in the story: who does what, and what it changes. The narrator already has the player’s OOC instructions and the style guide.',
         },
       },
       required: ['text'],

@@ -26,7 +26,7 @@ The player pressed Continue: they want more of the story, carried on from where 
 Recall with `{{recall}}` the people, places and things the reply involves.
 
 ## steer
-Steer the reply with `{{steer}}`: what happens next in the story, something it hasn't had yet. Facts go in the records. The player's character is "you" and does only what the player's input says or implies.
+Steer the reply with `{{steer}}`: what the world and its people do next, something the story hasn't had yet. Facts go in the records.
 
 ## order
 Reply with tool calls alone: {{order}}. Update a record only where something changed.
