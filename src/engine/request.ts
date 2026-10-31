@@ -13,7 +13,7 @@
 //      for each record travel in its tools. Changes rarely (settings edits,
 //      compactions).
 //   2. History — append-only between compactions: each turn's input (player
-//      text, or the fixed bootstrap / Continue directive), the narrator's
+//      text, or the fixed opening / Continue input), the narrator's
 //      story update, and its narration prose, so nothing sent once is later
 //      removed. The story update — memory entries newly recalled, or already
 //      in view and changed, and the OOC list when it changed — sits between
@@ -498,8 +498,8 @@ export function buildStoryUpdateMessages(
 
 // History replays the durable story: each turn's input, its story update for
 // the narrator, and its narration prose. The Plotter gets the records whole
-// in its tail, so the story updates are the narrator's alone. Bootstrap and
-// Continue directives stay too — they are fixed short strings, they keep
+// in its tail, so the story updates are the narrator's alone. The opening and
+// Continue inputs stay too — they are fixed short strings, they keep
 // user/assistant roles alternating, and dropping them once the turn completed
 // would remove bytes an earlier request already sent. Other tool activity and
 // reasoning are ephemeral scaffolding of the turn that produced them — each

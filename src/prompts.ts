@@ -57,7 +57,7 @@ export type PlotterTurnSection =
   | 'nudge-rejected'
 export const plotterTurnText = sectionReader<PlotterTurnSection>('plotter-turn.md', plotterTurn)
 
-const turnReminderText = sectionReader<'default' | 'player' | 'ooc' | 'continue'>('turn-reminder.md', turnReminder)
+const turnReminderText = sectionReader<'opening' | 'default' | 'player' | 'ooc' | 'continue'>('turn-reminder.md', turnReminder)
 const nsfwText = sectionReader<'on' | 'off'>('nsfw.md', nsfw)
 
 export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
@@ -66,7 +66,8 @@ export const DEFAULT_SYSTEM_PROMPT = dmSystem.trim()
 export const PLOTTER_SYSTEM_PROMPT = plotterSystem.trim()
 export const DEFAULT_SCENARIO = defaultScenario.trim()
 export const REVISER_SYSTEM_PROMPT = reviserSystem.trim()
-// Synthetic user input sent when the player presses Continue (skips their turn).
+// The input that marks a Continue turn, when the player presses Continue: a
+// plain message, so it isn't taken for the player's direction.
 export const CONTINUE_DIRECTIVE = continueDirective.trim()
 
 // The last thing the narrator reads before writing, so it points at the
@@ -76,10 +77,12 @@ export const CONTINUE_DIRECTIVE = continueDirective.trim()
 // After the player's own input, the reply opens by telling what they did
 // and said. Input that is only out-of-character direction has no move to
 // tell, and on a Continue their last move was told in the last reply, so the
-// story carries on from there; an opening has no move to tell either.
+// story carries on from there. The opening and Continue inputs only mark the
+// turn: what to do with it is said here, and in the Plotter's steps.
 export function buildTurnReminder(kind?: TurnKind, input?: string): string {
   if (kind === 'player') return turnReminderText(input && isOutOfCharacterOnly(input) ? 'ooc' : 'player')
   if (kind === 'continue') return turnReminderText('continue')
+  if (kind === 'bootstrap') return turnReminderText('opening')
   return turnReminderText('default')
 }
 
@@ -112,6 +115,7 @@ export function buildSummarizerLengthNote(targetChars: number): string {
   return `Length budget: use at most ${targetChars.toLocaleString()} characters where possible. HARD MAXIMUM: ${maxChars.toLocaleString()}.`
 }
 
+// The input that marks the opening turn, likewise plain.
 export function buildNewAdventureBootstrap(): string {
   return newAdventureBootstrapTemplate.trim()
 }

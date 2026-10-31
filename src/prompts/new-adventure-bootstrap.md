@@ -1,1 +1,1 @@
-(OOC: Begin the story.)
+Begin.

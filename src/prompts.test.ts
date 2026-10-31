@@ -35,6 +35,7 @@ describe('prompts', () => {
       buildTurnReminder('player'),
       buildTurnReminder('player', '(OOC: more of the pub)'),
       buildTurnReminder('continue'),
+      buildTurnReminder('bootstrap'),
       CONTINUE_DIRECTIVE,
       buildNewAdventureBootstrap(),
       NSFW_ON_PROMPT,
@@ -50,7 +51,8 @@ describe('prompts', () => {
 
   it('gives each kind of turn its reminder', () => {
     const reminder = buildTurnReminder()
-    expect(buildTurnReminder('bootstrap')).toBe(reminder)
+    // The opening has a reminder of its own: its input only marks the turn.
+    expect(buildTurnReminder('bootstrap')).not.toBe(reminder)
     // After the player's own input, the reply opens by telling their move.
     expect(buildTurnReminder('player')).not.toBe(reminder)
     expect(buildTurnReminder('player')).toContain(reminder)
@@ -63,9 +65,11 @@ describe('prompts', () => {
     expect(direction).not.toBe(reminder)
   })
 
-  it('sends the opening and Continue as the player’s out-of-character direction', () => {
+  it('marks the opening and Continue with plain inputs, not the player’s direction', () => {
+    // Sent as out-of-character direction, the opening was kept as a standing
+    // instruction.
     for (const directive of [buildNewAdventureBootstrap(), CONTINUE_DIRECTIVE]) {
-      expect(directive).toMatch(/^\(OOC: [\s\S]+\)$/)
+      expect(directive).not.toMatch(/[([]/)
     }
   })
 

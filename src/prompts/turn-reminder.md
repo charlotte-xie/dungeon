@@ -1,3 +1,6 @@
+## opening
+Open the story where the scenario starts, with the player's character in the scene, and play it up to its first meaningful development. Play it in the moment, through concrete detail and quoted speech.
+
 ## default
 Play out what follows, including the next meaningful story development. Play it in the moment, through concrete detail and quoted speech. Keep it fresh: new words, new details, new moments.
 
