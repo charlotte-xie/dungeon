@@ -75,7 +75,7 @@ export const PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth: only the paths you name change, and leaving a path out never deletes it. Operations apply in order: \`move\`, then \`delete\`, then \`set\`. Periods separate path parts, so entry names have none.`,
+      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Periods separate path parts, so entry names have none.`,
     parameters: {
       type: 'object',
       properties: {
@@ -93,8 +93,14 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         set: {
           type: 'object',
           description:
-            'Map of dotted path → value (`name.facet`, `name.facet.item`, or a whole entry); null deletes the path.',
+            'Map of dotted path → value that replaces the entire value at the path (`name.facet`, `name.facet.item`, or a whole entry); null deletes the path.',
           additionalProperties: true,
+        },
+        merge: {
+          type: 'object',
+          description:
+            'Map of dotted path → object whose keys are added to the object at the path, at any depth, keeping everything it doesn’t name: {"The pawnshop robbery": {"status": "…"}} changes the status alone. null removes a key.',
+          additionalProperties: { type: 'object' },
         },
       },
     },
@@ -448,9 +454,12 @@ export function executeTool(
     try {
       const args = JSON.parse(rawArgs) as {
         set?: Record<string, JsonValue>
+        merge?: Record<string, JsonValue>
         delete?: unknown
         move?: Record<string, unknown>
       }
+      const isPlainObject = (v: unknown): v is Record<string, JsonValue> =>
+        typeof v === 'object' && v !== null && !Array.isArray(v)
       const moveEntries =
         args.move && typeof args.move === 'object' && !Array.isArray(args.move)
           ? Object.entries(args.move)
@@ -462,15 +471,27 @@ export function executeTool(
         args.set && typeof args.set === 'object' && !Array.isArray(args.set)
           ? Object.entries(args.set)
           : []
-      if (!moveEntries.length && !deletePaths.length && !setEntries.length) {
+      const mergeEntries = isPlainObject(args.merge) ? Object.entries(args.merge) : []
+      if (!moveEntries.length && !deletePaths.length && !setEntries.length && !mergeEntries.length) {
         return unchanged(
-          'error: update_memory requires a non-empty `set`, `delete`, or `move`.',
+          'error: update_memory requires a non-empty `set`, `merge`, `delete`, or `move`.',
         )
       }
+      // A merge writes the leaves of its object one path at a time, so the
+      // values it doesn't name stay, and every key passes the path check.
+      const leafPaths = (base: string, value: Record<string, JsonValue>): [string, JsonValue][] =>
+        Object.entries(value).flatMap(([key, v]): [string, JsonValue][] =>
+          isPlainObject(v) ? leafPaths(`${base}.${key}`, v) : [[`${base}.${key}`, v]],
+        )
+      const merges = mergeEntries.map(([path, value]) => ({
+        path,
+        leaves: isPlainObject(value) ? leafPaths(path, value) : undefined,
+      }))
       const unsafePaths = [
         ...moveEntries.flatMap(([from, to]) => (typeof to === 'string' ? [from, to] : [from])),
         ...deletePaths,
         ...setEntries.map(([path]) => path),
+        ...merges.flatMap(({ path, leaves }) => [path, ...(leaves ?? []).map(([leaf]) => leaf)]),
       ].filter((path) => !isSafeStatePath(path))
       if (unsafePaths.length > 0) {
         return unchanged(
@@ -481,8 +502,6 @@ export function executeTool(
       const notes: string[] = []
       let failed = false
       let next: Memory = memory
-      const isPlainObject = (v: unknown): v is Record<string, JsonValue> =>
-        typeof v === 'object' && v !== null && !Array.isArray(v)
       // Remove a path and prune any ancestor objects it leaves empty.
       const deleteAndPrune = (m: Memory, path: string): Memory => {
         let out = deleteByPath(m, path)
@@ -540,20 +559,35 @@ export function executeTool(
         notes.push(`deleted ${path}`)
       }
 
-      // Sets are additive: only named paths change; everything else survives.
-      // Setting null deletes the path, mirroring live state's convention.
-      for (const [path, value] of setEntries) {
+      // Write one value at a path, replacing what was there; null deletes the
+      // path, mirroring live state's convention. Returns false for a no-op.
+      const write = (path: string, value: JsonValue | undefined): boolean => {
         if (value === null || value === undefined) {
-          if (getByPath(next, path) === undefined) {
-            notes.push(`deleted ${path} via null (no-op; not present)`)
-          } else {
-            next = deleteAndPrune(next, path)
-            notes.push(`deleted ${path} via null`)
-          }
-          continue
+          if (getByPath(next, path) === undefined) return false
+          next = deleteAndPrune(next, path)
+          return true
         }
         next = setByPath(next, path, value)
-        notes.push(`set ${path}`)
+        return true
+      }
+
+      // A set replaces the value at its path; paths it doesn't name survive.
+      for (const [path, value] of setEntries) {
+        const deleting = value === null || value === undefined
+        const changed = write(path, value)
+        notes.push(deleting ? `deleted ${path} via null${changed ? '' : ' (no-op; not present)'}` : `set ${path}`)
+      }
+
+      // A merge adds its keys to the object at its path, at any depth, and
+      // keeps the keys it doesn't name.
+      for (const { path, leaves } of merges) {
+        if (!leaves) {
+          notes.push(`REJECTED merge ${path}: needs an object; use set for a single value.`)
+          failed = true
+          continue
+        }
+        for (const [leaf, value] of leaves) write(leaf, value)
+        notes.push(`merged ${path}${leaves.length ? `: ${leaves.map(([leaf]) => leaf.slice(path.length + 1)).join(', ')}` : ' (no-op; empty)'}`)
       }
 
       const result = `${failed ? 'partial' : 'ok'} — memory: ${notes.join('; ')}`

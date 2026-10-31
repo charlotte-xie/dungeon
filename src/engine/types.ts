@@ -94,10 +94,10 @@ export type JsonValue =
 export type WorldState = { [key: string]: JsonValue }
 
 // Long-term memory: slug → free JSON for each canonical entity (people,
-// places, things) that persists across scenes. The rules suggest a facet
-// vocabulary; the shape beyond that is the model's discretion. Edited
-// additively by dotted path (any depth): only paths named in a call change;
-// omission never deletes.
+// places, things, threads) that persists across scenes. The rules suggest a
+// facet vocabulary; the shape beyond that is the model's discretion. Edited
+// by dotted path (any depth): paths a call doesn't name stay; `set` replaces
+// the entire value at its path, and `merge` adds keys to the object there.
 export type Memory = { [slug: string]: JsonValue }
 
 // The working data a turn threads through the narrator, plotter, and tool

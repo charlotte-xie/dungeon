@@ -60,6 +60,45 @@ describe('tool execution boundaries', () => {
     expect(result.result).toBe('ok — memory: set the_baker.bond')
   })
 
+  it('replaces the entire value at a path with set, and keeps what merge does not name', () => {
+    const thread = { is: 'the drowning', status: 'the families not speaking', truth: 'the rail was cut' }
+    const data = { state: {}, plot: [], memory: { drowning: thread }, ooc: [] }
+    const set = executeTool('update_memory', JSON.stringify({ set: { drowning: { status: 'asked about' } } }), data)
+    expect(set.data.memory).toEqual({ drowning: { status: 'asked about' } })
+
+    const merged = executeTool(
+      'update_memory',
+      JSON.stringify({ merge: { drowning: { status: 'a witness named', clues: { jacket: 'never found' }, truth: null } } }),
+      data,
+    )
+    expect(merged.data.memory).toEqual({
+      drowning: { is: 'the drowning', status: 'a witness named', clues: { jacket: 'never found' } },
+    })
+    expect(merged.result).toBe('ok — memory: merged drowning: status, clues.jacket, truth')
+
+    // Merging into a map adds to it; a merge with no object is refused.
+    const more = executeTool(
+      'update_memory',
+      JSON.stringify({ merge: { 'drowning.clues': { rail: 'freshly cut' }, 'drowning.is': 'x' } }),
+      merged.data,
+    )
+    expect(more.data.memory.drowning).toMatchObject({ is: 'the drowning', clues: { jacket: 'never found', rail: 'freshly cut' } })
+    expect(more.result).toMatch(/^partial/)
+    expect(more.result).toContain('REJECTED merge drowning.is')
+  })
+
+  it('rejects an unsafe key anywhere inside a merge, without partial writes', () => {
+    const data = { state: {}, plot: [], memory: { hesta: { is: 'the baker' } }, ooc: [] }
+    const unsafe = executeTool(
+      'update_memory',
+      '{"merge": {"hesta": {"is": "changed", "__proto__": {"polluted": "yes"}}}}',
+      data,
+    )
+    expect(unsafe.data).toBe(data)
+    expect(unsafe.result).toMatch(/unsafe memory path/)
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
   it('renames an entity with move and merges when the target already exists', () => {
     const data = {
       state: {},
