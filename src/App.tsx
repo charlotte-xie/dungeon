@@ -1,12 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT } from './prompts'
-import { buildPlotterInstruction } from './engine/agents/narrator'
-import { buildReviserMessages } from './engine/agents/reviser'
 import { totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
-import { buildNarratorSections, buildPlotterSections, buildPlotterTools } from './engine/request'
 import { replyStatus } from './engine/turnRecovery'
 import type { Turn } from './engine/types'
 import { useGameController } from './hooks/useGameController'
@@ -494,67 +491,9 @@ function App() {
           }}
         />
       )}
-      {inspect === 'context' && (() => {
-        const lastTurn = [...turns].reverse().find((t) => t.reply.text || t.narrator?.text)
-        const lastDraft = lastTurn?.narrator?.text ?? lastTurn?.reply.text ?? ''
-        const reviserPreview = context.useReviser
-          ? {
-              messages: buildReviserMessages(
-                game.slots,
-                lastDraft || '(placeholder draft — take one turn to see the real reviser request)',
-              ),
-              model: context.reviserModel,
-              source: lastDraft ? ('last-turn' as const) : ('no-draft' as const),
-              note: lastTurn ? `Draft from turn #${turns.indexOf(lastTurn) + 1}.` : '',
-            }
-          : undefined
-        const data = {
-          state: game.state,
-          plot: game.plot,
-          memory: game.memory,
-          ooc: game.ooc,
-        }
-        // Both previews show the next turn, with a placeholder for its input.
-        const nextTurn: Turn = {
-          id: 'next-turn',
-          kind: 'player',
-          input: '(the player’s next input)',
-          reply: { id: 'next-reply', model, text: '' },
-        }
-        const story = {
-          systemPrompt,
-          slots: game.slots,
-          chronicle: game.chronicle,
-          history: [...turns.slice(compactCutoff), nextTurn],
-          data,
-          includePriorPlayerTurns: context.includePriorPlayerTurns,
-          flags: context,
-          nsfw: context.nsfw,
-          reminderAsSystem: context.reminderAsSystem,
-        }
-        const tools = buildPlotterTools(context)
-        return (
-          <ContextViewer
-            narrator={buildNarratorSections(story)}
-            plotter={
-              tools.length
-                ? {
-                    sections: buildPlotterSections({
-                      ...story,
-                      pivot: buildPlotterInstruction(context, data, context.stateCleanupChars),
-                    }),
-                    tools,
-                    model: context.plotterModel.trim() || model,
-                  }
-                : undefined
-            }
-            sampling={sampling}
-            reviser={reviserPreview}
-            onClose={() => setInspect(null)}
-            onInspect={setInspect}
-          />
-        )
-      })()}
+      {inspect === 'context' && (
+        <ContextViewer requests={game.nextRequests()} onClose={() => setInspect(null)} onInspect={setInspect} />
+      )}
       {showNewAdventure && (
         <NewAdventurePrompt
           slots={game.slots}

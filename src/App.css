@@ -515,18 +515,6 @@ header h1 {
   width: min(960px, 100%);
 }
 
-.context-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.context-item {
-  border: 1px solid #2a2a2a;
-  border-radius: 4px;
-  background: #131313;
-}
-
 .ctx-tabs {
   display: flex;
   gap: 0.4rem;
@@ -555,47 +543,6 @@ header h1 {
   color: #d8d2c0;
 }
 
-.ctx-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid #2a2a2a;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.ctx-role {
-  color: #c9a959;
-}
-
-.ctx-system .ctx-role { color: #c9a959; }
-.ctx-user .ctx-role { color: #6fa8dc; }
-.ctx-assistant .ctx-role { color: #a6d96a; }
-.ctx-tool .ctx-role { color: #d69acf; }
-
-.ctx-tag {
-  font-size: 0.7rem;
-  opacity: 0.65;
-  letter-spacing: 0.04em;
-}
-
-.ctx-len {
-  margin-left: auto;
-  font-size: 0.7rem;
-  opacity: 0.55;
-  letter-spacing: 0.04em;
-}
-
-.context-item .state-json {
-  /* Content flows in the modal's single scroll — no per-message scrollbars. */
-  max-height: none;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
 /* Header + tabs stick together above the scrolling content, spanning the
    modal's full width over its padding. */
 .ctx-head-block {
@@ -619,56 +566,78 @@ header h1 {
   padding-bottom: 0.6rem;
 }
 
-.ctx-section {
-  margin-top: 0.6rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 4px;
-  background: #131313;
-}
-
-.ctx-section > summary {
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
+/* A request as posted: the endpoint, then its JSON body whole, every key in
+   order and every string with its own line breaks. */
+.wire-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
-  padding: 0.6rem 0.75rem;
-  font-family: 'Cinzel', 'Georgia', serif;
-  letter-spacing: 0.04em;
-  font-size: 1.05rem;
+  margin-bottom: 0.6rem;
 }
 
-/* Hide the native disclosure triangle in favour of a custom chevron. */
-.ctx-section > summary::-webkit-details-marker {
+.wire-bar code {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.wire-meta {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.wire-tree {
+  font: 0.8rem/1.45 ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  color: #d6d6d6;
+}
+
+.wire-node > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.1rem 0;
+}
+
+.wire-node > summary::-webkit-details-marker {
   display: none;
 }
 
-.ctx-section > summary::before {
-  content: '▶';
-  font-size: 0.7em;
-  color: #888;
-  transition: transform 0.15s ease;
+.wire-node > summary::before {
+  content: '▸ ';
+  color: #777;
 }
 
-.ctx-section[open] > summary::before {
-  transform: rotate(90deg);
+.wire-node[open] > summary::before {
+  content: '▾ ';
 }
 
-.ctx-section > summary:hover {
-  background: #1a1a1a;
+.wire-children {
+  margin-left: 0.4rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid #2a2a2a;
 }
 
-.ctx-section[open] > summary {
-  border-bottom: 1px solid #2a2a2a;
+.wire-leaf {
+  padding: 0.1rem 0;
 }
 
-/* Expanded: show the full content, not a cramped nested scroll box. */
-.ctx-section-json {
+.wire-key { color: #c9a959; }
+.wire-string { color: #a6d96a; overflow-wrap: anywhere; }
+.wire-scalar { color: #6fa8dc; }
+
+.wire-text {
+  margin: 0.25rem 0 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: #131313;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font: inherit;
+  color: #e0dccf;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wire-raw {
   max-height: none;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
 }
 
 .modal h2 {

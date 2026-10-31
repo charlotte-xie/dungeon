@@ -56,6 +56,13 @@ export interface ModelCompletionRequest {
   onStream?: (event: ModelStreamEvent) => void
 }
 
+// A request as it goes over the wire: the endpoint and the JSON body posted to
+// it. Headers, which carry the API key, are not part of it.
+export interface WireRequest {
+  url: string
+  body: Record<string, unknown>
+}
+
 // What a streamed completion reports while it arrives: pieces of its text and
 // of its reasoning, and each tool call as it begins.
 export type ModelStreamEvent =

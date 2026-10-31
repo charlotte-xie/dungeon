@@ -1,198 +1,149 @@
 import { useState } from 'react'
-import type { ModelMessage, ModelToolDefinition } from '../engine/model/types'
-import type { RequestSections } from '../engine/request'
-import type { SamplingParams } from '../engine/types'
+import type { WireRequest } from '../engine/model/types'
 import { InspectSwitch, type InspectView } from './InspectSwitch'
 
-export interface ReviserPreview {
-  messages: ModelMessage[]
-  model: string
-  source: 'last-turn' | 'no-draft'
-  // Short note about where the draft came from (e.g. "Draft from turn #4.")
-  // — purely informational.
-  note: string
-}
-
-export interface PlotterPreview {
-  sections: RequestSections
-  tools: ModelToolDefinition[]
-  model: string
+export interface NextRequest {
+  role: 'plotter' | 'narrator' | 'reviser'
+  wire: WireRequest
 }
 
 interface ContextViewerProps {
-  narrator: RequestSections
-  // Absent when every record is switched off: there is no Plotter request.
-  plotter?: PlotterPreview
-  sampling: SamplingParams
-  reviser?: ReviserPreview
+  requests: NextRequest[]
   onClose: () => void
   onInspect: (view: InspectView) => void
 }
 
-type Tab = 'system' | 'chronicle' | 'history' | 'notes' | 'plotter' | 'reviser'
-
-function chars(items: ModelMessage[]): number {
-  return items.reduce((n, m) => n + (m.content?.length ?? 0), 0)
+const ROLE_LABELS: Record<NextRequest['role'], string> = {
+  plotter: 'Plotter',
+  narrator: 'Narrator',
+  reviser: 'Reviser',
 }
 
-function sizeNote(items: ModelMessage[]): string {
-  return `${chars(items).toLocaleString()} chars across ${items.length} message${items.length === 1 ? '' : 's'}.`
+// What each request is, and what changes before it is sent for real.
+const ROLE_NOTES: Record<NextRequest['role'], string> = {
+  plotter:
+    'The Plotter’s first request of the next turn. Its later requests in the turn add its calls, their results and any reminder.',
+  narrator:
+    'The narrator’s request as it stands before the Plotter runs: the records the Plotter changes, the memories it recalls and its steer join it then.',
+  reviser: 'The reviser’s request for the last reply’s draft.',
 }
 
-function MessageList({ items }: { items: ModelMessage[] }) {
-  if (!items.length) {
-    return <p className="hint"><em>(no messages in this section)</em></p>
-  }
-  return (
-    <div className="context-list">
-      {items.map((m, i) => (
-        <div key={i} className={`context-item ctx-${m.role}`}>
-          <div className="ctx-head">
-            <span className="ctx-role">{m.role}</span>
-            {m.toolCallId && <span className="ctx-tag">tool_call_id: {m.toolCallId}</span>}
-            {m.toolCalls?.length ? (
-              <span className="ctx-tag">{m.toolCalls.length} tool_call(s)</span>
-            ) : null}
-            <span className="ctx-len">{m.content.length.toLocaleString()} chars</span>
-          </div>
-          {(m.content || !m.toolCalls?.length) && (
-            <pre className="state-json">{m.content || '(empty)'}</pre>
-          )}
-          {m.toolCalls?.length ? (
-            <pre className="state-json">{JSON.stringify(m.toolCalls, null, 2)}</pre>
-          ) : null}
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
+// Labels an object in a list by the fields that say what it is, such as a
+// message's role or an item's type and name.
+function itemSummary(value: JsonValue): string {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return ''
+  return ['role', 'type', 'name']
+    .filter((key) => typeof value[key] === 'string')
+    .map((key) => `${key}: ${value[key] as string}`)
+    .join(' · ')
+}
+
+// Renders a JSON value whole: every key and value in order, strings with
+// their own line breaks. Nothing is left out or reworded.
+function JsonNode({ name, value }: { name: string; value: JsonValue }) {
+  if (typeof value === 'string') {
+    if (!value.includes('\n') && value.length <= 100) {
+      return (
+        <div className="wire-leaf">
+          <span className="wire-key">{name}</span> <span className="wire-string">{JSON.stringify(value)}</span>
         </div>
-      ))}
-    </div>
+      )
+    }
+    return (
+      <div className="wire-leaf">
+        <span className="wire-key">{name}</span>{' '}
+        <span className="wire-meta">string · {value.length.toLocaleString()} chars</span>
+        <pre className="wire-text">{value}</pre>
+      </div>
+    )
+  }
+  if (value === null || typeof value !== 'object') {
+    return (
+      <div className="wire-leaf">
+        <span className="wire-key">{name}</span> <span className="wire-scalar">{JSON.stringify(value)}</span>
+      </div>
+    )
+  }
+  const entries: [string, JsonValue][] = Array.isArray(value)
+    ? value.map((item, i) => [String(i), item])
+    : Object.entries(value)
+  const summary = itemSummary(value)
+  return (
+    <details className="wire-node" open>
+      <summary>
+        <span className="wire-key">{name}</span>{' '}
+        <span className="wire-meta">
+          {Array.isArray(value) ? `[${value.length}]` : summary || `{${entries.length}}`}
+        </span>
+      </summary>
+      <div className="wire-children">
+        {entries.map(([key, item]) => (
+          <JsonNode key={key} name={key} value={item} />
+        ))}
+      </div>
+    </details>
   )
 }
 
-export function ContextViewer({ narrator, plotter, sampling, reviser, onClose, onInspect }: ContextViewerProps) {
-  const [tab, setTab] = useState<Tab>('history')
+export function ContextViewer({ requests, onClose, onInspect }: ContextViewerProps) {
+  const [selected, setSelected] = useState(0)
+  const [raw, setRaw] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const current = requests[Math.min(selected, requests.length - 1)]
+  const json = current ? JSON.stringify(current.wire.body, null, 2) : ''
 
-  const { system, chronicle, history, tail: notes } = narrator
-  // What the Plotter's request holds beyond the story both roles share: its
-  // own system prompt, its rules in place of the narrator's reading notes,
-  // and its own tail.
-  const plotterPrefix = plotter
-    ? plotter.sections.system.filter((m) => !system.some((n) => n.content === m.content))
-    : []
-  const plotterMessages = plotter ? [...plotterPrefix, ...plotter.sections.tail] : []
-  const toolsJson = plotter ? JSON.stringify(plotter.tools, null, 2) : ''
-
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'system', label: `System (${system.length})` },
-    { id: 'chronicle', label: `Chronicle (${chronicle.length})` },
-    { id: 'history', label: `History (${history.length})` },
-    { id: 'notes', label: `Notes (${notes.length})` },
-    ...(plotter ? [{ id: 'plotter' as Tab, label: 'Plotter' }] : []),
-    ...(reviser ? [{ id: 'reviser' as Tab, label: 'Reviser' }] : []),
-  ]
+  const copy = () => {
+    void navigator.clipboard.writeText(json).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
 
   return (
     <div className="modal-backdrop">
       <div className="modal modal-wide">
         <div className="ctx-head-block">
           <div className="modal-header">
-            <h2>
-              {tab === 'reviser'
-                ? 'Context for reviser request (preview)'
-                : tab === 'plotter'
-                  ? 'Context for Plotter request (preview)'
-                  : 'Context for next narrator request'}
-            </h2>
+            <h2>Next requests</h2>
             <InspectSwitch view="context" onChange={onInspect} />
             <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
           </div>
           <div className="ctx-tabs">
-            {tabs.map((t) => (
+            {requests.map((r, i) => (
               <button
-                key={t.id}
-                className={`ctx-tab ${tab === t.id ? 'active' : ''}`}
-                onClick={() => setTab(t.id)}
+                key={r.role}
+                className={`ctx-tab ${r === current ? 'active' : ''}`}
+                onClick={() => setSelected(i)}
               >
-                {t.label}
+                {ROLE_LABELS[r.role]}
               </button>
             ))}
           </div>
         </div>
-        {tab === 'system' && (
+        {current && (
           <>
             <p className="hint">
-              The stable, cacheable prefix: system prompt, content stance, adventure
-              slots, and a short note on reading the narrator&apos;s notes. Changes
-              only when settings change. The narrator is offered no tools; sampling
-              temperature {sampling.temperature}. {sizeNote(system)}
+              {ROLE_NOTES[current.role]} Built by the code that sends it; the text in the input box
+              stands in for your next input.
             </p>
-            <MessageList items={system} />
-          </>
-        )}
-        {tab === 'chronicle' && (
-          <>
-            <p className="hint">
-              The chronicle: older turns compressed into the &quot;story so far&quot;
-              summary the model reads in place of their full text. Empty until the
-              first compaction. {sizeNote(chronicle)}
-            </p>
-            <MessageList items={chronicle} />
-          </>
-        )}
-        {tab === 'history' && (
-          <>
-            <p className="hint">
-              The recent live transcript: player inputs, each turn&apos;s story update
-              (recalled or changed memories, OOC changes) as a tool call, and DM
-              narration replayed verbatim, up to the compaction cutoff. The last input is a placeholder for the player&apos;s next one. {sizeNote(history)}
-            </p>
-            <MessageList items={history} />
-          </>
-        )}
-        {tab === 'notes' && (
-          <>
-            <p className="hint">
-              The per-turn tail, rebuilt fresh every turn: the narrator&apos;s notes for
-              the reply as one tool call (the scene and the steer, built from the
-              Plotter&apos;s briefing; this preview has no briefing yet), then the turn
-              reminder.{' '}
-              {sizeNote(notes)}
-            </p>
-            <MessageList items={notes} />
-          </>
-        )}
-        {tab === 'plotter' && plotter && (
-          <>
-            <p className="hint">
-              Sent first, when the player acts (model: {plotter.model}). It shares the
-              content stance, slots, chronicle, and history with the narrator&apos;s
-              request; shown here is what differs: its own system prompt, the full
-              rules for each record in place of the narrator&apos;s note, then its tail —
-              the records as check_* tool results and its instruction. The player&apos;s
-              next input is a placeholder here.{' '}
-              {sizeNote(plotterMessages)}
-            </p>
-            <MessageList items={plotterMessages} />
-            <p className="hint">
-              Tools offered to the Plotter — {plotter.tools.length} schema
-              {plotter.tools.length === 1 ? '' : 's'} · {toolsJson.length.toLocaleString()} chars.
-            </p>
-            <pre className="state-json ctx-section-json">{toolsJson}</pre>
-          </>
-        )}
-        {tab === 'reviser' && reviser && (
-          <>
-            {reviser.source === 'no-draft' ? (
-              <p className="hint">
-                No DM reply yet — the reviser preview uses a placeholder draft. Take one
-                turn and reopen this view to see the real reviser request.
-              </p>
+            <div className="wire-bar">
+              <code>POST {current.wire.url}</code>
+              <span className="wire-meta">{json.length.toLocaleString()} chars of JSON</span>
+              <span className="spacer" />
+              <button onClick={() => setRaw((r) => !r)}>{raw ? 'Readable' : 'Raw JSON'}</button>
+              <button onClick={copy}>{copied ? 'Copied' : 'Copy JSON'}</button>
+            </div>
+            {raw ? (
+              <pre className="state-json wire-raw">{json}</pre>
             ) : (
-              <p className="hint">
-                Built from the most recent narrator draft (model: {reviser.model}). The
-                reviser receives only what you see here — no chronicle, world state,
-                plot, memory, or prior turns. {reviser.note} {sizeNote(reviser.messages)}
-              </p>
+              <div className="wire-tree">
+                {Object.entries(current.wire.body as Record<string, JsonValue>).map(([key, value]) => (
+                  <JsonNode key={key} name={key} value={value} />
+                ))}
+              </div>
             )}
-            <MessageList items={reviser.messages} />
           </>
         )}
         <div className="modal-actions pinned">

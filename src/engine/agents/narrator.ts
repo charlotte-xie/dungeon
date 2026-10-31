@@ -46,9 +46,12 @@ import { completeModel } from '../model/client'
 import type {
   ApiProtocol,
   ModelCompletion,
+  ModelCompletionRequest,
+  ModelConnection,
   ModelMessage,
   ModelStreamEvent,
   ModelToolCall,
+  ModelToolDefinition,
   ReasoningEffort,
 } from '../model/types'
 import type {
@@ -200,6 +203,156 @@ function rejectsToolsWithoutSchemas(err: unknown): boolean {
   return /\bAPI (400|422):/.test(message) && /tool/i.test(message)
 }
 
+// --- The requests a turn sends ---
+// runNarrator and the Context view's preview of the next turn build their
+// requests with these, so the preview is what will be sent.
+
+// Each role sends to its own provider prefix cache.
+function roleConnections(ctx: NarratorContext): { plotter: ModelConnection; narrator: ModelConnection } {
+  const connection = { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol }
+  return {
+    plotter: { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'plotter') },
+    narrator: { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'narrator') },
+  }
+}
+
+// The story both roles' requests are built from. The turn being played gets
+// its story update once the Plotter is done.
+function storyOf(ctx: NarratorContext) {
+  const latest = ctx.history.length - 1
+  return {
+    systemPrompt: ctx.systemPrompt,
+    slots: ctx.slots,
+    chronicle: ctx.chronicle,
+    history: ctx.history.map((t, i) => (i === latest ? { ...t, storyUpdate: undefined } : t)),
+    data: ctx.initialData,
+    includePriorPlayerTurns: ctx.includePriorPlayerTurns,
+    flags: ctx.flags,
+    nsfw: ctx.nsfw,
+    reminderAsSystem: ctx.reminderAsSystem,
+  }
+}
+
+// The Plotter's first request of the turn; later ones append to it.
+function firstPlotterMessages(ctx: NarratorContext): ModelMessage[] {
+  return buildPlotterMessages({
+    ...storyOf(ctx),
+    pivot: buildPlotterInstruction(ctx.flags, ctx.initialData, ctx.stateCleanupThreshold, ctx.history.at(-1)?.kind),
+  })
+}
+
+function plotterRequest(
+  ctx: NarratorContext,
+  messages: ModelMessage[],
+  tools: ModelToolDefinition[],
+  options: { label: string; forceCall?: boolean; onStream?: (event: ModelStreamEvent) => void },
+): ModelCompletionRequest {
+  return {
+    model: ctx.plotterModel?.trim() || ctx.model,
+    reasoningEffort: ctx.plotterReasoning,
+    messages,
+    tools,
+    ...(options.forceCall ? { toolChoice: 'required' as const } : {}),
+    temperature: ctx.sampling.temperature,
+    label: options.label,
+    onStream: options.onStream,
+  }
+}
+
+// The narrator's request, from what the Plotter left: the data, its
+// briefing, and the turn's story update.
+function narratorMessagesFor(
+  ctx: NarratorContext,
+  data: StoryData,
+  briefing: BriefingCall[],
+  storyUpdate: StoryUpdate | undefined,
+): ModelMessage[] {
+  const story = storyOf(ctx)
+  const latest = ctx.history.length - 1
+  return buildNarratorMessages({
+    ...story,
+    history: story.history.map((t, i) => (i === latest ? { ...t, storyUpdate } : t)),
+    data,
+    briefing,
+  })
+}
+
+// A provider that won't take a replayed tool call without schemas gets the
+// schemas of the narrator's own calls, with calls forbidden.
+function ownCallsKey(ctx: NarratorContext): string {
+  return `${ctx.baseUrl}\u0000${ctx.model}`
+}
+
+function narratorSendsSchemas(ctx: NarratorContext, messages: ModelMessage[]): boolean {
+  return messages.some((m) => m.toolCalls?.length) && toolsRequiredForOwnCalls.has(ownCallsKey(ctx))
+}
+
+function narratorRequest(
+  ctx: NarratorContext,
+  messages: ModelMessage[],
+  options: { label: string; withSchemas: boolean; onStream?: (event: ModelStreamEvent) => void },
+): ModelCompletionRequest {
+  return {
+    model: ctx.model,
+    reasoningEffort: ctx.reasoningEffort,
+    messages,
+    ...(options.withSchemas
+      ? { tools: [RECALL_MEMORIES_TOOL, GET_OOC_INSTRUCTIONS_TOOL, GET_STEER_TOOL], toolChoice: 'none' as const }
+      : {}),
+    temperature: ctx.sampling.temperature,
+    label: options.label,
+    onStream: options.onStream,
+  }
+}
+
+export interface PreviewRequest {
+  role: 'plotter' | 'narrator'
+  request: ModelCompletionRequest
+  connection: ModelConnection
+}
+
+// The next turn's requests, as the turn will send them: the Plotter's first
+// request, and the narrator's as it stands before the Plotter runs, so with
+// no steer or recalled memories yet. `streams` says which roles the turn
+// listens to as they write, since a request that streams says so.
+export function nextTurnRequests(
+  ctx: NarratorContext,
+  streams: { plotter: boolean; narrator: boolean },
+): PreviewRequest[] {
+  const connections = roleConnections(ctx)
+  const listen = (on: boolean) => (on ? () => {} : undefined)
+  const tools = buildPlotterTools(ctx.flags)
+  const plotter: PreviewRequest[] = tools.length
+    ? [
+        {
+          role: 'plotter',
+          request: plotterRequest(ctx, firstPlotterMessages(ctx), tools, {
+            label: 'plotter:0',
+            onStream: listen(streams.plotter),
+          }),
+          connection: connections.plotter,
+        },
+      ]
+    : []
+  const latest = ctx.history.length - 1
+  const storyUpdate = tools.length
+    ? buildStoryUpdate(ctx.history.slice(0, latest), [], ctx.initialData, ctx.flags)
+    : undefined
+  const messages = narratorMessagesFor(ctx, ctx.initialData, [], storyUpdate)
+  return [
+    ...plotter,
+    {
+      role: 'narrator',
+      request: narratorRequest(ctx, messages, {
+        label: 'narrator:0',
+        withSchemas: narratorSendsSchemas(ctx, messages),
+        onStream: listen(streams.narrator),
+      }),
+      connection: connections.narrator,
+    },
+  ]
+}
+
 /**
  * Thrown when the model ends its turn (finish_reason=stop) with no narrative
  * prose, even after being nudged. Carries the trace so the UI can still
@@ -226,22 +379,8 @@ export async function runNarrator(
   hooks: NarratorHooks = {},
 ): Promise<NarratorResult> {
   let data = ctx.initialData
-  const connection = { baseUrl: ctx.baseUrl, apiKey: ctx.apiKey, protocol: ctx.protocol }
-  const plotterConnection = { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'plotter') }
-  const narratorConnection = { ...connection, cacheKey: roleCacheKey(ctx.cacheKey, 'narrator') }
-  // The turn being played gets its story update once the Plotter is done.
+  const { plotter: plotterConnection, narrator: narratorConnection } = roleConnections(ctx)
   const latest = ctx.history.length - 1
-  const story = {
-    systemPrompt: ctx.systemPrompt,
-    slots: ctx.slots,
-    chronicle: ctx.chronicle,
-    history: ctx.history.map((t, i) => (i === latest ? { ...t, storyUpdate: undefined } : t)),
-    data: ctx.initialData,
-    includePriorPlayerTurns: ctx.includePriorPlayerTurns,
-    flags: ctx.flags,
-    nsfw: ctx.nsfw,
-    reminderAsSystem: ctx.reminderAsSystem,
-  }
 
   const plotterTrace: TraceEvent[] = []
   const narratorTrace: TraceEvent[] = []
@@ -292,15 +431,7 @@ export async function runNarrator(
   let plotting: Plotting | undefined
   if (tools.length) {
     const enabledToolNames = new Set(tools.map((t) => t.name))
-    const messages = buildPlotterMessages({
-      ...story,
-      pivot: buildPlotterInstruction(
-        ctx.flags,
-        data,
-        ctx.stateCleanupThreshold,
-        ctx.history.at(-1)?.kind,
-      ),
-    })
+    const messages = firstPlotterMessages(ctx)
     const pushToolResult = (call: ModelToolCall, content: string) => {
       messages.push({ role: 'tool', toolCallId: call.id, content })
       trace.push({
@@ -384,16 +515,7 @@ export async function runNarrator(
         newRequest = true
         hooks.onPlotterStage?.('planning')
         const completion = await completeModel(
-          {
-            model: ctx.plotterModel?.trim() || ctx.model,
-            reasoningEffort: ctx.plotterReasoning,
-            messages,
-            tools,
-            ...(forceCall ? { toolChoice: 'required' as const } : {}),
-            temperature: ctx.sampling.temperature,
-            label,
-            onStream: streamPlotter,
-          },
+          plotterRequest(ctx, messages, tools, { label, forceCall, onStream: streamPlotter }),
           plotterConnection,
           signal,
         )
@@ -449,12 +571,7 @@ export async function runNarrator(
   trace = narratorTrace
   const plotterReasoningTokens = reasoningTokens
   const storyUpdate = plotting?.storyUpdate
-  const narratorMessages = buildNarratorMessages({
-    ...story,
-    history: story.history.map((t, i) => (i === latest ? { ...t, storyUpdate } : t)),
-    data,
-    briefing,
-  })
+  const narratorMessages = narratorMessagesFor(ctx, data, briefing, storyUpdate)
   // The story update and the notes show in the narrator's trace, which is
   // never replayed into either role's context.
   const oocBefore = oocInView(ctx.history.slice(0, latest))
@@ -463,9 +580,6 @@ export async function runNarrator(
   }
   const notes = buildReplyNotes(briefing, data, ctx.flags)
   if (notes) trace.push({ kind: 'call', name: GET_STEER_TOOL.name, arguments: '{}', result: notes })
-  // A provider that won't take a replayed tool call without schemas gets the
-  // schemas of the narrator's own calls, with calls forbidden.
-  const capabilityKey = `${ctx.baseUrl}\u0000${ctx.model}`
   // Live updates stream the reply. Each attempt streams afresh, so the reply
   // shown starts again with it.
   const streamNarration = (): ((event: ModelStreamEvent) => void) | undefined => {
@@ -482,27 +596,17 @@ export async function runNarrator(
   const narrate = async (label: string): Promise<ModelCompletion> => {
     const attempt = (withSchemas: boolean) =>
       completeModel(
-        {
-          model: ctx.model,
-          reasoningEffort: ctx.reasoningEffort,
-          messages: narratorMessages,
-          ...(withSchemas
-            ? { tools: [RECALL_MEMORIES_TOOL, GET_OOC_INSTRUCTIONS_TOOL, GET_STEER_TOOL], toolChoice: 'none' as const }
-            : {}),
-          temperature: ctx.sampling.temperature,
-          label,
-          onStream: streamNarration(),
-        },
+        narratorRequest(ctx, narratorMessages, { label, withSchemas, onStream: streamNarration() }),
         narratorConnection,
         signal,
       )
     const replaysCalls = narratorMessages.some((m) => m.toolCalls?.length)
-    const withSchemas = replaysCalls && toolsRequiredForOwnCalls.has(capabilityKey)
+    const withSchemas = narratorSendsSchemas(ctx, narratorMessages)
     try {
       return await attempt(withSchemas)
     } catch (err) {
       if (withSchemas || !replaysCalls || signal.aborted || !rejectsToolsWithoutSchemas(err)) throw err
-      toolsRequiredForOwnCalls.add(capabilityKey)
+      toolsRequiredForOwnCalls.add(ownCallsKey(ctx))
       trace.push({
         kind: 'thought',
         text: '(the provider rejected replayed tool calls without tools; resent with the narrator’s own tools offered and calls forbidden)',

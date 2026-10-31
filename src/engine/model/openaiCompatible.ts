@@ -16,6 +16,7 @@ import type {
   ModelMessage,
   ModelToolDefinition,
   ProtocolAnomaly,
+  WireRequest,
 } from './types'
 
 function trimTrailingSlashes(value: string): string {
@@ -237,18 +238,19 @@ export async function completeOpenAICompatibleChat(
   )
 }
 
-async function completeOpenAICompatibleChatWithinTimeout(
-  request: ModelCompletionRequest,
-  connection: ModelConnection,
-  signal: AbortSignal,
-): Promise<ModelCompletion> {
+function capabilityKeyFor(baseUrl: string, model: string): string {
+  return `${baseUrl}\u0000${model}`
+}
+
+function wantsReasoning(request: ModelCompletionRequest): boolean {
+  return !!request.reasoningEffort && request.reasoningEffort !== 'default'
+}
+
+// The Chat Completions request a completion posts, leaving out what this
+// endpoint and model were found to reject.
+export function chatCompletionsRequest(request: ModelCompletionRequest, connection: ModelConnection): WireRequest {
   const baseUrl = effectiveBaseUrl(connection.baseUrl)
-  if (!connection.apiKey && isXaiHost(baseUrl)) {
-    throw new Error(
-      'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
-    )
-  }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  const capabilityKey = capabilityKeyFor(baseUrl, request.model)
   const streams = !!request.onStream && !streamingUnsupported.has(capabilityKey)
   const body: Record<string, unknown> = {
     model: request.model,
@@ -262,8 +264,7 @@ async function completeOpenAICompatibleChatWithinTimeout(
     body.tools = request.tools.map(toWireTool)
     if (request.toolChoice && !toolChoiceUnsupported.has(capabilityKey)) body.tool_choice = request.toolChoice
   }
-  const wantsReasoning = !!request.reasoningEffort && request.reasoningEffort !== 'default'
-  if (wantsReasoning && !reasoningUnsupported.has(capabilityKey)) {
+  if (wantsReasoning(request) && !reasoningUnsupported.has(capabilityKey)) {
     body.reasoning_effort = request.reasoningEffort
   }
   if (request.temperature !== undefined && !temperatureUnsupported.has(capabilityKey)) {
@@ -272,10 +273,25 @@ async function completeOpenAICompatibleChatWithinTimeout(
   if (connection.cacheKey && !cacheKeyUnsupported.has(capabilityKey)) {
     body.prompt_cache_key = connection.cacheKey
   }
+  return { url: `${baseUrl}/chat/completions`, body }
+}
+
+async function completeOpenAICompatibleChatWithinTimeout(
+  request: ModelCompletionRequest,
+  connection: ModelConnection,
+  signal: AbortSignal,
+): Promise<ModelCompletion> {
+  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  if (!connection.apiKey && isXaiHost(baseUrl)) {
+    throw new Error(
+      'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
+    )
+  }
+  const capabilityKey = capabilityKeyFor(baseUrl, request.model)
+  const { url, body } = chatCompletionsRequest(request, connection)
   const headers = requestHeaders(connection, baseUrl)
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
-  const url = `${baseUrl}/chat/completions`
   const response = await postWithFallbacks(url, headers, body, signal, capabilityKey, label)
   // A provider that ignores the stream flag answers with a single JSON body.
   const raw = isEventStream(response)
@@ -286,7 +302,7 @@ async function completeOpenAICompatibleChatWithinTimeout(
     raw,
     new Set((request.tools ?? []).map((tool) => tool.name)),
   )
-  if (wantsReasoning && !Object.hasOwn(body, 'reasoning_effort')) completion.anomalies.push(REASONING_DROPPED)
+  if (wantsReasoning(request) && !Object.hasOwn(body, 'reasoning_effort')) completion.anomalies.push(REASONING_DROPPED)
   return completion
 }
 
@@ -352,18 +368,11 @@ export async function completeOpenAICompatibleResponses(
   )
 }
 
-async function completeResponsesWithinTimeout(
-  request: ModelCompletionRequest,
-  connection: ModelConnection,
-  signal: AbortSignal,
-): Promise<ModelCompletion> {
+// The Responses request a completion posts, leaving out what this endpoint
+// and model were found to reject.
+export function responsesApiRequest(request: ModelCompletionRequest, connection: ModelConnection): WireRequest {
   const baseUrl = effectiveBaseUrl(connection.baseUrl)
-  if (!connection.apiKey && isXaiHost(baseUrl)) {
-    throw new Error(
-      'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
-    )
-  }
-  const capabilityKey = `${baseUrl}\u0000${request.model}`
+  const capabilityKey = capabilityKeyFor(baseUrl, request.model)
   const body: Record<string, unknown> = {
     model: request.model,
     input: toResponsesInput(request.messages),
@@ -371,8 +380,7 @@ async function completeResponsesWithinTimeout(
     // Stateless by design: never rely on (or pay for) server-side storage.
     store: false,
   }
-  const wantsReasoning = !!request.reasoningEffort && request.reasoningEffort !== 'default'
-  if (wantsReasoning && !reasoningUnsupported.has(capabilityKey)) {
+  if (wantsReasoning(request) && !reasoningUnsupported.has(capabilityKey)) {
     body.reasoning = { effort: request.reasoningEffort }
   }
   if (request.tools?.length) {
@@ -385,9 +393,24 @@ async function completeResponsesWithinTimeout(
   if (connection.cacheKey && !cacheKeyUnsupported.has(capabilityKey)) {
     body.prompt_cache_key = connection.cacheKey
   }
+  return { url: `${baseUrl}/responses`, body }
+}
+
+async function completeResponsesWithinTimeout(
+  request: ModelCompletionRequest,
+  connection: ModelConnection,
+  signal: AbortSignal,
+): Promise<ModelCompletion> {
+  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  if (!connection.apiKey && isXaiHost(baseUrl)) {
+    throw new Error(
+      'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
+    )
+  }
+  const capabilityKey = capabilityKeyFor(baseUrl, request.model)
+  const { url, body } = responsesApiRequest(request, connection)
   const label = request.label ?? 'model'
   console.debug(`[model:${label}] request`, { baseUrl, body })
-  const url = `${baseUrl}/responses`
   const response = await postWithFallbacks(
     url,
     requestHeaders(connection, baseUrl),
@@ -404,7 +427,7 @@ async function completeResponsesWithinTimeout(
     raw,
     new Set((request.tools ?? []).map((tool) => tool.name)),
   )
-  if (wantsReasoning && !Object.hasOwn(body, 'reasoning')) completion.anomalies.push(REASONING_DROPPED)
+  if (wantsReasoning(request) && !Object.hasOwn(body, 'reasoning')) completion.anomalies.push(REASONING_DROPPED)
   return completion
 }
 

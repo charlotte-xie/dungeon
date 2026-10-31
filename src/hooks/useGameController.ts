@@ -2,12 +2,16 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
 import {
   EmptyNarrativeError,
+  nextTurnRequests,
   runNarrator,
+  type NarratorContext,
   type NarratorResult,
   type PlotterStage,
   type Plotting,
 } from '../engine/agents/narrator'
-import { runReviser } from '../engine/agents/reviser'
+import { reviserRequest, runReviser } from '../engine/agents/reviser'
+import { wireRequest } from '../engine/model/client'
+import type { WireRequest } from '../engine/model/types'
 import {
   chronicleNeedsCompaction,
   compactCascade,
@@ -311,6 +315,79 @@ export function useGameController(settings: GameSettings) {
     return { id: crypto.randomUUID(), kind, input: turnInput, reply }
   }
 
+  // The context a turn is played in, from the settings and the world it
+  // starts from. runTurn plays it, and nextRequests previews the next one.
+  function narratorContext(turn: {
+    cacheKey: string
+    slots: AdventureSlots
+    chronicle: Chronicle
+    history: Turn[]
+    data: StoryData
+  }): NarratorContext {
+    return {
+      systemPrompt,
+      model,
+      reasoningEffort: context.narratorReasoning,
+      plotterModel: context.plotterModel,
+      plotterReasoning: context.plotterReasoning,
+      apiKey,
+      baseUrl,
+      protocol: context.apiProtocol,
+      cacheKey: turn.cacheKey,
+      slots: turn.slots,
+      chronicle: turn.chronicle,
+      history: turn.history,
+      initialData: turn.data,
+      sampling,
+      stateCleanupThreshold: context.stateCleanupChars,
+      includePriorPlayerTurns: context.includePriorPlayerTurns,
+      reminderAsSystem: context.reminderAsSystem,
+      flags: {
+        includeWorldState: context.includeWorldState,
+        includePlotOutline: context.includePlotOutline,
+        includeMemory: context.includeMemory,
+        includeOoc: context.includeOoc,
+      },
+      nsfw: context.nsfw,
+    }
+  }
+  // The reviser replaces the draft, so a draft shown as it streams would
+  // change under the player at the end: with it on, the reply doesn't stream.
+  const narratorStreams = !context.useReviser
+
+  // The next turn's requests, exactly as they will be posted: the Plotter's
+  // first and the narrator's (before the Plotter's briefing), then the
+  // reviser's for the last reply's draft. The input box's text stands in for
+  // the player's input, or a placeholder while it's empty.
+  function nextRequests(): { role: 'plotter' | 'narrator' | 'reviser'; wire: WireRequest }[] {
+    const pendingTurn = makePendingTurn('player', input.trim() || '(the player’s next input)')
+    const cacheKey = turns[0]?.id ?? pendingTurn.id
+    const ctx = narratorContext({
+      cacheKey,
+      slots,
+      chronicle,
+      history: [...turns, pendingTurn].slice(compactCutoff),
+      data: { state, plot, memory, ooc },
+    })
+    // runTurn always listens to the Plotter's stage and thinking.
+    const turnRequests = nextTurnRequests(ctx, { plotter: true, narrator: narratorStreams }).map(
+      ({ role, request, connection }) => ({ role, wire: wireRequest(request, connection) }),
+    )
+    if (!context.useReviser) return turnRequests
+    const lastReply = [...turns].reverse().find((t) => t.reply.text || t.narrator?.text)
+    const reviser = reviserRequest({
+      model: context.reviserModel,
+      apiKey,
+      baseUrl,
+      protocol: context.apiProtocol,
+      cacheKey,
+      slots,
+      draft: lastReply?.narrator?.text ?? lastReply?.reply.text ?? '(the narrator’s next draft)',
+      sampling,
+    })
+    return [...turnRequests, { role: 'reviser', wire: wireRequest(reviser.request, reviser.connection) }]
+  }
+
   // Appends a turn to the log and runs it. Its starting world is kept for
   // Undo, Retry and Stop.
   async function runTurn(args: {
@@ -489,32 +566,13 @@ export function useGameController(settings: GameSettings) {
       }
 
       const result = await runNarrator(
-        {
-          systemPrompt,
-          model,
-          reasoningEffort: context.narratorReasoning,
-          plotterModel: context.plotterModel,
-          plotterReasoning: context.plotterReasoning,
-          apiKey,
-          baseUrl,
-          protocol: context.apiProtocol,
+        narratorContext({
           cacheKey,
           slots: turnSlots,
           chronicle: workingChronicle,
           history: allTurns.slice(workingCutoff),
-          initialData: baseData,
-          sampling,
-          stateCleanupThreshold: context.stateCleanupChars,
-          includePriorPlayerTurns: context.includePriorPlayerTurns,
-          reminderAsSystem: context.reminderAsSystem,
-          flags: {
-            includeWorldState: context.includeWorldState,
-            includePlotOutline: context.includePlotOutline,
-            includeMemory: context.includeMemory,
-            includeOoc: context.includeOoc,
-          },
-          nsfw: context.nsfw,
-        },
+          data: baseData,
+        }),
         controller.signal,
         {
           onPlotted: (p) => {
@@ -529,15 +587,13 @@ export function useGameController(settings: GameSettings) {
           onPlotterThinking: (text) => {
             if (operationCanCommit(operation)) showStreamed({ plotterThinking: text })
           },
-          // The reviser replaces the draft, so a draft shown as it streams
-          // would change under the player at the end.
-          ...(context.useReviser
-            ? {}
-            : {
+          ...(narratorStreams
+            ? {
                 onNarration: (text: string) => {
                   if (operationCanCommit(operation)) showStreamed({ narration: text })
                 },
-              }),
+              }
+            : {}),
         },
       )
       if (!operationCanCommit(operation)) return stopIfCancelled()
@@ -817,6 +873,8 @@ export function useGameController(settings: GameSettings) {
     // saves
     captureGame,
     restoreGame,
+    // the Context view
+    nextRequests,
   }
 }
 

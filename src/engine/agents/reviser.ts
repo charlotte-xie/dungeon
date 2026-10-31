@@ -9,7 +9,7 @@
 import { REVISER_SYSTEM_PROMPT } from '../../prompts'
 import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
-import type { ApiProtocol, ModelMessage } from '../model/types'
+import type { ApiProtocol, ModelCompletionRequest, ModelConnection, ModelMessage } from '../model/types'
 import type {
   AdventureSlots,
   ModelCall,
@@ -30,9 +30,7 @@ export interface ReviserContext {
   sampling: SamplingParams
 }
 
-// Pure message-builder. Exposed so the Context viewer can preview exactly
-// what the reviser will receive without executing the call.
-export function buildReviserMessages(
+function buildReviserMessages(
   slots: AdventureSlots,
   draft: string,
 ): ModelMessage[] {
@@ -59,6 +57,25 @@ export function buildReviserMessages(
   return messages
 }
 
+// The reviser's request and where it goes, as runReviser sends it; the
+// Context view previews it through this too.
+export function reviserRequest(ctx: ReviserContext): { request: ModelCompletionRequest; connection: ModelConnection } {
+  return {
+    request: {
+      model: ctx.model,
+      messages: buildReviserMessages(ctx.slots, ctx.draft),
+      temperature: ctx.sampling.temperature,
+      label: 'reviser',
+    },
+    connection: {
+      baseUrl: ctx.baseUrl,
+      apiKey: ctx.apiKey,
+      protocol: ctx.protocol,
+      cacheKey: roleCacheKey(ctx.cacheKey, 'reviser'),
+    },
+  }
+}
+
 export async function runReviser(
   ctx: ReviserContext,
   signal: AbortSignal,
@@ -67,23 +84,8 @@ export async function runReviser(
   const startedAt = Date.now()
   const trace: TraceEvent[] = []
 
-  const messages = buildReviserMessages(ctx.slots, ctx.draft)
-
-  const completion = await completeModel(
-    {
-      model: ctx.model,
-      messages,
-      temperature: ctx.sampling.temperature,
-      label: 'reviser',
-    },
-    {
-      baseUrl: ctx.baseUrl,
-      apiKey: ctx.apiKey,
-      protocol: ctx.protocol,
-      cacheKey: roleCacheKey(ctx.cacheKey, 'reviser'),
-    },
-    signal,
-  )
+  const { request, connection } = reviserRequest(ctx)
+  const completion = await completeModel(request, connection, signal)
   if (completion.promptTokens !== undefined || completion.cachedTokens !== undefined) {
     trace.push({
       kind: 'usage',

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  chatCompletionsRequest,
   completeOpenAICompatibleChat,
   completeOpenAICompatibleResponses,
+  responsesApiRequest,
   rejectsCacheKey,
   rejectsReasoning,
   rejectsStreamOptions,
@@ -321,6 +323,29 @@ describe('prompt-cache key', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('prompt_cache_key')
     expect(JSON.parse(fetchMock.mock.calls[2][1].body)).not.toHaveProperty('prompt_cache_key')
+  })
+})
+
+describe('the request a preview shows', () => {
+  it('is the body each protocol posts, built by the same code', async () => {
+    const reply = { status: 'completed', output: [], choices: [{ message: { content: 'Hi.' } }] }
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(reply), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const request = {
+      model: 'm',
+      messages: [{ role: 'user' as const, content: 'I knock.' }],
+      tools: [{ name: 'steer', description: 'Steer.', parameters: { type: 'object' } }],
+      temperature: 0.5,
+      reasoningEffort: 'low' as const,
+    }
+    const connection = { baseUrl: 'http://local/v1/', apiKey: 'k', cacheKey: 'adventure' }
+    await completeOpenAICompatibleChat(request, connection, new AbortController().signal)
+    await completeOpenAICompatibleResponses(request, { ...connection, protocol: 'responses' }, new AbortController().signal)
+    const posted = fetchMock.mock.calls.map(([url, init]) => ({ url, body: JSON.parse(init.body) }))
+    expect(posted).toEqual([
+      chatCompletionsRequest(request, connection),
+      responsesApiRequest(request, { ...connection, protocol: 'responses' }),
+    ])
   })
 })
 

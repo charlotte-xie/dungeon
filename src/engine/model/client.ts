@@ -3,15 +3,26 @@
 // game-state code.
 
 import {
+  chatCompletionsRequest,
   completeOpenAICompatibleChat,
   completeOpenAICompatibleResponses,
   listOpenAICompatibleModels,
+  responsesApiRequest,
 } from './openaiCompatible'
 import type {
   ModelCompletion,
   ModelCompletionRequest,
   ModelConnection,
+  WireRequest,
 } from './types'
+
+// The request completeModel would post for this completion, built by the
+// same code, so a preview shows exactly what the model will be sent.
+export function wireRequest(request: ModelCompletionRequest, connection: ModelConnection): WireRequest {
+  return connection.protocol === 'responses'
+    ? responsesApiRequest(request, connection)
+    : chatCompletionsRequest(request, connection)
+}
 
 export async function completeModel(
   request: ModelCompletionRequest,

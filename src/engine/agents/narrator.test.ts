@@ -3,6 +3,7 @@ import {
   EmptyNarrativeError,
   MAX_PLOTTER_ITERATIONS,
   buildPlotterInstruction,
+  nextTurnRequests,
   runNarrator,
   type NarratorContext,
   type Plotting,
@@ -542,6 +543,30 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.text).toBe('Prose.')
     expect(result.plotting).toBeUndefined()
     expect(mockedModel).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('nextTurnRequests', () => {
+  beforeEach(() => {
+    mockedModel.mockReset()
+  })
+
+  it('previews the requests exactly as the turn sends them', async () => {
+    // A Plotter that records nothing leaves the narrator's request as it
+    // stood before the Plotter ran, which is what the preview shows.
+    const ctx = { ...CTX, flags: { ...CTX.flags, includePlotOutline: false } }
+    const sent: ModelCompletionRequest[] = []
+    mockedModel.mockImplementation(async (req) => {
+      sent.push({ ...req, messages: req.messages.map((m) => ({ ...m })) })
+      return isPlotter(req) ? completion({}) : completion({ text: 'The door opens.' })
+    })
+    await runNarrator(ctx, new AbortController().signal, { onPlotterStage: () => {}, onNarration: () => {} })
+
+    const preview = nextTurnRequests(ctx, { plotter: true, narrator: true })
+    const asSent = ({ onStream, ...request }: ModelCompletionRequest) => ({ ...request, streams: !!onStream })
+    expect(preview.map((p) => p.role)).toEqual(['plotter', 'narrator'])
+    expect(preview.map((p) => asSent(p.request))).toEqual(sent.map(asSent))
+    expect(preview.map((p) => p.connection)).toEqual(mockedModel.mock.calls.map(([, connection]) => connection))
   })
 })
 
