@@ -214,7 +214,7 @@ export const BRIEFING_TOOLS: ReadonlySet<string> = new Set([RECALL_MEMORY_TOOL.n
 export const RECALL_MEMORIES_TOOL: ModelToolDefinition = {
     name: 'recall_memories',
     description:
-      'What you remember about the people, places and things in play: in full when first recalled, then only what has changed, with null for what no longer holds.',
+      'What you remember about the people, places, things and threads in play: in full when first recalled, then only what has changed, with null for what no longer holds.',
     parameters: { type: 'object', properties: {} },
 }
 

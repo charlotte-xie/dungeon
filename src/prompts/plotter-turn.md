@@ -2,13 +2,13 @@
 As the Plotter, before the narrator writes {{reply}}:
 
 ## opening-setup
-Set up the records from the scenario: the people, places and things the story starts with, what each person wants and keeps hidden, with the truth behind each mystery settled, and the player's character under `player`.
+Set up the records from the scenario: the player's character under `player`, as the scenario gives them; then the people, places, things and threads the story starts with, what each person wants and keeps hidden, with the truth behind each mystery settled.
 
 ## opening-plan
 Set up the plan: the threads the story will follow.
 
 ## opening-recall
-Recall with `{{recall}}` the people, places and things the opening involves.
+Recall with `{{recall}}` the people, places, things and threads the opening involves.
 
 ## opening-steer
 Steer the opening with `{{steer}}`: how the story begins.
@@ -23,7 +23,7 @@ Work out what happens next: the development that does most for the story now, mo
 The player pressed Continue: carry the story on from where the last reply ended to its next development. Their character carries on as before.
 
 ## recall
-Recall with `{{recall}}` the people, places and things the reply involves.
+Recall with `{{recall}}` the people, places, things and threads the reply involves.
 
 ## steer
 Steer the reply with `{{steer}}`: what the world and its people do next, something the story hasn't had yet.
