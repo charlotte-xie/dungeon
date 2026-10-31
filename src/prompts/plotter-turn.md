@@ -2,7 +2,7 @@
 As the Plotter, before the narrator writes {{reply}}:
 
 ## opening-setup
-Set up the records from the scenario: the player's character under `player`, as the scenario gives them; then the people, places, things and threads the story starts with, what each person wants and keeps hidden, with the truth behind each mystery settled.
+Set up the records from the scenario: the player's character under `player`, as the scenario gives them; then the people, places, things and threads the story starts with, and what each person wants and keeps hidden.
 
 ## opening-plan
 Set up the plan: the threads the story will follow.

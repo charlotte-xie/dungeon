@@ -75,14 +75,14 @@ export const PLOT_PLAN_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Periods separate path parts, so entry names have none.`,
+      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Entry keys are slugs, and periods separate path parts.`,
     parameters: {
       type: 'object',
       properties: {
         move: {
           type: 'object',
           description:
-            'Map of fromPath → toPath: renames an entry (e.g. {"dark_haired_boy": "Dan"}) or relocates a value. Moving onto an existing object merges the two, the moved keys winning; use it to fold a duplicate into the main entry.',
+            'Map of fromPath → toPath: renames an entry (e.g. {"dark_haired_boy": "dan"}) or relocates a value. Moving onto an existing object merges the two, the moved keys winning; use it to fold a duplicate into the main entry.',
           additionalProperties: { type: 'string' },
         },
         delete: {
@@ -93,13 +93,13 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         set: {
           type: 'object',
           description:
-            'Map of dotted path → value that replaces the entire value at the path (`name.facet`, `name.facet.item`, or a whole entry); null deletes the path.',
+            'Map of dotted path → value that replaces the entire value at the path: {"pawnshop_robbery.status": "…"} for one facet, `hesta.wants.shop` for one item, `hesta` for a whole entry. null deletes the path.',
           additionalProperties: true,
         },
         merge: {
           type: 'object',
           description:
-            'Map of dotted path → object whose keys are added to the object at the path, at any depth, keeping everything it doesn’t name: {"The pawnshop robbery": {"status": "…"}} changes the status alone. null removes a key.',
+            'Map of dotted path → object whose keys are added to the object at the path, at any depth, keeping everything it doesn’t name: {"hesta.wants": {"lodger": "…"}} adds one want and keeps the rest. null removes a key.',
           additionalProperties: { type: 'object' },
         },
       },

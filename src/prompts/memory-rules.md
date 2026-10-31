@@ -2,8 +2,9 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
 
 ```json5
 {
-  // One entry for each person, place, thing or thread, keyed by name.
-  "Hesta": {
+  // One entry for each person, place, thing or thread, keyed by a slug, so a path such as mill_lane.layout.bakery reaches any value.
+  "hesta": {
+    "name": "Hesta",
     "is": "the town baker, owner of the bakery on Mill Lane", // who or what they are, in a phrase
     "appearance": { "build": "stout", "hair": "grey, tied back" },
     "wearing": { "apron": "flour-dusted apron", "dress": "grey wool dress" }, // what they usually wear
@@ -16,14 +17,15 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
       "tam": "Hesta is hiding her son Tam upstairs after the robbery went wrong; only she and Tam know."
     }
   },
-  "Mill Lane": {
+  "mill_lane": {
+    "name": "Mill Lane",
     "is": "a crooked street of shops above the river",
     "layout": { // the places within a place
       "bakery": "Hesta's bakery, with rooms above",
       "lockup": "the constabulary lockup at the river end"
     }
   },
-  "The pawnshop robbery": { // a thread that runs on through the story
+  "pawnshop_robbery": { // a thread that runs on through the story
     "is": "last week's botched robbery of the Mill Lane pawnshop",
     "status": "The constable is searching the street, and the pawnbroker has posted a reward.", // how it stands now
     "truth": "The pawnbroker staged it for the insurance; Tam was his hired lookout." // settled now, kept until the story reveals it
