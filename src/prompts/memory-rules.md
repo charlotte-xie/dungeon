@@ -1,5 +1,3 @@
-# Long-Term Memory
-
 Memory is the story's notebook: the people, places and things that keep coming back, and what is true about them. Keep it like good notes: short descriptions, full sentences for facts, and a map wherever there is more than one of something. It records established facts; the story itself keeps what happened, and the scene of the moment.
 
 ```json5

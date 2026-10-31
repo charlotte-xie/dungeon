@@ -62,7 +62,7 @@ window.__report = (list) => list.map((e) => {
     role: 'plotter', ms: e.ms, cache,
     calls: calls.map((c) => c.name).join(','),
     proseInstead: !calls.length && text ? text.slice(0, 120) : undefined,
-    plan: calls.filter((c) => c.name === 'future_plot_plan').map((c) => { const a = args(c); return `${a.op}${a.position ? ' ' + a.position : ''}${a.text ? ': ' + a.text : ''}` }),
+    plan: calls.filter((c) => c.name === 'plot_plan').map((c) => { const a = args(c); return `${a.op}${a.position ? ' ' + a.position : ''}${a.text ? ': ' + a.text : ''}` }),
     steer: calls.filter((c) => c.name === 'steer').map((c) => args(c).text).join(' | '),
   }
   const ending = (text.match(/[^.!?…]+[.!?…]+["”’]?/g) || [text]).slice(-2).join(' ').trim()

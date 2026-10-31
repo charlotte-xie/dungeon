@@ -9,6 +9,7 @@ import {
 } from './narrator'
 import { completeModel } from '../model/client'
 import type { ModelCompletion, ModelCompletionRequest, ModelMessage } from '../model/types'
+import { STATE_RULES } from '../state'
 import type { Turn } from '../types'
 
 vi.mock('../model/client', () => ({ completeModel: vi.fn() }))
@@ -106,7 +107,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(plotterReq.tools?.map((t) => t.name)).toEqual(
       expect.arrayContaining(['update_state', 'update_memory', 'recall_memory', 'steer']),
     )
-    expect(plotterReq.messages.some((m) => m.content.includes('# Live State'))).toBe(true)
+    expect(plotterReq.tools?.find((t) => t.name === 'update_state')?.description).toBe(STATE_RULES)
     expect(plotterReq.messages.some((m) => m.toolCalls?.some((c) => c.id === 'ctx-check-state'))).toBe(
       true,
     )
@@ -115,7 +116,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     // notes for the reply, as one call of its own after the player's input.
     expect(narratorReq.label).toBe('narrator:0')
     expect(narratorReq.tools ?? []).toEqual([])
-    expect(narratorReq.messages.some((m) => m.content.includes('# Live State'))).toBe(false)
+    expect(narratorReq.messages.some((m) => m.content.includes(STATE_RULES))).toBe(false)
     const inputIdx = narratorReq.messages.findIndex((m) => m.role === 'user' && m.content === 'I knock.')
     const call = narratorReq.messages[inputIdx + 1]
     expect(call.toolCalls?.map((c) => c.name)).toEqual(['get_steer'])
@@ -139,7 +140,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     mockedModel.mockResolvedValueOnce(
       completion({
         toolCalls: [
-          { id: 'p1', name: 'future_plot_plan', arguments: '{"op":"insert","text":"The miller returns."}' },
+          { id: 'p1', name: 'plot_plan', arguments: '{"op":"insert","text":"The miller returns."}' },
           { id: 'o1', name: 'update_ooc', arguments: '{"op":"append","text":"Keep replies short."}' },
           { id: 'r1', name: 'check_state', arguments: '{}' },
           { id: 'bad', name: 'update_memory', arguments: '{"set":{}}' },
@@ -561,12 +562,12 @@ describe('buildPlotterInstruction', () => {
     expect(memoryOnly).toContain('check_memory')
     expect(memoryOnly).toContain('`update_memory`')
     expect(memoryOnly).toContain('`recall_memory`')
-    for (const name of ['`steer`', 'check_state', 'future_plot_plan', 'update_ooc']) {
+    for (const name of ['`steer`', 'check_state', 'plot_plan', 'update_ooc']) {
       expect(memoryOnly).not.toContain(name)
     }
 
     const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
-    for (const name of ['`update_memory`', '`future_plot_plan`', '`update_state`', '`update_ooc`', '`recall_memory`', '`steer`']) {
+    for (const name of ['`update_memory`', '`plot_plan`', '`update_state`', '`update_ooc`', '`recall_memory`', '`steer`']) {
       expect(all).toContain(name)
     }
     expect(all).toContain('then `recall_memory`, then `steer`')

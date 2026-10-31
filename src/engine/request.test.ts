@@ -9,6 +9,7 @@ import {
   buildPlotterGuidance,
   buildPlotterMessages,
   buildPlotterSections,
+  buildPlotterTools,
   buildReplyNotes,
   buildStateGuidance,
   buildStoryUpdate,
@@ -19,6 +20,8 @@ import {
 } from './request'
 import type { ModelMessage } from './model/types'
 import { PLOTTER_SYSTEM_PROMPT, buildTurnReminder } from '../prompts'
+import { STATE_RULES } from './state'
+import { MEMORY_RULES, OOC_RULES, PLOT_RULES } from './tools'
 import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
 const SLOTS: AdventureSlots = { scenario: 'A haunted mill.', styleGuide: '' }
@@ -30,7 +33,8 @@ const ALL_FLAGS: ContextFlags = {
   includeOoc: true,
 }
 
-const RULE_HEADINGS = ['# Long-Term Memory', '# Story Direction', '# Live State', '# OOC Instructions']
+// Each record's rules, which travel in the description of the tool that keeps it.
+const RULES = [MEMORY_RULES, PLOT_RULES, STATE_RULES, OOC_RULES]
 
 // Records only the Plotter reads in full: the narrator gets the scene in its
 // notes, and the OOC list and recalled memories only through story updates.
@@ -109,8 +113,8 @@ function storyRoles(messages: ModelMessage[]): string[] {
 describe('buildNarratorMessages layout', () => {
   it('gives the narrator a line on its notes per record, not the rules for keeping them', () => {
     const messages = narrator([playerTurn('t1', 'I enter the mill.')])
-    for (const heading of RULE_HEADINGS) {
-      expect(messages.some((m) => m.content.includes(heading))).toBe(false)
+    for (const rules of RULES) {
+      expect(messages.some((m) => m.content.includes(rules))).toBe(false)
     }
     const firstUser = messages.findIndex((m) => m.role === 'user')
     const note = buildNarratorNotesMessage(ALL_FLAGS)
@@ -317,14 +321,16 @@ describe('buildNarratorMessages layout', () => {
 })
 
 describe('buildPlotterMessages layout', () => {
-  it('puts the full rules in the stable prefix, before any history', () => {
+  it('carries each record’s rules in the tool that keeps it, not in a message', () => {
     const messages = plotter([playerTurn('t1', 'I enter the mill.')])
-    const firstUser = messages.findIndex((m) => m.role === 'user')
-    for (const heading of RULE_HEADINGS) {
-      const idx = messages.findIndex((m) => m.role === 'system' && m.content.includes(heading))
-      expect(idx).toBeGreaterThanOrEqual(0)
-      expect(idx).toBeLessThan(firstUser)
+    const tools = buildPlotterTools(ALL_FLAGS)
+    for (const rules of RULES) {
+      expect(messages.some((m) => m.content.includes(rules))).toBe(false)
+      expect(tools.some((t) => t.description.includes(rules))).toBe(true)
     }
+    // A record switched off takes its rules with its tools.
+    const withoutPlan = buildPlotterTools({ ...ALL_FLAGS, includePlotOutline: false })
+    expect(withoutPlan.some((t) => t.description.includes(PLOT_RULES))).toBe(false)
   })
 
   it('gets the scenario but leaves the style guide to the narrator', () => {
@@ -359,15 +365,10 @@ describe('buildPlotterMessages layout', () => {
     expect(pivot).toEqual({ role: 'system', content: PIVOT })
   })
 
-  it('omits disabled records from both rules and injection', () => {
-    const messages = plotter([playerTurn('t1', 'Hello?')], {
-      includeMemory: false,
-      includePlotOutline: false,
-      includeOoc: false,
-    })
-    expect(
-      messages.some((m) => m.role === 'system' && m.content.includes('# Long-Term Memory')),
-    ).toBe(false)
+  it('omits disabled records from the tools and the injection', () => {
+    const off = { includeMemory: false, includePlotOutline: false, includeOoc: false }
+    const messages = plotter([playerTurn('t1', 'Hello?')], off)
+    expect(buildPlotterTools({ ...ALL_FLAGS, ...off }).map((t) => t.name)).toEqual(['update_state', 'check_state'])
     const call = messages[messages.length - 3]
     expect(call.role).toBe('assistant')
     expect(call.toolCalls?.map((c) => c.name)).toEqual(['check_state'])

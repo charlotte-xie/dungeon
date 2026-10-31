@@ -1,7 +1,5 @@
-# OOC Instructions
-
-The player's standing out-of-character instructions: direction given in (parentheses) or [brackets] that keeps applying after the message that carried it. Typical entries cover style and pacing, content boundaries, standing direction for the world or its people, and how the player's character is portrayed.
+Edit the player's standing out-of-character instructions, one operation per call: `append` or `insert` an entry, `update` one, or `delete` one. They are direction given in (parentheses) or [brackets] that keeps applying after the message that carried it, each written as a standing preference, such as "Don't have NPCs ask repetitive questions". Typical entries cover style and pacing, content boundaries, standing direction for the world or its people, and how the player's character is portrayed.
 
 Record only direction the player has given that is meant to keep applying. Update an entry the player supersedes, and delete one they withdraw or that is done. One-shot requests are carried out rather than recorded, and a rewrite request applies to its reply alone. What the player says in character is story.
 
-The current list is authoritative, and the player may edit it directly; it supersedes older OOC direction in the history. It holds at most {{maxOocItems}} entries of {{maxOocItemChars}} characters each.
+The current list is authoritative, and the player may edit it directly; it supersedes older OOC direction in the history. Positions are 1-indexed. It holds at most {{maxOocItems}} entries of {{maxOocItemChars}} characters each.

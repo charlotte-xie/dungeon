@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeOpenAIChatCompletion, normalizeResponsesApiResponse } from './normalize'
 
-const allowed = new Set(['future_plot_plan', 'update_memory'])
+const allowed = new Set(['plot_plan', 'update_memory'])
 
 function response(message: Record<string, unknown>) {
   return {
@@ -20,7 +20,7 @@ describe('OpenAI-compatible response normalisation', () => {
             id: 'call-1',
             type: 'function',
             function: {
-              name: 'future_plot_plan',
+              name: 'plot_plan',
               arguments: '{"op":"append","text":"A bell will ring."}',
             },
           },
@@ -32,7 +32,7 @@ describe('OpenAI-compatible response normalisation', () => {
     expect(result.toolCalls).toEqual([
       {
         id: 'call-1',
-        name: 'future_plot_plan',
+        name: 'plot_plan',
         arguments: '{"op":"append","text":"A bell will ring."}',
       },
     ])
@@ -45,7 +45,7 @@ describe('OpenAI-compatible response normalisation', () => {
         content:
           '```html\n<!--thinking-->\n```\n' +
           '```json\n' +
-          '{"name":"future_plot_plan","parameters":{"op":"append","text":"The watch closes in."}}\n' +
+          '{"name":"plot_plan","parameters":{"op":"append","text":"The watch closes in."}}\n' +
           '```',
       }),
       allowed,
@@ -53,7 +53,7 @@ describe('OpenAI-compatible response normalisation', () => {
 
     expect(result.text).toBe('')
     expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0].name).toBe('future_plot_plan')
+    expect(result.toolCalls[0].name).toBe('plot_plan')
     expect(JSON.parse(result.toolCalls[0].arguments)).toEqual({
       op: 'append',
       text: 'The watch closes in.',
@@ -100,11 +100,11 @@ describe('OpenAI-compatible response normalisation', () => {
     const args = '{"op":"delete","position":1}'
     const result = normalizeOpenAIChatCompletion(
       response({
-        content: `\`\`\`json\n{"name":"future_plot_plan","parameters":${args}}\n\`\`\``,
+        content: `\`\`\`json\n{"name":"plot_plan","parameters":${args}}\n\`\`\``,
         tool_calls: [
           {
             id: 'call-1',
-            function: { name: 'future_plot_plan', arguments: args },
+            function: { name: 'plot_plan', arguments: args },
           },
         ],
       }),
@@ -267,7 +267,7 @@ describe('arguments written as JSON5', () => {
         status: 'completed',
         output: [
           { type: 'function_call', call_id: 'call-1', name: 'update_memory', arguments: json5 },
-          { type: 'function_call', call_id: 'call-2', name: 'future_plot_plan', arguments: '{"op": "remove", "position": 1}' },
+          { type: 'function_call', call_id: 'call-2', name: 'plot_plan', arguments: '{"op": "remove", "position": 1}' },
         ],
       },
       allowed,
@@ -283,14 +283,14 @@ describe('arguments written as JSON5', () => {
   it('recovers a call typed as JSON5 in a json5 fence', () => {
     const result = normalizeOpenAIChatCompletion(
       response({
-        content: "```json5\n{name: 'future_plot_plan', parameters: {op: 'remove', position: 2,},}\n```",
+        content: "```json5\n{name: 'plot_plan', parameters: {op: 'remove', position: 2,},}\n```",
       }),
       allowed,
     )
 
     expect(result.text).toBe('')
     expect(result.toolCalls.map((call) => [call.name, call.arguments])).toEqual([
-      ['future_plot_plan', '{"op":"remove","position":2}'],
+      ['plot_plan', '{"op":"remove","position":2}'],
     ])
   })
 

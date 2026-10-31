@@ -213,26 +213,26 @@ describe('tool execution boundaries', () => {
     const data = { state: {}, plot: ['The flood rises.'], memory: {}, ooc: [] }
     // Without a position, the entry goes at the end.
     const added = executeTool(
-      'future_plot_plan',
+      'plot_plan',
       JSON.stringify({ op: 'insert', text: 'The order returns.' }),
       data,
     )
     expect(added.data.plot).toEqual(['The flood rises.', 'The order returns.'])
     expect(added.result).toBe('ok — inserted at position 2. Plan now has 2 entries.')
     const first = executeTool(
-      'future_plot_plan',
+      'plot_plan',
       JSON.stringify({ op: 'insert', position: 1, text: 'A rival arrives.' }),
       added.data,
     )
     expect(first.data.plot[0]).toBe('A rival arrives.')
-    const removed = executeTool('future_plot_plan', JSON.stringify({ op: 'remove', position: 2 }), first.data)
+    const removed = executeTool('plot_plan', JSON.stringify({ op: 'remove', position: 2 }), first.data)
     expect(removed.data.plot).toEqual(['A rival arrives.', 'The order returns.'])
     expect(removed.result).toContain('removed entry 2')
     // The tool says when: a good idea in, a completed or abandoned entry out.
     // Rewriting in place turned directions into notes on the current scene.
     for (const op of ['update', 'append', 'delete']) {
       const refused = executeTool(
-        'future_plot_plan',
+        'plot_plan',
         JSON.stringify({ op, position: 1, text: 'The knight attacks.' }),
         data,
       )

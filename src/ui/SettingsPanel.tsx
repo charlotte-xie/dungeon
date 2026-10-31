@@ -522,7 +522,7 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When off, the long-term-memory system message is dropped AND the update_memory tool is not advertised — the model has no persistent record of NPCs, locations, plot themes, or key past events. Default ${DEFAULT_CONTEXT.includeMemory ? 'on' : 'off'}.`}
+            title={`When off, the memory tools are not offered — the model has no persistent record of NPCs, locations, plot themes, or key past events. Default ${DEFAULT_CONTEXT.includeMemory ? 'on' : 'off'}.`}
           >
             <input
               type="checkbox"
@@ -533,7 +533,7 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When off, the live-state system message is dropped AND the update_state tool is not advertised — the model has no record of the current scene. Useful for comparing prose quality with/without structured grounding. Default ${DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.`}
+            title={`When off, the live-state tools are not offered — the model has no record of the current scene. Useful for comparing prose quality with/without structured grounding. Default ${DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.`}
           >
             <input
               type="checkbox"
@@ -544,7 +544,7 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When off, the future-plot-plan system message is dropped AND the future_plot_plan tool is not advertised — the model steers without a running plan. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
+            title={`When off, the plot_plan and steer tools are not offered — the narrator writes without a plan or a steer. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
           >
             <input
               type="checkbox"
@@ -555,7 +555,7 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When off, the OOC-instructions rules are dropped AND the update_ooc tool is not advertised — standing player directives only apply while their message remains in the live transcript. Default ${DEFAULT_CONTEXT.includeOoc ? 'on' : 'off'}.`}
+            title={`When off, the OOC-instruction tools are not offered — standing player directives only apply while their message remains in the live transcript. Default ${DEFAULT_CONTEXT.includeOoc ? 'on' : 'off'}.`}
           >
             <input
               type="checkbox"

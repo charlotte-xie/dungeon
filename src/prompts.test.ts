@@ -83,8 +83,10 @@ describe('prompts', () => {
     expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/respond to|up to them/i)
     // Scripting the last line turned a fight into attack after attack.
     expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/closes? on|camera|last line/i)
-    // Labelled plan entries and a worked example came back as ultimatums.
-    expect(buildPlotRules(10, 500)).not.toMatch(/example|question|promise|stakes|payoff/i)
+    // Labelled plan entries came back as ultimatums, and so did a sample
+    // entry that was a bargain; the sample now is something the world does,
+    // and the choice wording above stays out.
+    expect(buildPlotRules(10, 500)).not.toMatch(/question|promise|stakes|payoff/i)
     // "The player" in the records leaked into dialogue.
     expect(buildMemoryRules()).not.toMatch(/saw the player|wary of the player|The player is lean/)
   })
