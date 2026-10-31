@@ -559,7 +559,6 @@ describe('buildPlotterInstruction', () => {
       CTX.initialData,
       4000,
     )
-    expect(memoryOnly).toContain('check_memory')
     expect(memoryOnly).toContain('`update_memory`')
     expect(memoryOnly).toContain('`recall_memory`')
     for (const name of ['`steer`', 'check_state', 'plot_plan', 'update_ooc']) {

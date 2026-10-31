@@ -158,7 +158,6 @@ export function buildPlotterInstruction(
   const recalls = flags.includeMemory
   const vars = {
     reply: opening ? 'the opening' : 'the next reply',
-    reads: enabled.map((s) => s.checkTool.name).join(' / '),
     recall: RECALL_MEMORY_TOOL.name,
     steer: STEER_TOOL.name,
     order: [

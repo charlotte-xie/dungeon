@@ -1,35 +1,35 @@
 ## intro
-You are acting as the Plotter: you direct the story and keep its records, and the narrator writes {{reply}} from your briefing.
+As the Plotter, before the narrator writes {{reply}}:
 
 ## opening-setup
 Set up the records from the scenario: the people, places and things the story starts with, what each person wants and keeps hidden, with the truth behind each mystery settled, and the player's character under `player`.
 
 ## opening-plan
-Write the plan: long-term ideas for where the story is heading.
+Set up the plan: the threads the story will follow.
 
 ## opening-recall
 Recall with `{{recall}}` the people, places and things the opening involves.
 
 ## opening-steer
-Steer the opening with `{{steer}}`: brief guidance on how the story begins, with the player's character as "you".
+Steer the opening with `{{steer}}`: how the story begins.
 
 ## record
-Record long-term facts that will matter for continuity, if the records ({{reads}}) don't hold them yet.
+Update the records where something lasting has changed.
 
 ## develop
-Work out what happens next: the development that does most for the story right now, moving a thread of the plan on where it fits. If the player is dwelling on a moment, let it develop; if not, move the story on.
+Work out what happens next: the development that does most for the story now, moving a thread of the plan on where it fits.
 
 ## develop-continue
-The player pressed Continue: they want more of the story, carried on from where the last reply ended to its next development. Their character carries on as before.
+The player pressed Continue: carry the story on from where the last reply ended to its next development. Their character carries on as before.
 
 ## recall
 Recall with `{{recall}}` the people, places and things the reply involves.
 
 ## steer
-Steer the reply with `{{steer}}`: what the world and its people do next, something the story hasn't had yet. Facts go in the records.
+Steer the reply with `{{steer}}`: what the world and its people do next, something the story hasn't had yet.
 
 ## order
-Reply with tool calls alone: {{order}}. Update a record only where something changed.
+Reply with tool calls alone: {{order}}.
 
 ## done
 If there is nothing to record, reply with only the word DONE.
