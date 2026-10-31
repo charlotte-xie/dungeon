@@ -159,12 +159,16 @@ export function buildPlotterInstruction(
   // the plan itself stays private.
   const steers = flags.includePlotOutline
   const recalls = flags.includeMemory
+  // The record tools are alternatives, called only for a record that
+  // changes: listed as a sequence, they were all called every turn.
+  const records = enabled.map((s) => `\`${s.updateTool.name}\``)
+  const recordTools = records.length > 1 ? `${records.slice(0, -1).join(', ')} or ${records.at(-1)}` : records[0]
   const vars = {
     reply: opening ? 'the opening' : 'the next reply',
     recall: RECALL_MEMORY_TOOL.name,
     steer: STEER_TOOL.name,
     order: [
-      `${enabled.map((s) => `\`${s.updateTool.name}\``).join(', ')} for the records`,
+      ...(recordTools ? [plotterTurnText('order-records', { records: recordTools })] : []),
       ...(recalls ? [`\`${RECALL_MEMORY_TOOL.name}\``] : []),
       ...(steers ? [`\`${STEER_TOOL.name}\``] : []),
     ].join(', then '),

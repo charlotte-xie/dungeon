@@ -52,6 +52,7 @@ export type PlotterTurnSection =
   | 'recall'
   | 'steer'
   | 'order'
+  | 'order-records'
   | 'done'
   | 'nudge-steer'
   | 'nudge-rejected'

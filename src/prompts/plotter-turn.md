@@ -31,6 +31,9 @@ Steer the reply with `{{steer}}`: what the world and its people do next, somethi
 ## order
 Reply with tool calls alone: {{order}}.
 
+## order-records
+{{records}} for each record you change
+
 ## done
 If there is nothing to record, reply with only the word DONE.
 
