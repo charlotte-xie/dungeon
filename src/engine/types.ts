@@ -120,7 +120,6 @@ export interface SlotDef {
   key: SlotKey
   label: string
   header: string
-  framing: string
   hint: string
   placeholder: string
   defaultValue: string

@@ -50,8 +50,6 @@ export const ADVENTURE_SLOTS: SlotDef[] = [
     key: 'scenario',
     label: 'Scenario brief',
     header: '# Scenario brief',
-    framing:
-      'The premise, setting and tone of this adventure.',
     hint: 'Premise, setting, and opening situation. Sets where and what the adventure is.',
     placeholder: 'e.g. You are a relic hunter who has spent your last coin on a guide to the Mouldering Vaults...',
     defaultValue: DEFAULT_SCENARIO,
@@ -62,8 +60,6 @@ export const ADVENTURE_SLOTS: SlotDef[] = [
     key: 'styleGuide',
     label: 'Author style guide',
     header: '# Author style guide',
-    framing:
-      'The voice, genre and emotional register of this adventure.',
     hint: 'Voice, genre, prose register. Optional but powerful — sets the feel of the writing.',
     placeholder: 'e.g. Gritty urban noir; sparse, elliptical dialogue; present tense; no purple prose.',
     defaultValue: DEFAULT_STYLE_GUIDE,

@@ -442,8 +442,9 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     // Hesta changed without a recall: the narrator, who holds her, is told.
     const updates = secondNarrator.filter((m) => m.toolCallId?.endsWith('-recall-memories'))
     expect(updates.map((m) => m.content.includes('Baker 3.'))).toEqual([false, true])
-    // The Plotter sees the story updates the narrator was given.
-    expect(secondPlotter.some((m) => m.toolCallId?.endsWith('-recall-memories'))).toBe(true)
+    // The story updates are the narrator's: the Plotter reads the records whole.
+    expect(secondPlotter.some((m) => m.toolCallId?.endsWith('-recall-memories'))).toBe(false)
+    expect(secondPlotter.some((m) => m.toolCallId === 'ctx-check-memory' && m.content.includes('Baker 1.'))).toBe(true)
   })
 
   it('never executes a call the narrator returns, and nudges it for prose', async () => {

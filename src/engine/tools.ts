@@ -118,21 +118,21 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
 export const CHECK_STATE_TOOL: ModelToolDefinition = {
     name: 'check_state',
     description:
-      `Check your private scene notes: the current live-state JSON (current-scene consistency facts). The latest state is already in this conversation as a check_state result; call again only to re-check it after updates. ${CANON_GUARD}`,
+      `Check your private scene notes: the current live-state JSON (current-scene consistency facts). ${CANON_GUARD}`,
     parameters: { type: 'object', properties: {} },
 }
 
 export const CHECK_MEMORY_TOOL: ModelToolDefinition = {
     name: 'check_memory',
     description:
-      `Check your private continuity notes: the current long-term memory entries. The latest memory is already in this conversation as a check_memory result; call again only to re-check it after updates. ${CANON_GUARD}`,
+      `Check your private continuity notes: the current long-term memory entries. ${CANON_GUARD}`,
     parameters: { type: 'object', properties: {} },
 }
 
 export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
     name: 'check_plot_plan',
     description:
-      'Check your private planning notes: the current plot plan. The latest plan is already in this conversation as a check_plot_plan result; call again only to re-check it after updates.',
+      'Check your private planning notes: the current plot plan.',
     parameters: { type: 'object', properties: {} },
 }
 
@@ -165,7 +165,7 @@ export const UPDATE_OOC_TOOL: ModelToolDefinition = {
 export const CHECK_OOC_TOOL: ModelToolDefinition = {
     name: 'check_ooc',
     description:
-      "Check your private notes: the player's standing out-of-character instructions. The latest list is already in this conversation as a check_ooc result; call again only to re-check it after updates.",
+      "Check your private notes: the player's standing out-of-character instructions.",
     parameters: { type: 'object', properties: {} },
 }
 

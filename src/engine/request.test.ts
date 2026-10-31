@@ -374,11 +374,11 @@ describe('buildPlotterMessages layout', () => {
     expect(call.toolCalls?.map((c) => c.name)).toEqual(['check_state'])
   })
 
-  it('sees the story updates the narrator was given, but not its notes for the reply', () => {
+  it('leaves the narrator’s story updates and notes to the narrator', () => {
     const history = [playerTurn('t1', 'I knock.', 'No answer.', UPDATE), playerTurn('t2', 'I wait.')]
     const messages = buildPlotterMessages({ ...args(history, undefined, true, BRIEFING), pivot: PIVOT })
     const ids = messages.flatMap((m) => m.toolCalls?.map((c) => c.id) ?? [])
-    expect(ids.filter((id) => id.startsWith('dm-'))).toEqual(['dm-t1-recall-memories'])
+    expect(ids.filter((id) => id.startsWith('dm-'))).toEqual([])
     expect(messages.some((m) => m.content.includes('Nobody answers.'))).toBe(false)
   })
 
@@ -394,11 +394,11 @@ describe('buildPlotterMessages layout', () => {
     expect(second.slice(0, shared.length)).toEqual(shared)
   })
 
-  it('shares the story with the narrator request', () => {
+  it('shares the story with the narrator request, without the narrator’s story updates', () => {
     const history = [playerTurn('t1', 'I knock.', 'No answer.', UPDATE), playerTurn('t2', 'I wait.')]
     const n = buildNarratorSections(args(history))
     const p = buildPlotterSections({ ...args(history), pivot: PIVOT })
-    expect(p.history).toEqual(n.history)
+    expect(p.history).toEqual(n.history.filter((m) => !m.toolCalls?.length && m.role !== 'tool'))
     expect(p.chronicle).toEqual(n.chronicle)
     // Each role has its own system prompt; the content stance and scenario
     // follow it in both.

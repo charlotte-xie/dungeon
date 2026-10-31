@@ -75,7 +75,7 @@ import type {
 } from './types'
 
 export function buildSlotMessage(def: SlotDef, value: string): string {
-  return `${def.header}\n\n${def.framing}\n\n${value}`
+  return `${def.header}\n\n${value}`
 }
 
 // --- Context payloads: the tool-result content served for each read tool, ---
@@ -535,14 +535,20 @@ export function buildStoryUpdateMessages(
   )
 }
 
-// History replays the durable story: each turn's input, its story update, and
-// its narration prose. Bootstrap and Continue directives stay too — they are
-// fixed short strings, they keep user/assistant roles alternating, and
-// dropping them once the turn completed would remove bytes an earlier request
-// already sent. Other tool activity and reasoning are ephemeral scaffolding of
-// the turn that produced them — each role gets what it needs fresh in its
-// tail, and stale snapshots would only bloat the transcript.
-function buildHistoryMessages(history: Turn[], includePriorPlayerTurns: boolean): ModelMessage[] {
+// History replays the durable story: each turn's input, its story update for
+// the narrator, and its narration prose. The Plotter gets the records whole
+// in its tail, so the story updates are the narrator's alone. Bootstrap and
+// Continue directives stay too — they are fixed short strings, they keep
+// user/assistant roles alternating, and dropping them once the turn completed
+// would remove bytes an earlier request already sent. Other tool activity and
+// reasoning are ephemeral scaffolding of the turn that produced them — each
+// role gets what it needs fresh in its tail, and stale snapshots would only
+// bloat the transcript.
+function buildHistoryMessages(
+  history: Turn[],
+  includePriorPlayerTurns: boolean,
+  role: 'narrator' | 'plotter',
+): ModelMessage[] {
   const messages: ModelMessage[] = []
   // The OOC list given so far, which each later update is told against.
   let oocBefore: string[] | undefined
@@ -560,7 +566,7 @@ function buildHistoryMessages(history: Turn[], includePriorPlayerTurns: boolean)
     if (includeInput) {
       messages.push({ role: 'user', content: t.input ?? '' })
     }
-    if (t.storyUpdate) {
+    if (t.storyUpdate && role === 'narrator') {
       messages.push(...buildStoryUpdateMessages(t.id, t.storyUpdate, oocBefore))
       if (t.storyUpdate.ooc) oocBefore = t.storyUpdate.ooc
     }
@@ -593,7 +599,7 @@ export function buildNarratorSections(args: ModelMessagesArgs): RequestSections 
   return {
     system: [...buildFrameMessages(args, args.systemPrompt, 'narrator'), ...(notes ? [notes] : [])],
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
+    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'narrator'),
     tail: [
       ...buildReplyNotesMessages(buildReplyNotes(args.briefing ?? [], args.data, args.flags)),
       directiveMessage(
@@ -613,13 +619,13 @@ export interface PlotterMessagesArgs extends ModelMessagesArgs {
   pivot: string
 }
 
-// The Plotter's request: the same story up to the player's latest input, the
-// full rules, the records as tool results, then its instruction.
+// The Plotter's request: the story's inputs and replies up to the player's
+// latest input, the records whole as tool results, then its instruction.
 export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections {
   return {
     system: buildFrameMessages(args, PLOTTER_SYSTEM_PROMPT, 'plotter'),
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns),
+    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'plotter'),
     tail: [
       ...buildContextInjectionMessages(args.data, args.flags),
       directiveMessage(args.pivot, args.reminderAsSystem),
