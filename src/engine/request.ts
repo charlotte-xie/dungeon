@@ -7,19 +7,20 @@
 // the reply from the story and that briefing alone. Each request is laid out
 // front to back as:
 //
-//   1. Stable prefix — the role's own system prompt (the narrator's writing
-//      brief, or the Plotter's directing brief), NSFW stance, adventure
-//      slots, then the Plotter's full rules for each enabled record, or the
-//      narrator's short note on reading its notes, then the chronicle.
-//      Changes rarely (settings edits, compactions).
+//   1. Stable prefix — one system message: the role's own system prompt (the
+//      narrator's writing brief, or the Plotter's directing brief), NSFW
+//      stance and adventure slots; then the chronicle. The Plotter's rules
+//      for each record travel in its tools. Changes rarely (settings edits,
+//      compactions).
 //   2. History — append-only between compactions: each turn's input (player
-//      text, or the fixed bootstrap / Continue directive), its story update,
-//      and its narration prose, so nothing sent once is later removed. The
-//      story update — memory entries newly recalled, or already in view and
-//      changed, and the OOC list when it changed — sits between the input and
-//      the reply as one call the DM appears to have made, saved with the turn
-//      so it replays byte for byte. Other tool calls and reasoning are never
-//      replayed. A failed turn produced no narration and is skipped entirely.
+//      text, or the fixed bootstrap / Continue directive), the narrator's
+//      story update, and its narration prose, so nothing sent once is later
+//      removed. The story update — memory entries newly recalled, or already
+//      in view and changed, and the OOC list when it changed — sits between
+//      the input and the reply as the narrator's own calls, named for what
+//      they bring and saved with the turn so they replay byte for byte. Other
+//      tool calls and reasoning are never replayed. A failed turn produced no
+//      narration and is skipped entirely.
 //   3. Tail — volatile, part of the current turn only and never persisted.
 //      The Plotter gets the current records as a seeded tool exchange (one
 //      assistant message that "called" the read tools, then one tool result
@@ -41,7 +42,6 @@ import {
   NSFW_ON_PROMPT,
   PLOTTER_SYSTEM_PROMPT,
   buildTurnReminder,
-  narratorNotesText,
 } from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
@@ -137,11 +137,10 @@ export interface ContextFlags {
 
 // One descriptor per context subsystem, in canonical order. Everything the
 // pipeline needs to know about a subsystem lives here — its tools (whose
-// descriptions carry its rules), injection payload, status hints, and the
-// narrator's note — so every consumer (seeded injection, tool advertisement,
-// live re-reads, the Plotter's instruction, the narrator's note) iterates
-// this table. A subsystem that is switched off cannot be mentioned anywhere,
-// by construction.
+// descriptions carry its rules), injection payload and status hints — so
+// every consumer (seeded injection, tool advertisement, live re-reads, the
+// Plotter's instruction) iterates this table. A subsystem that is switched
+// off cannot be mentioned anywhere, by construction.
 export interface ContextSubsystem {
   enabled(flags: ContextFlags): boolean
   checkTool: ModelToolDefinition
@@ -151,9 +150,6 @@ export interface ContextSubsystem {
   briefTools: readonly ModelToolDefinition[]
   // Heads this subsystem's status line in the Plotter's instruction.
   label: string
-  // The narrator's line on what this subsystem puts in its notes, or after
-  // them. Without the rules for keeping the record.
-  narratorNote: string
   // The tool-result content for the check tool: the current data, nothing
   // else. Served in the seeded injection and for live re-reads.
   buildPayload(data: StoryData): string
@@ -171,7 +167,6 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     updateTool: UPDATE_MEMORY_TOOL,
     briefTools: [RECALL_MEMORY_TOOL],
     label: 'Memory',
-    narratorNote: narratorNotesText('memory', { call: RECALL_MEMORIES_TOOL.name }),
     buildPayload: (data) => buildMemoryPayload(data.memory),
     isEmpty: (data) => Object.keys(data.memory).length === 0,
     buildGuidance: (data) => buildMemoryGuidance(data.memory),
@@ -182,7 +177,6 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     updateTool: PLOT_PLAN_TOOL,
     briefTools: [STEER_TOOL],
     label: 'Plot plan',
-    narratorNote: narratorNotesText('plot', { call: GET_STEER_TOOL.name }),
     buildPayload: (data) => buildPlotPayload(data.plot),
     isEmpty: (data) => data.plot.length === 0,
     buildGuidance: () => '',
@@ -193,7 +187,6 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     updateTool: UPDATE_STATE_TOOL,
     briefTools: [],
     label: 'Live state',
-    narratorNote: narratorNotesText('state', { call: GET_STEER_TOOL.name }),
     buildPayload: (data) => buildStatePayload(data.state),
     isEmpty: (data) => Object.keys(data.state).length === 0,
     buildGuidance: (data, stateCleanupThreshold) =>
@@ -205,42 +198,11 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
     updateTool: UPDATE_OOC_TOOL,
     briefTools: [],
     label: 'OOC instructions',
-    narratorNote: narratorNotesText('ooc', { call: GET_OOC_INSTRUCTIONS_TOOL.name }),
     buildPayload: (data) => buildOocPayload(data.ooc),
     isEmpty: (data) => data.ooc.length === 0,
     buildGuidance: () => '',
   },
 ]
-
-// The narrator's own calls that bring a turn's story update, as the enabled
-// records make them.
-function storyUpdateTools(flags: ContextFlags): ModelToolDefinition[] {
-  return [
-    ...(flags.includeMemory ? [RECALL_MEMORIES_TOOL] : []),
-    ...(flags.includeOoc ? [GET_OOC_INSTRUCTIONS_TOOL] : []),
-  ]
-}
-
-function hasReplyNotes(flags: ContextFlags): boolean {
-  return flags.includeWorldState || flags.includePlotOutline
-}
-
-// The narrator's note on its notes for its stable prefix: which calls bring
-// them, then one line per enabled record. Null when nothing is enabled.
-export function buildNarratorNotesMessage(flags: ContextFlags): ModelMessage | null {
-  const lines = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags)).map(
-    (s) => `- ${s.narratorNote}`,
-  )
-  if (!lines.length) return null
-  const updates = storyUpdateTools(flags).map((t) => `\`${t.name}\``)
-  const intro = [
-    narratorNotesText('intro'),
-    ...(updates.length ? [narratorNotesText('story-update', { calls: updates.join(' and ') })] : []),
-    ...(hasReplyNotes(flags) ? [narratorNotesText('reply-notes', { replyNotes: GET_STEER_TOOL.name })] : []),
-    narratorNotesText('close'),
-  ].join(' ')
-  return { role: 'system', content: `${intro}\n\n${lines.join('\n')}` }
-}
 
 // The tools the Plotter is offered: each enabled subsystem's update, read,
 // and briefing tools.
@@ -308,8 +270,8 @@ export interface ModelMessagesArgs {
 // One request, in its architectural sections, so the Context viewer can show
 // each without re-parsing the flattened list.
 export interface RequestSections {
-  // Stable prefix: system prompt, NSFW stance, slots, and the note on its
-  // notes (narrator) or the records' rules (Plotter).
+  // Stable prefix: one system message holding the role's system prompt, the
+  // content stance and the adventure slots.
   system: ModelMessage[]
   chronicle: ModelMessage[]
   history: ModelMessage[]
@@ -321,24 +283,23 @@ export function flattenSections(sections: RequestSections): ModelMessage[] {
   return [...sections.system, ...sections.chronicle, ...sections.history, ...sections.tail]
 }
 
-// The head of a role's stable prefix: its own system prompt, then the
-// content stance and the adventure slots. The narrator gets every slot; the
-// Plotter leaves out the narrator's writing guidance.
+// The head of a role's stable prefix, as one system message: its own system
+// prompt, then the content stance and the adventure slots under their
+// headings. The narrator gets every slot; the Plotter leaves out the
+// narrator's writing guidance. Some chat templates take only one system
+// message at the start.
 function buildFrameMessages(
   args: ModelMessagesArgs,
   systemPrompt: string,
   role: 'narrator' | 'plotter',
 ): ModelMessage[] {
-  const messages: ModelMessage[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'system', content: args.nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT },
-  ]
+  const parts = [systemPrompt, args.nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT]
   for (const def of ADVENTURE_SLOTS) {
     const value = (args.slots[def.key] ?? '').trim()
     if (!value || (role === 'plotter' && def.narratorOnly)) continue
-    messages.push({ role: 'system', content: buildSlotMessage(def, value) })
+    parts.push(buildSlotMessage(def, value))
   }
-  return messages
+  return [{ role: 'system', content: parts.join('\n\n') }]
 }
 
 // The briefing's calls of one tool, by their parsed arguments. The executor
@@ -595,9 +556,8 @@ function directiveMessage(content: string, asSystem: boolean): ModelMessage {
 // updates, and its notes for this reply, with no tools. The latest turn
 // carries the story update just made.
 export function buildNarratorSections(args: ModelMessagesArgs): RequestSections {
-  const notes = buildNarratorNotesMessage(args.flags)
   return {
-    system: [...buildFrameMessages(args, args.systemPrompt, 'narrator'), ...(notes ? [notes] : [])],
+    system: buildFrameMessages(args, args.systemPrompt, 'narrator'),
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'narrator'),
     tail: [

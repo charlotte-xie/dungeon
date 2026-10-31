@@ -14,7 +14,6 @@ import {
   NSFW_ON_PROMPT,
   REVISER_SYSTEM_PROMPT,
   SUMMARIZER_SYSTEM_PROMPT,
-  narratorNotesText,
   plotterTurnText,
 } from './prompts'
 
@@ -42,10 +41,6 @@ describe('prompts', () => {
       NSFW_OFF_PROMPT,
       plotterTurnText('nudge-steer', { steer: 'steer' }),
       plotterTurnText('nudge-rejected'),
-      ...(['intro', 'close'] as const).map((name) => narratorNotesText(name)),
-      ...(['memory', 'plot', 'state', 'ooc'] as const).map((name) => narratorNotesText(name, { call: 'get_steer' })),
-      narratorNotesText('story-update', { calls: '`recall_memories`' }),
-      narratorNotesText('reply-notes', { replyNotes: 'get_steer' }),
     ]
     for (const text of texts) {
       expect(text.trim()).not.toBe('')

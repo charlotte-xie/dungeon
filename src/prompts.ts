@@ -6,7 +6,6 @@ import plotRulesTemplate from './prompts/plot-rules.md?raw'
 import oocRulesTemplate from './prompts/ooc-rules.md?raw'
 import turnReminder from './prompts/turn-reminder.md?raw'
 import plotterTurn from './prompts/plotter-turn.md?raw'
-import narratorNotes from './prompts/narrator-notes.md?raw'
 import nsfw from './prompts/nsfw.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
@@ -57,11 +56,6 @@ export type PlotterTurnSection =
   | 'nudge-steer'
   | 'nudge-rejected'
 export const plotterTurnText = sectionReader<PlotterTurnSection>('plotter-turn.md', plotterTurn)
-
-// The narrator's note on reading its own calls, and its line for each record.
-export const narratorNotesText = sectionReader<
-  'intro' | 'story-update' | 'reply-notes' | 'close' | 'memory' | 'plot' | 'state' | 'ooc'
->('narrator-notes.md', narratorNotes)
 
 const turnReminderText = sectionReader<'default' | 'player' | 'ooc' | 'continue'>('turn-reminder.md', turnReminder)
 const nsfwText = sectionReader<'on' | 'off'>('nsfw.md', nsfw)

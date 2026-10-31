@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CONTEXT_SUBSYSTEMS,
   buildContextInjectionMessages,
   buildMemoryPayload,
   buildNarratorMessages,
-  buildNarratorNotesMessage,
   buildNarratorSections,
   buildPlotterGuidance,
   buildPlotterMessages,
@@ -111,22 +109,17 @@ function storyRoles(messages: ModelMessage[]): string[] {
 }
 
 describe('buildNarratorMessages layout', () => {
-  it('gives the narrator a line on its notes per record, not the rules for keeping them', () => {
+  it('opens with one system message, without the rules for keeping the records', () => {
     const messages = narrator([playerTurn('t1', 'I enter the mill.')])
+    const prefix = messages.slice(0, messages.findIndex((m) => m.role === 'user'))
+    expect(prefix.map((m) => m.role)).toEqual(['system'])
+    expect(prefix[0].content.startsWith('system prompt\n\n')).toBe(true)
+    expect(prefix[0].content).toContain('# Scenario brief\n\nA haunted mill.')
     for (const rules of RULES) {
       expect(messages.some((m) => m.content.includes(rules))).toBe(false)
     }
-    const firstUser = messages.findIndex((m) => m.role === 'user')
-    const note = buildNarratorNotesMessage(ALL_FLAGS)
-    const notes = messages.filter((m, i) => i < firstUser && m.content === note?.content)
-    expect(notes).toHaveLength(1)
-    // It names the narrator's own calls, and holds each record's line.
-    for (const call of ['`recall_memories`', '`get_ooc_instructions`', '`get_steer`']) {
-      expect(notes[0].content).toContain(call)
-    }
-    for (const s of CONTEXT_SUBSYSTEMS) expect(notes[0].content).toContain(s.narratorNote)
     // The Plotter's record-keeping stays out of sight.
-    expect(notes[0].content).not.toMatch(/update_|recall_memory|`steer`/)
+    expect(prefix[0].content).not.toMatch(/update_|recall_memory|`steer`/)
   })
 
   it('replays each turn’s story update in history, and gives notes for the current reply only', () => {
@@ -186,19 +179,14 @@ describe('buildNarratorMessages layout', () => {
     expect(reminder).toMatchObject({ role: 'user', content: `(OOC: ${buildTurnReminder('player')})` })
   })
 
-  it('omits disabled records from the note and the tail', () => {
+  it('omits disabled records from the tail', () => {
     const messages = narrator(
       [playerTurn('t1', 'Hello?')],
       { includeMemory: false, includePlotOutline: false, includeOoc: false },
       BRIEFING,
     )
-    const notes = messages.find((m) => m.content === buildNarratorNotesMessage({ ...ALL_FLAGS, includeMemory: false, includePlotOutline: false, includeOoc: false })?.content)
-    // Only the scene is switched on: its line, and no story updates.
-    for (const s of CONTEXT_SUBSYSTEMS) {
-      if (s.label === 'Live state') expect(notes?.content).toContain(s.narratorNote)
-      else expect(notes?.content).not.toContain(s.narratorNote)
-    }
-    expect(notes?.content).not.toMatch(/`recall_memories`|`get_ooc_instructions`/)
+    // Only the scene is switched on: no story updates, and the scene alone.
+    expect(messages.some((m) => m.toolCalls?.some((c) => c.name !== 'get_steer'))).toBe(false)
     const [input, , replyNotes, reminder] = messages.slice(-4)
     expect(input).toMatchObject({ role: 'user', content: 'Hello?' })
     expect(replyNotes.content).toMatch(/^# Scene/)
@@ -206,24 +194,14 @@ describe('buildNarratorMessages layout', () => {
     expect(reminder.role).toBe('system')
   })
 
-  it('sends no note when every record is switched off', () => {
+  it('sends no calls when every record is switched off', () => {
     const messages = narrator([playerTurn('t1', 'Hello?')], {
       includeWorldState: false,
       includePlotOutline: false,
       includeMemory: false,
       includeOoc: false,
     })
-    expect(
-      buildNarratorNotesMessage({
-        includeWorldState: false,
-        includePlotOutline: false,
-        includeMemory: false,
-        includeOoc: false,
-      }),
-    ).toBeNull()
-    for (const sub of CONTEXT_SUBSYSTEMS) {
-      expect(messages.some((m) => m.content.includes(sub.narratorNote))).toBe(false)
-    }
+    expect(messages.some((m) => m.toolCalls?.length || m.role === 'tool')).toBe(false)
     expect(messages[messages.length - 2]).toMatchObject({ role: 'user', content: 'Hello?' })
   })
 
@@ -401,10 +379,13 @@ describe('buildPlotterMessages layout', () => {
     expect(p.history).toEqual(n.history.filter((m) => !m.toolCalls?.length && m.role !== 'tool'))
     expect(p.chronicle).toEqual(n.chronicle)
     // Each role has its own system prompt; the content stance and scenario
-    // follow it in both.
-    expect(n.system[0].content).toBe('system prompt')
-    expect(p.system[0].content).toBe(PLOTTER_SYSTEM_PROMPT)
-    expect(p.system.slice(1, 3)).toEqual(n.system.slice(1, 3))
+    // follow it in both, in the same one message.
+    expect(n.system).toHaveLength(1)
+    expect(p.system).toHaveLength(1)
+    expect(n.system[0].content.startsWith('system prompt\n\n')).toBe(true)
+    expect(p.system[0].content.startsWith(`${PLOTTER_SYSTEM_PROMPT}\n\n`)).toBe(true)
+    const shared = n.system[0].content.slice('system prompt'.length)
+    expect(p.system[0].content.slice(PLOTTER_SYSTEM_PROMPT.length)).toBe(shared)
   })
 })
 
