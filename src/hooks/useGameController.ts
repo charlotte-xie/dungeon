@@ -17,7 +17,6 @@ import {
   chronicleCutoff,
   chronicleNeedsCompaction,
   compactCascade,
-  memoryForCompaction,
   rebuildChronicle,
   stripTracesBefore,
   totalChronicleEntries,
@@ -332,8 +331,8 @@ export function useGameController(settings: GameSettings) {
     return { id: crypto.randomUUID(), kind, input: turnInput, reply }
   }
 
-  // The summariser's model and connection, grounded on the given memory.
-  function summariserArgs(cacheKey: string | undefined, groundingMemory: Memory): ChronicleAgentArgs {
+  // The summariser's model and connection.
+  function summariserArgs(cacheKey: string | undefined): ChronicleAgentArgs {
     return {
       model: context.summarizerModel.trim() || model,
       reasoningEffort: context.summarizerReasoning,
@@ -341,7 +340,6 @@ export function useGameController(settings: GameSettings) {
       baseUrl,
       protocol: context.apiProtocol,
       cacheKey,
-      memory: memoryForCompaction(groundingMemory, context.includeMemory),
     }
   }
 
@@ -548,7 +546,7 @@ export function useGameController(settings: GameSettings) {
             baseTurns,
             workingChronicle,
             settings,
-            summariserArgs(cacheKey, baseData.memory),
+            summariserArgs(cacheKey),
             controller.signal,
             (label) => {
               if (operationCanCommit(operation)) setStatusText(label)
@@ -758,7 +756,7 @@ export function useGameController(settings: GameSettings) {
         turns,
         chronicle,
         settings,
-        summariserArgs(turns[0]?.id, memory),
+        summariserArgs(turns[0]?.id),
         controller.signal,
         (label) => {
           if (operationCanCommit(operation)) setStatusText(label)
@@ -798,10 +796,10 @@ export function useGameController(settings: GameSettings) {
       const rebuilt = await rebuildChronicle(
         turns,
         chronicle,
-        summariserArgs(turns[0]?.id, memory),
+        summariserArgs(turns[0]?.id),
         controller.signal,
-        (done, total) => {
-          if (operationCanCommit(operation)) setStatusText(`Rebuilding chronicle… ${done} of ${total}`)
+        (writing, total) => {
+          if (operationCanCommit(operation)) setStatusText(`Rebuilding chronicle… ${writing} of ${total}`)
         },
       )
       if (!operationCanCommit(operation)) return

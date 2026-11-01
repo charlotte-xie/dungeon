@@ -118,22 +118,25 @@ export function buildSummarizerLengthNote(targetChars: number): string {
   return `Length budget: use at most ${targetChars.toLocaleString()} characters where possible. HARD MAXIMUM: ${maxChars.toLocaleString()}.`
 }
 
-const summarizerInputsText = sectionReader<'canon' | 'turns' | 'turn' | 'instruction'>(
+const summarizerInputsText = sectionReader<'story' | 'story-start' | 'turns' | 'turn' | 'instruction'>(
   'summarizer-inputs.md',
   summarizerInputsTemplate,
 )
 
-// The summariser's input: the memory as grounding (left out when empty), the
-// run of turns to record, each headed by its number in the log, the length
-// budget, then what to write.
+// The summariser's input: the story so far (or word that the story starts
+// with these turns), the run of turns to record, each headed by its number
+// in the log, the length budget, then what to write. The story so far comes
+// first, so the calls of one compaction share a cached prefix.
 export function buildSummarizerInputs(
-  memoryJson: string | null,
+  storySoFar: string[],
   turns: { number: number; text: string }[],
   targetChars: number,
 ): string {
   const body = turns.map((t) => summarizerInputsText('turn', { number: t.number, text: t.text })).join('\n\n')
   return [
-    ...(memoryJson ? [summarizerInputsText('canon', { memory: memoryJson })] : []),
+    storySoFar.length
+      ? summarizerInputsText('story', { story: storySoFar.join('\n\n') })
+      : summarizerInputsText('story-start'),
     summarizerInputsText('turns', { count: turns.length, turns: body }),
     buildSummarizerLengthNote(targetChars),
     summarizerInputsText('instruction'),

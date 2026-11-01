@@ -1,15 +1,16 @@
-// Summariser agent. Single-purpose: given a run of consecutive turns, each
-// rendered as PLAYER:/DM: lines and numbered as in the log, produce one
-// compact continuity record within the requested length budget.
+// Summariser agent. Single-purpose: given the story so far and the run of
+// consecutive turns that follows it, each turn rendered as PLAYER:/DM: lines
+// and numbered as in the log, write the next part of the story so far within
+// the requested length budget.
 //
-// The chronicle module decides what to summarise and at what target length;
-// the agent just renders the inputs and calls the model.
+// The chronicle module decides what to summarise, what comes before it and
+// at what target length; the agent just renders the inputs and calls the
+// model.
 
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerInputs } from '../../prompts'
 import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type { ApiProtocol, ModelMessage, ReasoningEffort } from '../model/types'
-import type { Memory } from '../types'
 
 export interface SummarizerInput {
   model: string
@@ -20,12 +21,11 @@ export interface SummarizerInput {
   // The adventure's prompt-cache key; the summariser uses its own key derived
   // from it (see roleCacheKey).
   cacheKey?: string
-  // Long-term memory at the time of the fold, passed whole as grounding canon
-  // so summaries keep entity names and established facts consistent across
-  // folds (without it, adjacent entries can drift — "the priest" vs. his
-  // name). Folds are rare, and matching entries to the inputs missed exactly
-  // those unnamed references.
-  memory: Memory
+  // The summaries of everything before these turns, oldest first. They give
+  // the story's threads and the names it uses, as they stood at the time;
+  // they come first in the input, so the calls of one compaction, each
+  // seeing one more, share a cached prefix.
+  storySoFar: string[]
   // The turns to record in one summary, at any level of the chronicle.
   turns: SummaryTurn[]
   // Target length for the resulting summary, in chars. Used both as the
@@ -48,8 +48,7 @@ export async function runSummarizer(
   input: SummarizerInput,
   signal: AbortSignal,
 ): Promise<SummarizerResult> {
-  const memoryJson = Object.keys(input.memory).length ? JSON.stringify(input.memory, null, 2) : null
-  const userContent = buildSummarizerInputs(memoryJson, input.turns, input.targetChars)
+  const userContent = buildSummarizerInputs(input.storySoFar, input.turns, input.targetChars)
 
   const messages: ModelMessage[] = [
     { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },

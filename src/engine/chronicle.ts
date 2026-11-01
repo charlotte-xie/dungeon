@@ -19,8 +19,8 @@
 //
 // 1. When (turns.length - cutoff) >= N, drain the live tail down to `floor`
 //    turns in one event: fold sub-batches of M turns into one chronicle[0]
-//    entry each (summaries run in parallel; entries append in story order).
-//    Between events the chronicle and cutoff are frozen.
+//    entry each, in story order. Between events the chronicle and cutoff are
+//    frozen.
 // 2. After folding, if chronicle[k].length >= N for some k, take the first
 //    M entries at level k, summarise the turns they cover into one entry,
 //    and append it to chronicle[k+1]. Recurse. Levels only
@@ -29,11 +29,13 @@
 //    level k+1.
 //
 // All summarisation goes through runSummarizer (one model call per fold or
-// promotion).
+// promotion). Each summary is written with the story so far in view: the
+// entries before its turns, as they stand when it is written. So the calls
+// run one after another, each fold seeing the ones made before it.
 
 import { runSummarizer, type SummaryTurn } from './agents/summarizer'
 import type { ApiProtocol, ModelMessage, ReasoningEffort } from './model/types'
-import type { Chronicle, ChronicleEntry, Memory, Turn } from './types'
+import type { Chronicle, ChronicleEntry, Turn } from './types'
 
 export interface ChronicleSettings {
   compactionThreshold: number  // N — high watermark; also per-level promotion threshold
@@ -60,13 +62,20 @@ export interface ChronicleAgentArgs {
   protocol: ApiProtocol
   // The adventure's prompt-cache key; see ModelConnection.
   cacheKey?: string
-  // Long-term memory at fold time — passed to the summariser as grounding
-  // canon so entity names and facts stay consistent across chronicle entries.
-  memory: Memory
 }
 
-export function memoryForCompaction(memory: Memory, includeMemory: boolean): Memory {
-  return includeMemory ? memory : {}
+// The texts of the chronicle's entries in story order: the highest level
+// first, level 0 last.
+function storyTexts(chronicle: Chronicle): string[] {
+  return [...chronicle].reverse().flatMap((level) => level.map((entry) => entry.text))
+}
+
+// The chronicle with `entry` appended at `level`, adding the level if need be.
+function withEntry(chronicle: Chronicle, level: number, entry: ChronicleEntry): Chronicle {
+  const next = chronicle.slice()
+  while (next.length <= level) next.push([])
+  next[level] = [...next[level], entry]
+  return next
 }
 
 // An entry with the turns it covers, as indices into the history (end
@@ -192,29 +201,43 @@ function extendLastEntry(chronicle: Chronicle, lastTurnId: string): Chronicle | 
   return null
 }
 
-// Adds one level-0 entry for each summarised batch, pointing at the batch's
-// turns. A batch of nothing but failed turns has no story to summarise: its
-// turns join the previous entry, or the next new one when there is none
-// before, so the entries still cover the folded turns without gaps.
-function foldBatches(chronicle: Chronicle, batches: Turn[][], texts: (string | null)[]): Chronicle {
-  let next = chronicle.length ? chronicle.map((level) => level.slice()) : [[]]
+// Folds turns [start, end) into level-0 entries of up to `batch` turns each,
+// one after another so each is written with the ones before it in view. A
+// batch of nothing but failed turns has no story to summarise: its turns join
+// the previous entry, or the next new one when there is none before, so the
+// entries still cover the folded turns without gaps.
+async function foldTurns(
+  turns: Turn[],
+  chronicle: Chronicle,
+  start: number,
+  end: number,
+  batch: number,
+  agent: ChronicleAgentArgs,
+  signal: AbortSignal,
+  onProgress?: (label: string) => void,
+): Promise<Chronicle> {
+  let next = chronicle
   let pendingFirst: string | undefined
-  batches.forEach((batch, i) => {
-    const text = texts[i]
-    const first = batch[0].id
-    const last = batch[batch.length - 1].id
-    if (text === null) {
-      const extended = extendLastEntry(next, last)
+  const count = Math.ceil((end - start) / batch)
+  for (let c = start, i = 1; c < end; c += batch, i++) {
+    onProgress?.(`Folding turns into chronicle… ${i} of ${count}`)
+    const last = Math.min(c + batch, end)
+    const inputs = turnsForSummary(turns, c, last)
+    if (!inputs.length) {
+      const extended = extendLastEntry(next, turns[last - 1].id)
       if (extended) next = extended
-      else pendingFirst ??= first
-      return
+      else pendingFirst ??= turns[c].id
+      continue
     }
-    next[0] = [
-      ...next[0],
-      { id: crypto.randomUUID(), text, firstTurnId: pendingFirst ?? first, lastTurnId: last, createdAt: Date.now() },
-    ]
+    next = withEntry(next, 0, {
+      id: crypto.randomUUID(),
+      text: await summarise(storyTexts(next), inputs, agent, signal),
+      firstTurnId: pendingFirst ?? turns[c].id,
+      lastTurnId: turns[last - 1].id,
+      createdAt: Date.now(),
+    })
     pendingFirst = undefined
-  })
+  }
   return next
 }
 
@@ -238,7 +261,12 @@ function turnsForSummary(turns: Turn[], start: number, end: number): SummaryTurn
   return inputs
 }
 
-async function summarise(inputs: SummaryTurn[], agent: ChronicleAgentArgs, signal: AbortSignal): Promise<string> {
+async function summarise(
+  storySoFar: string[],
+  inputs: SummaryTurn[],
+  agent: ChronicleAgentArgs,
+  signal: AbortSignal,
+): Promise<string> {
   const result = await runSummarizer(
     {
       model: agent.model,
@@ -247,7 +275,7 @@ async function summarise(inputs: SummaryTurn[], agent: ChronicleAgentArgs, signa
       baseUrl: agent.baseUrl,
       protocol: agent.protocol,
       cacheKey: agent.cacheKey,
-      memory: agent.memory,
+      storySoFar,
       turns: inputs,
       targetChars: targetFor(inputs),
     },
@@ -257,9 +285,8 @@ async function summarise(inputs: SummaryTurn[], agent: ChronicleAgentArgs, signa
 }
 
 // One pass through the cascade: fold raw turns into chronicle[0] if eligible,
-// then promote upward as long as any level is over threshold. Each iteration
-// makes at most one summariser call. Loop until no further compaction is
-// triggered. A forced pass, for testing what follows compaction, folds every
+// then promote upward as long as any level is over threshold, one level per
+// iteration. Loop until no further compaction is triggered. A forced pass, for testing what follows compaction, folds every
 // live turn but the latest whether or not the threshold is reached.
 export async function compactCascade(
   turns: Turn[],
@@ -284,25 +311,13 @@ export async function compactCascade(
   const HARD_CAP = 64
   for (let safety = 0; safety < HARD_CAP; safety++) {
     // Step 1: drain raw turns if over the high watermark — fold sub-batches
-    // of M down to the floor in one event. The sub-batch summaries are
-    // independent, so they run in parallel; entries append in story order.
+    // of M down to the floor in one event.
     const cutoff = chronicleCutoff(next, turns)
     const live = turns.length - cutoff
     const forcing = force && live > 1
     if (live >= N || forcing) {
-      onProgress?.('Folding turns into chronicle…')
       const targetCutoff = turns.length - (forcing ? 1 : low)
-      const starts: number[] = []
-      for (let c = cutoff; c < targetCutoff; c += M) starts.push(c)
-      const batches = starts.map((c) => turns.slice(c, Math.min(c + M, targetCutoff)))
-      const texts = await Promise.all(
-        starts.map(async (c, i) => {
-          const inputs = turnsForSummary(turns, c, c + batches[i].length)
-          // A sub-batch of nothing but failed turns has no story to record.
-          return inputs.length ? summarise(inputs, agent, signal) : null
-        }),
-      )
-      const folded = foldBatches(next, batches, texts)
+      const folded = await foldTurns(turns, next, cutoff, targetCutoff, M, agent, signal, onProgress)
       // Failed turns with no entry to join stay live: nothing more to fold.
       if (chronicleCutoff(folded, turns) === cutoff) break
       next = folded
@@ -312,7 +327,9 @@ export async function compactCascade(
     // Step 2: promote any level that's over threshold. Process bottom-up so
     // each pass touches at most one level (cleaner reasoning). The promoted
     // entry is summarised afresh from the turns its entries cover, not from
-    // their summaries, so what a lower summary left out isn't lost for good.
+    // their summaries, so what a lower summary left out isn't lost for good;
+    // the levels above, which hold the story before them, are its story so
+    // far.
     let promoted = false
     for (let level = 0; level < next.length; level++) {
       if (next[level].length < N) continue
@@ -324,15 +341,13 @@ export async function compactCascade(
       const end = (index.get(lastTurnId) ?? start) + 1
       const newEntry: ChronicleEntry = {
         id: crypto.randomUUID(),
-        text: await summarise(turnsForSummary(turns, start, end), agent, signal),
+        text: await summarise(storyTexts(next.slice(level + 1)), turnsForSummary(turns, start, end), agent, signal),
         firstTurnId,
         lastTurnId,
         createdAt: Date.now(),
       }
-      const updated = next.map((lvl, i) => (i === level ? lvl.slice(M) : lvl.slice()))
-      if (level + 1 >= updated.length) updated.push([])
-      updated[level + 1] = [...updated[level + 1], newEntry]
-      next = updated
+      const remaining = next.map((lvl, i) => (i === level ? lvl.slice(M) : lvl))
+      next = withEntry(remaining, level + 1, newEntry)
       promoted = true
       break // restart from the bottom; promotions can cascade
     }
@@ -344,33 +359,28 @@ export async function compactCascade(
   return next
 }
 
-// How many summaries a rebuild writes at once.
-const REBUILD_CONCURRENCY = 4
-
 // The chronicle with every entry written afresh from the turns it covers,
-// each keeping its place and its turns: for after the summariser, its prompt
-// or the memory it grounds on has changed. An entry with no narrated turns to
-// read keeps its text.
+// each keeping its place and its turns: for after the summariser or its
+// prompt has changed. The entries are written in story order, each with the
+// ones rewritten before it as its story so far. An entry with no narrated
+// turns to read keeps its text.
 export async function rebuildChronicle(
   turns: Turn[],
   chronicle: Chronicle,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
-  onProgress?: (done: number, total: number) => void,
+  onProgress?: (writing: number, total: number) => void,
 ): Promise<Chronicle> {
   const ranges = chronicleRanges(chronicle, turns) ?? []
   const texts = new Map<string, string>()
-  let nextRange = 0
-  let done = 0
-  async function worker() {
-    while (nextRange < ranges.length) {
-      const { entry, start, end } = ranges[nextRange++]
-      const inputs = turnsForSummary(turns, start, end)
-      if (inputs.length) texts.set(entry.id, await summarise(inputs, agent, signal))
-      onProgress?.(++done, ranges.length)
-    }
+  const storySoFar: string[] = []
+  for (const [i, { entry, start, end }] of ranges.entries()) {
+    onProgress?.(i + 1, ranges.length)
+    const inputs = turnsForSummary(turns, start, end)
+    const text = inputs.length ? await summarise(storySoFar.slice(), inputs, agent, signal) : entry.text
+    if (inputs.length) texts.set(entry.id, text)
+    storySoFar.push(text)
   }
-  await Promise.all(Array.from({ length: Math.min(REBUILD_CONCURRENCY, ranges.length) }, worker))
   const createdAt = Date.now()
   return chronicle.map((level) =>
     level.map((entry) => {

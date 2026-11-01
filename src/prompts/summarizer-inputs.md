@@ -1,18 +1,21 @@
-## canon
---- CANON (long-term memory — grounding only) ---
+## story
+--- THE STORY SO FAR ---
 
-Use this only to preserve the spelling and identity of entities already mentioned in the turns. Do NOT summarise this block or import any fact that the turns themselves do not establish or change.
+{{story}}
 
-```json
-{{memory}}
-```
+--- END OF THE STORY SO FAR ---
+
+## story-start
+--- THE STORY SO FAR ---
+
+The story begins with these turns.
 
 ## turns
---- BEGIN TURNS ({{count}} to record in one entry) ---
+--- THE TURNS ({{count}}) ---
 
 {{turns}}
 
---- END TURNS ---
+--- END OF THE TURNS ---
 
 ## turn
 --- TURN {{number}} ---
@@ -20,4 +23,4 @@ Use this only to preserve the spelling and identity of entities already mentione
 {{text}}
 
 ## instruction
-Produce one compact continuity record of the consequential changes established by every turn above, the first as fully as the last. Use complete sentences. The turns are RAW MATERIAL — do not echo their formatting, headers, or any "TURN N" / "PLAYER:" / "DM:" markers. Output the continuity text only — no preamble, headers, bullet markers, or meta commentary.
+Write the next part of the story so far: what these turns add to it, from the first turn to the last, as they tell it.

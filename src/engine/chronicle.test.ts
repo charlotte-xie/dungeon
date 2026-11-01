@@ -5,7 +5,6 @@ import {
   compactCascade,
   entryTurnNumbers,
   indexChronicle,
-  memoryForCompaction,
   rebuildChronicle,
   withoutEntries,
   type LegacyChronicleEntry,
@@ -26,7 +25,6 @@ const AGENT = {
   apiKey: 'k',
   baseUrl: 'http://x',
   protocol: 'chat-completions' as const,
-  memory: {},
 }
 
 function completedTurn(i: number): Turn {
@@ -48,19 +46,15 @@ function legacy(id: string, turnsCovered: number): LegacyChronicleEntry {
 
 // Each entry's turns as indices, in story order.
 function spans(chronicle: Chronicle, turns: Turn[]) {
-  return chronicleRanges(chronicle, turns)?.map((r) => [r.entry.id, r.start, r.end])
+  return chronicleRanges(chronicle, turns)?.map((r): [string, number, number] => [r.entry.id, r.start, r.end])
 }
 
 const TEN = Array.from({ length: 10 }, (_, i) => completedTurn(i))
 
-describe('compaction context', () => {
-  it('omits persistent memory when the feature is disabled', () => {
-    const memory = { hidden_fact: { is: 'The duke is the masked patron.' } }
-
-    expect(memoryForCompaction(memory, false)).toEqual({})
-    expect(memoryForCompaction(memory, true)).toBe(memory)
-  })
-})
+// What each summariser call was given as the story so far, in call order.
+function storiesSeen() {
+  return mockedSummarizer.mock.calls.map(([input]) => input.storySoFar)
+}
 
 describe('the chronicle as an index over the turns', () => {
   // Level 1 is older than level 0, so it comes first in story order.
@@ -171,6 +165,34 @@ describe('compactCascade drain events', () => {
     ])
     expect(chronicle[0][0].text).toContain('1:PLAYER: p0')
     expect(chronicle[0][3].text).toContain('13:PLAYER: p12')
+    // Each fold is written with the ones before it as its story so far.
+    const texts = chronicle[0].map((e) => e.text)
+    expect(storiesSeen()).toEqual([[], texts.slice(0, 1), texts.slice(0, 2), texts.slice(0, 3)])
+  })
+
+  it('gives a fold the whole chronicle, and a promotion the levels above it, as the story so far', async () => {
+    // Threshold 4, batch 2, floor 2: four live turns fold down to two, which
+    // fills level 0 and promotes its first two entries.
+    const turns = Array.from({ length: 14 }, (_, i) => completedTurn(i))
+    const chronicle: Chronicle = [
+      [entry('a', 't4', 't5'), entry('b', 't6', 't7'), entry('c', 't8', 't9')],
+      [entry('x', 't0', 't3')],
+    ]
+    const compacted = await compactCascade(
+      turns,
+      chronicle,
+      { compactionThreshold: 4, compactionFloor: 2, compactionBatch: 2 },
+      AGENT,
+      new AbortController().signal,
+    )
+    expect(storiesSeen()).toEqual([['x', 'a', 'b', 'c'], ['x']])
+    expect(mockedSummarizer.mock.calls[1][0].turns.map((t) => t.number)).toEqual([5, 6, 7, 8])
+    expect(spans(compacted, turns)?.map(([id, start, end]) => [id.length === 1 ? id : 'new', start, end])).toEqual([
+      ['x', 0, 4],
+      ['new', 4, 8],
+      ['c', 8, 10],
+      ['new', 10, 12],
+    ])
   })
 
   it('does nothing below the high watermark', async () => {
@@ -264,6 +286,8 @@ describe('rebuildChronicle', () => {
     expect(rebuilt[0][1].text).toBe('SUMMARY[7:PLAYER: p6\n\nDM: d6]')
     expect(mockedSummarizer).toHaveBeenCalledTimes(3)
     expect(progress).toEqual([1, 2, 3])
+    // In story order, each with the entries rewritten before it.
+    expect(storiesSeen()).toEqual([[], [rebuilt[1][0].text], [rebuilt[1][0].text, rebuilt[0][0].text]])
   })
 })
 
