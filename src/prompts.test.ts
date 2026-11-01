@@ -5,7 +5,7 @@ import {
   buildOocRules,
   buildPlotRules,
   buildStateRules,
-  buildSummarizerLengthNote,
+  buildSummarizerInputs,
   buildTurnReminder,
   CONTINUE_DIRECTIVE,
   DEFAULT_SYSTEM_PROMPT,
@@ -99,9 +99,8 @@ describe('prompts', () => {
     expect(() => plotterTurnText('no-such-section' as never)).toThrow('plotter-turn.md has no "## no-such-section" section')
   })
 
-  it('keeps the summariser system prompt byte-stable — the budget rides with the inputs', () => {
-    const note = buildSummarizerLengthNote(500)
-    expect(note).toContain('500')
-    expect(note).toContain('750')
+  it('keeps the summariser system prompt byte-stable — the length rides with the inputs', () => {
+    expect(buildSummarizerInputs([], [{ number: 1, text: 'DM: Rain falls.' }], 1500)).toContain('1,500')
+    expect(SUMMARIZER_SYSTEM_PROMPT).not.toContain('1,500')
   })
 })

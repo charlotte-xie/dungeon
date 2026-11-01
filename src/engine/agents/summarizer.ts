@@ -1,7 +1,7 @@
 // Summariser agent. Single-purpose: given the story so far and the run of
 // consecutive turns that follows it, each turn rendered as PLAYER:/DM: lines
 // and numbered as in the log, write the next part of the story so far within
-// the requested length budget.
+// the requested length.
 //
 // The chronicle module decides what to summarise, what comes before it and
 // at what target length; the agent just renders the inputs and calls the
@@ -28,9 +28,8 @@ export interface SummarizerInput {
   storySoFar: string[]
   // The turns to record in one summary, at any level of the chronicle.
   turns: SummaryTurn[]
-  // Target length for the resulting summary, in chars. Used both as the
-  // summariser's prompt directive and for budgeting at higher levels.
-  targetChars: number
+  // The most the summary may run to, in chars.
+  maxChars: number
 }
 
 // One turn as the summariser reads it: its number in the log (from 1) and its
@@ -48,7 +47,7 @@ export async function runSummarizer(
   input: SummarizerInput,
   signal: AbortSignal,
 ): Promise<SummarizerResult> {
-  const userContent = buildSummarizerInputs(input.storySoFar, input.turns, input.targetChars)
+  const userContent = buildSummarizerInputs(input.storySoFar, input.turns, input.maxChars)
 
   const messages: ModelMessage[] = [
     { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },

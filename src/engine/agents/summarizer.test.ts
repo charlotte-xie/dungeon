@@ -23,7 +23,7 @@ const INPUT: SummarizerInput = {
   protocol: 'chat-completions',
   storySoFar: [],
   turns: [{ number: 1, text: 'DM: Rain falls.' }],
-  targetChars: 400,
+  maxChars: 400,
 }
 
 describe('summariser input', () => {

@@ -22,5 +22,8 @@ The story begins with these turns.
 
 {{text}}
 
+## length
+Keep it within {{chars}} characters.
+
 ## instruction
-Write the next part of the story so far: what these turns add to it, from the first turn to the last, as they tell it.
+Write the next part of the story so far: what these turns add to it, by subject, as they tell it.

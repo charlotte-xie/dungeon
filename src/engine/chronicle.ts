@@ -43,15 +43,15 @@ export interface ChronicleSettings {
   compactionBatch: number      // M — turns/entries folded per chronicle entry
 }
 
-// Every entry, at any level, is summarised from the turns it covers and
-// targets the average length of one of them: entries end up roughly "one
+// Every entry, at any level, is summarised from the turns it covers and may
+// run to the average length of one of them: entries stay within "one
 // turn-worth" of text however many turns they cover. A floor prevents
-// pathologically tiny targets when turns are short.
-const MIN_SUMMARY_TARGET_CHARS = 180
+// pathologically tiny limits when turns are short.
+const MIN_SUMMARY_CHARS = 180
 
-function targetFor(inputs: SummaryTurn[]): number {
+function maxCharsFor(inputs: SummaryTurn[]): number {
   const total = inputs.reduce((n, t) => n + t.text.length, 0)
-  return Math.max(MIN_SUMMARY_TARGET_CHARS, Math.round(total / Math.max(1, inputs.length)))
+  return Math.max(MIN_SUMMARY_CHARS, Math.round(total / Math.max(1, inputs.length)))
 }
 
 export interface ChronicleAgentArgs {
@@ -277,7 +277,7 @@ async function summarise(
       cacheKey: agent.cacheKey,
       storySoFar,
       turns: inputs,
-      targetChars: targetFor(inputs),
+      maxChars: maxCharsFor(inputs),
     },
     signal,
   )

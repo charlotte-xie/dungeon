@@ -66,7 +66,7 @@ In **Settings**:
 - **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
 - **Narrator model / reasoning** — defaults to `grok-4.3` with reasoning off: the narrator writes from the plotter's briefing without thinking first.
 - **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
-- **Summariser model / reasoning** — defaults to `grok-4.3` with reasoning off.
+- **Summariser model / reasoning** — defaults to `grok-4.3` with low reasoning: it works out what matters in the turns before writing.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
 - The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.

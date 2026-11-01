@@ -110,27 +110,21 @@ export function buildOocRules(maxOocItems: number, maxOocItemChars: number): str
 
 export const SUMMARIZER_SYSTEM_PROMPT = summarizerTemplate.trim()
 
-// The length budget rides with the inputs rather than in the system prompt,
-// so every summariser call — including the parallel folds of one drain
-// event — shares one byte-identical system prefix.
-export function buildSummarizerLengthNote(targetChars: number): string {
-  const maxChars = Math.ceil(targetChars * 1.5)
-  return `Length budget: use at most ${targetChars.toLocaleString()} characters where possible. HARD MAXIMUM: ${maxChars.toLocaleString()}.`
-}
-
-const summarizerInputsText = sectionReader<'story' | 'story-start' | 'turns' | 'turn' | 'instruction'>(
+const summarizerInputsText = sectionReader<'story' | 'story-start' | 'turns' | 'turn' | 'length' | 'instruction'>(
   'summarizer-inputs.md',
   summarizerInputsTemplate,
 )
 
 // The summariser's input: the story so far (or word that the story starts
 // with these turns), the run of turns to record, each headed by its number
-// in the log, the length budget, then what to write. The story so far comes
-// first, so the calls of one compaction share a cached prefix.
+// in the log, the most it may write, then what to write. The story so far
+// comes first, so the calls of one compaction share a cached prefix; the
+// length rides here rather than in the system prompt, which stays the same
+// for every call.
 export function buildSummarizerInputs(
   storySoFar: string[],
   turns: { number: number; text: string }[],
-  targetChars: number,
+  maxChars: number,
 ): string {
   const body = turns.map((t) => summarizerInputsText('turn', { number: t.number, text: t.text })).join('\n\n')
   return [
@@ -138,7 +132,7 @@ export function buildSummarizerInputs(
       ? summarizerInputsText('story', { story: storySoFar.join('\n\n') })
       : summarizerInputsText('story-start'),
     summarizerInputsText('turns', { count: turns.length, turns: body }),
-    buildSummarizerLengthNote(targetChars),
+    summarizerInputsText('length', { chars: maxChars.toLocaleString('en-GB') }),
     summarizerInputsText('instruction'),
   ].join('\n\n')
 }

@@ -15,7 +15,7 @@ Each scenario file gives the premise to paste in, a script of inputs, what that 
 
 - Run the dev server with `pnpm dev` and open http://localhost:3003.
 - The maintainer enters the API key in **Settings**. Agents never type, read, print or log a key. To check one is set, test only that it is non-empty, for example `!!localStorage.getItem('dm.xaiKey')` for the xAI preset.
-- The baseline runs use the **xAI** preset: Responses API, grok-4.3, narrator reasoning off, Plotter reasoning low, with memory, the story arcs and OOC instructions on and live state off. Note any settings that differ in your report.
+- The baseline runs use the **xAI** preset: Responses API, grok-4.3, narrator reasoning off, Plotter and summariser reasoning low, with memory, the story arcs and OOC instructions on and live state off. Note any settings that differ in your report.
 - Play spends tokens on the maintainer's account. Keep a run to an opening and four to six turns.
 - Play transcripts are private writing: never commit them. Quote only the lines a finding needs.
 
