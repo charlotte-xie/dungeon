@@ -803,10 +803,144 @@ header h1 {
   background: #2a2a2a;
 }
 
-.role-settings {
+/* Settings: each group a bordered section, its fields in a grid. */
+.settings-section {
+  margin: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem 1rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  background: #151515;
+}
+
+.settings-section legend {
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #c9a959;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-section select,
+.settings-section input[type='text'],
+.settings-section input[type='password'] {
+  font: inherit;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  background: #1a1a1a;
+  color: #e6e6e6;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.settings-section select:disabled,
+.settings-section input:disabled,
+.settings-section textarea:disabled {
+  opacity: 0.5;
+}
+
+.settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.settings-fields .span-all {
+  grid-column: 1 / -1;
+}
+
+.url-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.url-row input[type='text'] {
+  flex: 1 1 14rem;
+  width: auto;
+}
+
+/* One row per role: name, preset, model id, and reasoning. */
+.model-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.model-head {
+  font-size: 0.75rem;
+  color: #8a7a4f;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.model-role {
+  font-size: 0.85rem;
+  color: #c9a959;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.model-last {
+  min-width: 0;
+}
+
+.tuning-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.page-main .tuning-grid label {
+  font-size: 0.75rem;
+  justify-content: space-between;
+}
+
+.settings-subhead {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #c9a959;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.flag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .settings-fields {
+    grid-template-columns: 1fr;
+  }
+
+  /* Each role stacks: its name, then preset and id, then reasoning. */
+  .model-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .model-head {
+    display: none;
+  }
+
+  .model-role {
+    grid-column: 1 / -1;
+    margin-top: 0.4rem;
+  }
+
+  .model-last {
+    grid-column: 1 / -1;
+  }
 }
 
 .modal label,
@@ -845,28 +979,6 @@ header h1 {
   width: 100%;
   text-transform: none;
   letter-spacing: normal;
-}
-
-.sampling-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-}
-
-.sampling-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  color: #c9a959;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-@media (max-width: 560px) {
-  .sampling-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Hints and errors read as sentences, even inside an uppercase field label. */
@@ -998,20 +1110,16 @@ textarea.state-json-editor.tab-editor {
   align-items: stretch;
 }
 
-.flag-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin: 0.35rem 0 0.5rem;
-}
-
-.flag-field {
+/* Outranks the column layout of .page-main label. */
+.page-main .flag-field {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   gap: 0.6rem;
   font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
   padding: 0.4rem 0.6rem;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
@@ -1270,31 +1378,6 @@ textarea.state-json-editor.tab-editor {
   color: #e6e6e6;
   border: 1px solid #3a3a3a;
   border-radius: 4px;
-}
-
-.model-picker {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.model-picker select,
-.model-picker input {
-  font: inherit;
-  padding: 0.4rem 0.55rem;
-  background: #1a1a1a;
-  color: #e6e6e6;
-  border: 1px solid #3a3a3a;
-  border-radius: 4px;
-}
-
-.model-picker select {
-  flex: 0 0 auto;
-  max-width: 50%;
-}
-
-.model-picker input {
-  flex: 1;
-  min-width: 0;
 }
 
 .saves-save-row input:disabled {
