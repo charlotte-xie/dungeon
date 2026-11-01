@@ -94,6 +94,21 @@ describe('compactCascade drain events', () => {
     }
   })
 
+  it('folds every live turn but the latest when forced, below the threshold', async () => {
+    const settings = { compactionThreshold: 32, compactionFloor: 16, compactionBatch: 4 }
+    const turns = Array.from({ length: 6 }, (_, i) => completedTurn(i))
+    const result = await compactCascade(turns, 0, [], settings, AGENT, new AbortController().signal, undefined, true)
+    // Five turns folded as sub-batches of 4 and 1; the latest stays live.
+    expect(result.cutoff).toBe(5)
+    expect(result.chronicle[0].map((e) => e.turnsCovered)).toEqual([4, 1])
+    expect(mockedSummarizer).toHaveBeenCalledTimes(2)
+    // With only the latest turn live there is nothing to force.
+    mockedSummarizer.mockClear()
+    const again = await compactCascade(turns, 5, result.chronicle, settings, AGENT, new AbortController().signal, undefined, true)
+    expect(again.cutoff).toBe(5)
+    expect(mockedSummarizer).not.toHaveBeenCalled()
+  })
+
   it('clamps the floor for legacy configs whose threshold predates it', async () => {
     // Stored threshold 8 with the new default floor 16: floor clamps to
     // N - M = 4, reproducing the old fold-one-batch behaviour.

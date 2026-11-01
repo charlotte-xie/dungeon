@@ -80,7 +80,8 @@ function renderTurnForSummary(t: Turn): string {
 // One pass through the cascade: fold raw turns into chronicle[0] if eligible,
 // then promote upward as long as any level is over threshold. Each iteration
 // makes at most one summariser call. Loop until no further compaction is
-// triggered.
+// triggered. A forced pass, for testing what follows compaction, folds every
+// live turn but the latest whether or not the threshold is reached.
 export async function compactCascade(
   turns: Turn[],
   cutoff: number,
@@ -89,6 +90,7 @@ export async function compactCascade(
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
   onProgress?: (label: string) => void,
+  force = false,
 ): Promise<CompactionResult> {
   const N = Math.max(2, settings.compactionThreshold)
   const M = Math.max(1, Math.min(settings.compactionBatch, N - 1))
@@ -106,9 +108,11 @@ export async function compactCascade(
     // Step 1: drain raw turns if over the high watermark — fold sub-batches
     // of M down to the floor in one event. The sub-batch summaries are
     // independent, so they run in parallel; entries append in story order.
-    if (turns.length - nextCutoff >= N) {
+    const live = turns.length - nextCutoff
+    const forcing = force && live > 1
+    if (live >= N || forcing) {
       onProgress?.('Folding turns into chronicle…')
-      const targetCutoff = turns.length - low
+      const targetCutoff = turns.length - (forcing ? 1 : low)
       const batches: Turn[][] = []
       for (let c = nextCutoff; c < targetCutoff; c += M) {
         batches.push(turns.slice(c, Math.min(c + M, targetCutoff)))
@@ -195,6 +199,12 @@ export async function compactCascade(
     break
   }
   return { chronicle: nextChronicle, cutoff: nextCutoff }
+}
+
+// A forced compaction has something to fold once there is a live turn
+// before the latest.
+export function canForceCompaction(turns: Turn[], cutoff: number): boolean {
+  return turns.length - cutoff > 1
 }
 
 export function chronicleNeedsCompaction(

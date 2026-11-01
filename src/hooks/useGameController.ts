@@ -13,6 +13,7 @@ import { reviserRequest, runReviser } from '../engine/agents/reviser'
 import { wireRequest } from '../engine/model/client'
 import type { WireRequest } from '../engine/model/types'
 import {
+  canForceCompaction,
   chronicleNeedsCompaction,
   compactCascade,
   memoryForCompaction,
@@ -164,6 +165,7 @@ export function useGameController(settings: GameSettings) {
     compactionFloor: context.compactionFloor,
     compactionBatch: context.compactionBatch,
   })
+  const canForceCompact = canForceCompaction(turns, compactCutoff)
 
   useEffect(() => {
     try {
@@ -738,20 +740,25 @@ export function useGameController(settings: GameSettings) {
     })
   }
 
-  async function compactNow() {
+  // Compact the chronicle now; forced, fold every live turn but the latest
+  // whether or not compaction is due, to test what follows it.
+  async function compactNow(force = false) {
     if (operations.busy) return
     const settings = {
       compactionThreshold: context.compactionThreshold,
       compactionFloor: context.compactionFloor,
       compactionBatch: context.compactionBatch,
     }
-    if (!chronicleNeedsCompaction(turns, compactCutoff, chronicle, settings)) {
+    if (force ? !canForceCompaction(turns, compactCutoff) : !chronicleNeedsCompaction(turns, compactCutoff, chronicle, settings)) {
       alert('Nothing to compact: chronicle is up to date.')
       return
     }
+    const what = force
+      ? 'Force a compaction now? Every live turn except the latest is condensed into summary entries, whether or not compaction is due'
+      : 'Compact the chronicle now? The oldest live turns are condensed into summary entries'
     if (
       !confirm(
-        'Compact the chronicle now? The oldest live turns are condensed into summary entries — the full text stays visible in your log, but the model will only see the summaries from then on. This is lossy, cannot be undone, and runs summariser model calls immediately.',
+        `${what} — the full text stays visible in your log, but the model will only see the summaries from then on. This is lossy, cannot be undone, and runs summariser model calls immediately.`,
       )
     ) {
       return
@@ -778,6 +785,7 @@ export function useGameController(settings: GameSettings) {
         (label) => {
           if (operationCanCommit(operation)) setStatusText(label)
         },
+        force,
       )
       if (!operationCanCommit(operation)) return
       setCompactionError(null)
@@ -870,6 +878,7 @@ export function useGameController(settings: GameSettings) {
     statusSince: status.since,
     streamed,
     canCompact,
+    canForceCompact,
     compactionError,
     dismissCompactionError: () => setCompactionError(null),
     // actions

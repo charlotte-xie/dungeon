@@ -473,9 +473,11 @@ function App() {
           context={context}
           busy={thinking}
           canCompact={game.canCompact}
+          canForceCompact={game.canForceCompact}
           onClose={() => setInspect(null)}
           onInspect={setInspect}
           onCompact={() => void game.compactNow()}
+          onForceCompact={() => void game.compactNow(true)}
           onResetState={() => game.commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={game.commitState}
           onSavePlot={game.commitPlot}

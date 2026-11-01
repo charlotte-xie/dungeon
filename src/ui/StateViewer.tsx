@@ -18,9 +18,11 @@ interface StateViewerProps {
   context: ContextConfig
   busy: boolean
   canCompact: boolean
+  canForceCompact: boolean
   onClose: () => void
   onInspect: (view: InspectView) => void
   onCompact: () => void
+  onForceCompact: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
   onSavePlot: (next: string[]) => void
@@ -62,9 +64,11 @@ export function StateViewer({
   context,
   busy,
   canCompact,
+  canForceCompact,
   onClose,
   onInspect,
   onCompact,
+  onForceCompact,
   onResetState,
   onSaveState,
   onSavePlot,
@@ -341,6 +345,20 @@ export function StateViewer({
               title={anyDirty ? 'Save or discard your edits first' : 'Fold older turns into the chronicle now'}
             >
               Compact now
+            </button>
+          )}
+          {tab === 'chronicle' && canForceCompact && (
+            <button
+              className="ghost"
+              onClick={onForceCompact}
+              disabled={busy || anyDirty}
+              title={
+                anyDirty
+                  ? 'Save or discard your edits first'
+                  : 'Fold every turn but the latest into the chronicle now, whether or not compaction is due'
+              }
+            >
+              Force compact
             </button>
           )}
           {tab === 'chronicle' && (
