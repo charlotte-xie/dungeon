@@ -5,7 +5,7 @@ As the Plotter, before the narrator writes {{reply}}:
 Set up the records from the scenario: the player's character under `player`, as the scenario gives them; then the people, places, things and threads the story starts with, and what each person wants and keeps hidden.
 
 ## opening-arcs
-Set up the arcs: where the story is heading.
+Set up the arcs: what is ongoing in the story from the start, and where each is heading.
 
 ## opening-recall
 Recall with `{{recall}}` the people, places, things and threads the opening involves.
@@ -17,7 +17,7 @@ Steer the opening with `{{steer}}`: how the story begins.
 Update the records where something lasting has changed.
 
 ## develop
-Work out what happens next: the development that does most for the story now, bringing an arc a little closer where it fits.
+Work out what happens next: the development that does most for the story now, moving an arc on a little where it fits.
 
 ## develop-continue
 The player pressed Continue: carry the story on from where the last reply ended to its next development, through what the world and its people do.

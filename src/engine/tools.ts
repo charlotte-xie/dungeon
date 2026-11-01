@@ -65,7 +65,7 @@ export const UPDATE_ARCS_TOOL: ModelToolDefinition = {
         },
         text: {
           type: 'string',
-          description: `One arc: what the world is building towards, and who it will land on. Required for insert and update; at most ${MAX_PLOT_ITEM_CHARS} characters.`,
+          description: `One arc: something ongoing, such as a quarrel, a rivalry, a debt or a secret working its way out, with where it is heading. Required for insert and update; at most ${MAX_PLOT_ITEM_CHARS} characters.`,
         },
       },
       required: ['op'],
@@ -132,7 +132,7 @@ export const CHECK_MEMORY_TOOL: ModelToolDefinition = {
 export const CHECK_ARCS_TOOL: ModelToolDefinition = {
     name: 'check_arcs',
     description:
-      'Check the story’s arcs: where the story is heading.',
+      'Check the story’s arcs: what is ongoing in it, and where each is heading.',
     parameters: { type: 'object', properties: {} },
 }
 
@@ -227,7 +227,7 @@ export const RECALL_MEMORIES_TOOL: ModelToolDefinition = {
 
 export const GET_STORY_ARCS_TOOL: ModelToolDefinition = {
     name: 'get_story_arcs',
-    description: 'Where the story is heading over the long run: the whole list each time it changes.',
+    description: 'The story’s arcs: what is ongoing in it, and where each is heading. The whole list each time it changes.',
     parameters: { type: 'object', properties: {} },
 }
 

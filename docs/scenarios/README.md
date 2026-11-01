@@ -152,8 +152,8 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 - Steers should describe what happens in the world. Flag steers that frame the player's decision ("must choose", "forcing a choice"), give writing instructions ("Keep the dialogue terse", "End ready for their next action") or move the player.
 - Flag steers that script every NPC line, which the narrator then copies word for word, and steers that add the same ambient line every time.
 - The opening should set up memory and the arcs on the first try, without the steer reminder.
-- The arcs should hold a few long-term directions, each kept and revised over many replies. Flag arcs that are just the current scene, arcs rewritten each turn into the next scene, landed or abandoned arcs left in place, and good threads the story revealed that never became arcs.
-- An arc the player edits should be kept as they wrote it, and the narrator should reach an arc only when the steer brings it there.
+- The arcs should hold a few ongoing threads, such as a quarrel or a secret working its way out, each kept and developed over many replies. Flag arcs written as a single event, arcs that are just the current scene or are rewritten each turn into the next one, finished or abandoned arcs left in place, and good threads the story revealed that never became arcs.
+- An arc the player edits should be kept as they wrote it, and an arc should run on through the story rather than be settled in the next reply.
 - Memory entries should start with `is`, and NPC goals should be recorded as `wants`.
 
 **Mechanics**

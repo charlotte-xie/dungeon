@@ -554,7 +554,7 @@ describe('buildStoryUpdate', () => {
     expect(calls).toEqual([
       {
         name: 'get_story_arcs',
-        result: '# Where the story is heading\n\n1. The miller returns at dusk.\n2. The flood takes the bridge.',
+        result: '# Story arcs\n\n1. The miller returns at dusk.\n2. The flood takes the bridge.',
       },
     ])
     const replayed = narrator([playerTurn('t1', 'I wait.', 'Time passes.', { arcs: arcs.plot })])

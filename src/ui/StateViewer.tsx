@@ -413,11 +413,12 @@ export function StateViewer({
       {tab === 'plot' && context.includePlotOutline && (
         <>
           <p className="hint">
-            The story's arcs: where it is heading over the long run. The plotter
-            sets them up, brings one a little closer with each steer, and revises
-            or removes them as the story turns. The narrator sees them whenever
-            they change. Edit them to take the story your way: the plotter keeps
-            to what you write. One arc per line; leading <code>-</code>,{' '}
+            The story's arcs: what is ongoing in it, such as a quarrel, a rivalry or
+            a secret working its way out, and where each is heading. The plotter
+            sets them up, moves one on a little with each steer, and revises or
+            removes them as the story turns. The narrator sees them whenever they
+            change. Edit them to take the story your way: the plotter keeps to what
+            you write. One arc per line; leading <code>-</code>,{' '}
             <code>*</code>, or <code>1.</code> numbering is stripped on save. Max{' '}
             {MAX_PLOT_ITEMS} arcs, each up to {MAX_PLOT_ITEM_CHARS} chars. Current:{' '}
             {plot.length} arc{plot.length === 1 ? '' : 's'}.

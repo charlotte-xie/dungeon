@@ -453,8 +453,8 @@ function renderOocUpdate(list: string[], before: string[] | undefined): string {
 }
 
 // A story update as the narrator's own calls, each named for what it brings:
-// what it remembers, where the story is heading, then the player's standing
-// OOC instructions. `oocBefore` is the OOC list in view before this update.
+// what it remembers, the story's arcs, then the player's standing OOC
+// instructions. `oocBefore` is the OOC list in view before this update.
 export function storyUpdateCalls(
   update: StoryUpdate,
   oocBefore: string[] | undefined,
@@ -466,7 +466,7 @@ export function storyUpdateCalls(
   return [
     ...(memories.length ? [{ name: RECALL_MEMORIES_TOOL.name, result: memories.join('\n\n') }] : []),
     ...(update.arcs
-      ? [{ name: GET_STORY_ARCS_TOOL.name, result: `# Where the story is heading\n\n${buildPlotPayload(update.arcs)}` }]
+      ? [{ name: GET_STORY_ARCS_TOOL.name, result: `# Story arcs\n\n${buildPlotPayload(update.arcs)}` }]
       : []),
     ...(ooc ? [{ name: GET_OOC_INSTRUCTIONS_TOOL.name, result: ooc }] : []),
   ]
