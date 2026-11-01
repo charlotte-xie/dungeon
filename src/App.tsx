@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT } from './prompts'
-import { totalChronicleEntries } from './engine/chronicle'
+import { entryTurnNumbers, totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
 import { replyStatus } from './engine/turnRecovery'
@@ -470,6 +470,7 @@ function App() {
           memory={game.memory}
           ooc={game.ooc}
           chronicle={game.chronicle}
+          entryTurns={entryTurnNumbers(game.chronicle, game.turns)}
           context={context}
           busy={thinking}
           canCompact={game.canCompact}
@@ -487,10 +488,7 @@ function App() {
           onClearPlot={() => game.commitPlot([])}
           onClearMemory={() => game.commitMemory({})}
           onClearOoc={() => game.commitOoc([])}
-          onClearChronicle={() => {
-            game.commitChronicle([])
-            game.commitCompactCutoff(0)
-          }}
+          onClearChronicle={() => game.commitChronicle([])}
         />
       )}
       {inspect === 'context' && (

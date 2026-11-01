@@ -8,6 +8,7 @@ import turnReminder from './prompts/turn-reminder.md?raw'
 import plotterTurn from './prompts/plotter-turn.md?raw'
 import nsfw from './prompts/nsfw.md?raw'
 import summarizerTemplate from './prompts/summarizer.md?raw'
+import summarizerInputsTemplate from './prompts/summarizer-inputs.md?raw'
 import defaultScenario from './prompts/default-scenario.md?raw'
 import newAdventureBootstrapTemplate from './prompts/new-adventure-bootstrap.md?raw'
 import reviserSystem from './prompts/reviser.md?raw'
@@ -115,6 +116,28 @@ export const SUMMARIZER_SYSTEM_PROMPT = summarizerTemplate.trim()
 export function buildSummarizerLengthNote(targetChars: number): string {
   const maxChars = Math.ceil(targetChars * 1.5)
   return `Length budget: use at most ${targetChars.toLocaleString()} characters where possible. HARD MAXIMUM: ${maxChars.toLocaleString()}.`
+}
+
+const summarizerInputsText = sectionReader<'canon' | 'turns' | 'turn' | 'instruction'>(
+  'summarizer-inputs.md',
+  summarizerInputsTemplate,
+)
+
+// The summariser's input: the memory as grounding (left out when empty), the
+// run of turns to record, each headed by its number in the log, the length
+// budget, then what to write.
+export function buildSummarizerInputs(
+  memoryJson: string | null,
+  turns: { number: number; text: string }[],
+  targetChars: number,
+): string {
+  const body = turns.map((t) => summarizerInputsText('turn', { number: t.number, text: t.text })).join('\n\n')
+  return [
+    ...(memoryJson ? [summarizerInputsText('canon', { memory: memoryJson })] : []),
+    summarizerInputsText('turns', { count: turns.length, turns: body }),
+    buildSummarizerLengthNote(targetChars),
+    summarizerInputsText('instruction'),
+  ].join('\n\n')
 }
 
 // The input that marks the opening turn, likewise plain.

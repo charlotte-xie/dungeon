@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
 import {
   EmptyNarrativeError,
@@ -14,6 +14,7 @@ import { wireRequest } from '../engine/model/client'
 import type { WireRequest } from '../engine/model/types'
 import {
   canForceCompaction,
+  chronicleCutoff,
   chronicleNeedsCompaction,
   compactCascade,
   memoryForCompaction,
@@ -31,7 +32,6 @@ import {
   turnRecoveryReducer,
 } from '../engine/turnRecovery'
 import {
-  LS_COMPACT_CUTOFF,
   LS_TURNS,
   loadStoredChronicle,
   loadStoredMemory,
@@ -133,10 +133,11 @@ export function useGameController(settings: GameSettings) {
   const oocBaseline = useRef<string[]>(storedOocBaseline)
   const [storedPlotBaseline] = useState(() => loadStoredPlotBaseline() ?? plot)
   const plotBaseline = useRef<string[]>(storedPlotBaseline)
-  const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
-  const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
+  const [{ turns: initialTurns, cutoff: legacyCutoff }] = useState(() => loadStoredTurnsAndCutoff())
   const [turns, setTurns] = useState<Turn[]>(initialTurns)
-  const [compactCutoff, setCompactCutoff] = useState<number>(initialCutoff)
+  // An index over the complete log: the turns after its last entry are live.
+  const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle(initialTurns, legacyCutoff))
+  const compactCutoff = useMemo(() => chronicleCutoff(chronicle, turns), [chronicle, turns])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   // What the running operation is doing, and since when, so the player can
@@ -149,7 +150,7 @@ export function useGameController(settings: GameSettings) {
   const streamedFlush = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [compactionError, setCompactionError] = useState<string | null>(null)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
-    recoveryForLog(loadStoredRecovery(), log),
+    recoveryForLog(loadStoredRecovery(log), log),
   )
   // Only moves that still fit the log are offered or carried out.
   const live = recoveryForLog(recovery, turns)
@@ -160,12 +161,12 @@ export function useGameController(settings: GameSettings) {
   const unanswered = !thinking && !!lastTurn && replyStatus(lastTurn) !== 'answered'
   const [operations] = useState(() => new OperationCoordinator())
 
-  const canCompact = chronicleNeedsCompaction(turns, compactCutoff, chronicle, {
+  const canCompact = chronicleNeedsCompaction(turns, chronicle, {
     compactionThreshold: context.compactionThreshold,
     compactionFloor: context.compactionFloor,
     compactionBatch: context.compactionBatch,
   })
-  const canForceCompact = canForceCompaction(turns, compactCutoff)
+  const canForceCompact = canForceCompaction(turns, chronicle)
 
   useEffect(() => {
     try {
@@ -289,18 +290,9 @@ export function useGameController(settings: GameSettings) {
     persistChronicle(next)
   }
 
-  function commitCompactCutoff(next: number) {
-    setCompactCutoff(next)
-    try {
-      if (next > 0) localStorage.setItem(LS_COMPACT_CUTOFF, String(next))
-      else localStorage.removeItem(LS_COMPACT_CUTOFF)
-    } catch {
-      // ignore
-    }
-  }
 
   function worldSnapshot(): WorldSnapshot {
-    return { state, plot, memory, ooc, chronicle, compactCutoff }
+    return { state, plot, memory, ooc, chronicle }
   }
 
   // Returns the restored OOC list and arcs: the snapshot's, plus the
@@ -319,7 +311,6 @@ export function useGameController(settings: GameSettings) {
     commitOoc(nextOoc)
     setOocBaseline([...saved.ooc])
     commitChronicle(saved.chronicle)
-    commitCompactCutoff(saved.compactCutoff)
     return { ooc: nextOoc, plot: nextPlot }
   }
 
@@ -432,7 +423,6 @@ export function useGameController(settings: GameSettings) {
       ooc: world.ooc,
     }
     const baseChronicle = world.chronicle
-    const baseCutoff = world.compactCutoff
     // The adventure's first turn names its prompt caches: each role's requests
     // go to their own provider cache, under a key derived from this one.
     const cacheKey = baseTurns[0]?.id ?? pendingTurn.id
@@ -533,15 +523,13 @@ export function useGameController(settings: GameSettings) {
       }
       const allTurns = [...baseTurns, pendingTurn]
       let workingChronicle = baseChronicle
-      let workingCutoff = baseCutoff
       // Compact BEFORE the in-flight turn (we don't want to summarise a turn
       // that doesn't have a reply yet). We measure against `baseTurns`.
-      if (chronicleNeedsCompaction(baseTurns, workingCutoff, workingChronicle, settings)) {
-        let compacted: Awaited<ReturnType<typeof compactCascade>> | null = null
+      if (chronicleNeedsCompaction(baseTurns, workingChronicle, settings)) {
+        let compacted: Chronicle | null = null
         try {
           compacted = await compactCascade(
             baseTurns,
-            workingCutoff,
             workingChronicle,
             settings,
             {
@@ -567,23 +555,14 @@ export function useGameController(settings: GameSettings) {
         if (!operationCanCommit(operation)) return stopIfCancelled()
         if (compacted) {
           setCompactionError(null)
-          workingChronicle = compacted.chronicle
-          workingCutoff = compacted.cutoff
+          workingChronicle = compacted
           commitChronicle(workingChronicle)
-          commitCompactCutoff(workingCutoff)
-          setTurns((ts) => stripTracesBefore(ts, workingCutoff))
+          const folded = chronicleCutoff(workingChronicle, baseTurns)
+          setTurns((ts) => stripTracesBefore(ts, folded))
           // Compaction is story-invariant and already paid for: the turn now
           // starts from the compacted world.
-          before = {
-            ...before,
-            world: { ...before.world, chronicle: workingChronicle, compactCutoff: workingCutoff },
-          }
-          dispatchRecovery({
-            type: 'rebase',
-            turnId: pendingTurn.id,
-            chronicle: workingChronicle,
-            compactCutoff: workingCutoff,
-          })
+          before = { ...before, world: { ...before.world, chronicle: workingChronicle } }
+          dispatchRecovery({ type: 'rebase', turnId: pendingTurn.id, chronicle: workingChronicle })
         }
         setStatusText(firstStatus)
       }
@@ -593,7 +572,7 @@ export function useGameController(settings: GameSettings) {
           cacheKey,
           slots: turnSlots,
           chronicle: workingChronicle,
-          history: allTurns.slice(workingCutoff),
+          history: allTurns.slice(chronicleCutoff(workingChronicle, baseTurns)),
           data: baseData,
         }),
         controller.signal,
@@ -749,7 +728,7 @@ export function useGameController(settings: GameSettings) {
       compactionFloor: context.compactionFloor,
       compactionBatch: context.compactionBatch,
     }
-    if (force ? !canForceCompaction(turns, compactCutoff) : !chronicleNeedsCompaction(turns, compactCutoff, chronicle, settings)) {
+    if (force ? !canForceCompaction(turns, chronicle) : !chronicleNeedsCompaction(turns, chronicle, settings)) {
       alert('Nothing to compact: chronicle is up to date.')
       return
     }
@@ -769,7 +748,6 @@ export function useGameController(settings: GameSettings) {
     try {
       const compacted = await compactCascade(
         turns,
-        compactCutoff,
         chronicle,
         settings,
         {
@@ -789,9 +767,8 @@ export function useGameController(settings: GameSettings) {
       )
       if (!operationCanCommit(operation)) return
       setCompactionError(null)
-      commitChronicle(compacted.chronicle)
-      commitCompactCutoff(compacted.cutoff)
-      setTurns((ts) => stripTracesBefore(ts, compacted.cutoff))
+      commitChronicle(compacted)
+      setTurns((ts) => stripTracesBefore(ts, chronicleCutoff(compacted, ts)))
     } catch (err) {
       if (!controller.signal.aborted && isCurrentOperation(operation)) {
         alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -815,20 +792,21 @@ export function useGameController(settings: GameSettings) {
     commitMemory({})
     commitEngineOoc(startOoc)
     commitChronicle([])
-    commitCompactCutoff(0)
     setCompactionError(null)
     await runTurn({
       pendingTurn: makePendingTurn('bootstrap', buildNewAdventureBootstrap()),
       baseTurns: [],
-      world: { state: freshState, plot: [], memory: {}, ooc: [...startOoc], chronicle: [], compactCutoff: 0 },
+      world: { state: freshState, plot: [], memory: {}, ooc: [...startOoc], chronicle: [] },
       slots: nextSlots,
       replaceExisting: true,
     })
   }
 
-  // Deep-copy the current adventure for a save slot.
+  // Deep-copy the current adventure for a save slot. Live turns without a
+  // reply are left out; folded turns all stay, since the chronicle points at
+  // them.
   function captureGame(): GameData {
-    const completedTurns = turns.filter((turn) => !!turn.reply.text)
+    const savedTurns = turns.filter((turn, i) => i < compactCutoff || !!turn.reply.text)
     return {
       slots: { ...slots },
       state: structuredClone(state),
@@ -836,8 +814,7 @@ export function useGameController(settings: GameSettings) {
       memory: structuredClone(memory),
       ooc: [...ooc],
       chronicle: structuredClone(chronicle),
-      turns: structuredClone(completedTurns),
-      compactCutoff: Math.min(compactCutoff, completedTurns.length),
+      turns: structuredClone(savedTurns),
     }
   }
 
@@ -853,7 +830,6 @@ export function useGameController(settings: GameSettings) {
     commitEngineOoc([...(save.ooc ?? [])])
     commitChronicle(save.chronicle ?? [])
     setTurns(save.turns)
-    commitCompactCutoff(save.compactCutoff)
   }
 
   return {
@@ -899,7 +875,6 @@ export function useGameController(settings: GameSettings) {
     commitMemory,
     commitSlots,
     commitChronicle,
-    commitCompactCutoff,
     // saves
     captureGame,
     restoreGame,

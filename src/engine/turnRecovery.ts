@@ -2,7 +2,7 @@ import type { Chronicle, Turn, TurnRecovery } from './types'
 
 export type TurnRecoveryEvent =
   | { type: 'start'; before: NonNullable<TurnRecovery['before']> }
-  | { type: 'rebase'; turnId: string; chronicle: Chronicle; compactCutoff: number }
+  | { type: 'rebase'; turnId: string; chronicle: Chronicle }
   | { type: 'abort'; turnId: string }
   | { type: 'undo'; undone: NonNullable<TurnRecovery['undone']> }
   | { type: 'redo'; before: NonNullable<TurnRecovery['before']> }
@@ -74,11 +74,7 @@ export function turnRecoveryReducer(
             ...recovery,
             before: {
               ...recovery.before,
-              world: {
-                ...recovery.before.world,
-                chronicle: event.chronicle,
-                compactCutoff: event.compactCutoff,
-              },
+              world: { ...recovery.before.world, chronicle: event.chronicle },
             },
           }
         : recovery

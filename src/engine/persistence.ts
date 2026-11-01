@@ -1,13 +1,13 @@
 // All localStorage IO + save-file shape detection / migration. The React tree
 // sees only loadStored*/persist* functions and the SavedGame type.
 
+import { indexChronicle, type LegacyChronicleEntry, type StoredChronicle } from './chronicle'
 import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
 import type { ReasoningEffort } from './model/types'
 import type {
   AdventureSlots,
   BriefingCall,
   Chronicle,
-  ChronicleEntry,
   ContextConfig,
   JsonValue,
   Memory,
@@ -163,7 +163,9 @@ function isMessageV1Like(value: unknown): value is MessageV1 {
   )
 }
 
-function isChronicleLike(value: unknown): value is Chronicle {
+// A stored chronicle: entries that point at their turns, or legacy entries
+// that only count them. Loading lays it over the turns (indexChronicle).
+function isChronicleLike(value: unknown): value is StoredChronicle {
   return (
     Array.isArray(value) &&
     value.every(
@@ -174,9 +176,10 @@ function isChronicleLike(value: unknown): value is Chronicle {
             isRecord(entry) &&
             typeof entry.id === 'string' &&
             typeof entry.text === 'string' &&
-            typeof entry.turnsCovered === 'number' &&
-            Number.isFinite(entry.turnsCovered) &&
-            entry.turnsCovered >= 0 &&
+            ((typeof entry.firstTurnId === 'string' && typeof entry.lastTurnId === 'string') ||
+              (typeof entry.turnsCovered === 'number' &&
+                Number.isFinite(entry.turnsCovered) &&
+                entry.turnsCovered >= 0)) &&
             typeof entry.createdAt === 'number' &&
             Number.isFinite(entry.createdAt),
         ),
@@ -315,6 +318,8 @@ function loadStoredCompactCutoffRaw(): number {
   }
 }
 
+// The stored turns, with the cutoff versions before the chronicle index
+// stored beside them: read only to lay a legacy chronicle over the turns.
 export function loadStoredTurnsAndCutoff(): { turns: Turn[]; cutoff: number } {
   try {
     const raw = localStorage.getItem(LS_TURNS)
@@ -359,7 +364,14 @@ function isStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
 }
 
-function isWorldSnapshotLike(value: unknown): value is WorldSnapshot {
+// A stored world snapshot. Older ones also carry the cutoff, read only to
+// lay a legacy chronicle over the turns.
+type StoredWorldSnapshot = Omit<WorldSnapshot, 'chronicle'> & {
+  chronicle: StoredChronicle
+  compactCutoff?: number
+}
+
+function isWorldSnapshotLike(value: unknown): value is StoredWorldSnapshot {
   return (
     isRecord(value) &&
     isWorldStateLike(value.state) &&
@@ -367,10 +379,19 @@ function isWorldSnapshotLike(value: unknown): value is WorldSnapshot {
     isMemoryLike(value.memory) &&
     isStringList(value.ooc) &&
     isChronicleLike(value.chronicle) &&
-    typeof value.compactCutoff === 'number' &&
-    Number.isInteger(value.compactCutoff) &&
-    value.compactCutoff >= 0
+    (value.compactCutoff === undefined ||
+      (typeof value.compactCutoff === 'number' && Number.isInteger(value.compactCutoff) && value.compactCutoff >= 0))
   )
+}
+
+function worldFrom(stored: StoredWorldSnapshot, turns: Turn[]): WorldSnapshot {
+  return {
+    state: stored.state,
+    plot: stored.plot,
+    memory: stored.memory,
+    ooc: stored.ooc,
+    chronicle: indexChronicle(stored.chronicle, turns, stored.compactCutoff),
+  }
 }
 
 // Known slot keys only, as strings; anything missing takes its default.
@@ -383,7 +404,7 @@ function slotsFrom(value: Record<string, unknown>): AdventureSlots {
   return slots
 }
 
-function beforeFrom(value: unknown): TurnRecovery['before'] {
+function beforeFrom(value: unknown, turns: Turn[]): TurnRecovery['before'] {
   if (
     !isRecord(value) ||
     typeof value.turnId !== 'string' ||
@@ -392,10 +413,10 @@ function beforeFrom(value: unknown): TurnRecovery['before'] {
   ) {
     return null
   }
-  return { turnId: value.turnId, world: value.world, slots: slotsFrom(value.slots) }
+  return { turnId: value.turnId, world: worldFrom(value.world, turns), slots: slotsFrom(value.slots) }
 }
 
-function undoneFrom(value: unknown): TurnRecovery['undone'] {
+function undoneFrom(value: unknown, turns: Turn[]): TurnRecovery['undone'] {
   if (
     !isRecord(value) ||
     (value.afterId !== null && typeof value.afterId !== 'string') ||
@@ -404,18 +425,19 @@ function undoneFrom(value: unknown): TurnRecovery['undone'] {
   ) {
     return null
   }
-  return { afterId: value.afterId, turn: value.turn, world: value.world }
+  return { afterId: value.afterId, turn: value.turn, world: worldFrom(value.world, turns) }
 }
 
-// Undo, Retry and Redo for the stored log. Shape-checked here; the controller
-// then keeps only what still fits the log.
-export function loadStoredRecovery(): TurnRecovery {
+// Undo, Retry and Redo for the stored log. Shape-checked here, with each
+// snapshot's chronicle laid over the log; the controller then keeps only
+// what still fits the log.
+export function loadStoredRecovery(turns: Turn[]): TurnRecovery {
   try {
     const raw = localStorage.getItem(LS_RECOVERY)
     if (!raw) return { before: null, undone: null }
     const parsed = JSON.parse(raw) as unknown
     if (!isRecord(parsed)) return { before: null, undone: null }
-    return { before: beforeFrom(parsed.before), undone: undoneFrom(parsed.undone) }
+    return { before: beforeFrom(parsed.before, turns), undone: undoneFrom(parsed.undone, turns) }
   } catch {
     return { before: null, undone: null }
   }
@@ -579,9 +601,11 @@ function storedReasoning(value: unknown): ReasoningEffort {
     : 'default'
 }
 
-export function summaryToChronicle(summary: string, cutoff: number): Chronicle {
+// A v2 flat summary as a one-entry legacy chronicle covering the turns up to
+// the old cutoff.
+export function summaryToChronicle(summary: string, cutoff: number): StoredChronicle {
   if (!summary) return []
-  const entry: ChronicleEntry = {
+  const entry: LegacyChronicleEntry = {
     id: crypto.randomUUID(),
     text: summary,
     turnsCovered: Math.max(0, cutoff),
@@ -590,32 +614,28 @@ export function summaryToChronicle(summary: string, cutoff: number): Chronicle {
   return [[entry]]
 }
 
-export function loadStoredChronicle(): Chronicle {
+// The stored chronicle laid over the stored turns. `legacyCutoff` is the
+// cutoff that versions before the index stored beside a chronicle whose
+// entries only counted their turns; a migrated chronicle is written back.
+export function loadStoredChronicle(turns: Turn[], legacyCutoff: number): Chronicle {
+  let stored: StoredChronicle | null = null
   try {
     const raw = localStorage.getItem(LS_CHRONICLE)
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown
-      if (isChronicleLike(parsed)) {
-        return parsed
-      }
-    }
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null
+    if (isChronicleLike(parsed)) stored = parsed
   } catch {
     // fall through to v2 migration
   }
-  // Migrate from v2 flat summary stored under dm.summary.
   try {
-    const v2 = localStorage.getItem(LS_SUMMARY_V2)
-    if (!v2) return []
-    const cutoffRaw = localStorage.getItem(LS_COMPACT_CUTOFF)
-    const cutoff = cutoffRaw ? Math.max(0, Math.floor(Number(cutoffRaw))) : 0
-    const migrated = summaryToChronicle(v2, cutoff)
-    try {
-      localStorage.setItem(LS_CHRONICLE, JSON.stringify(migrated))
+    // Migrate from v2 flat summary stored under dm.summary.
+    const v2 = stored ? null : localStorage.getItem(LS_SUMMARY_V2)
+    if (!stored && !v2) return []
+    const chronicle = indexChronicle(stored ?? summaryToChronicle(v2 ?? '', legacyCutoff), turns, legacyCutoff)
+    if (v2 || stored?.some((level) => level.some((entry) => 'turnsCovered' in entry))) {
+      persistChronicle(chronicle)
       localStorage.removeItem(LS_SUMMARY_V2)
-    } catch {
-      // best-effort
     }
-    return migrated
+    return chronicle
   } catch {
     return []
   }
@@ -628,6 +648,9 @@ export function persistChronicle(chronicle: Chronicle) {
     } else {
       localStorage.removeItem(LS_CHRONICLE)
     }
+    // The cutoff follows from the chronicle; the one older versions stored
+    // was only for laying a legacy chronicle over the turns.
+    localStorage.removeItem(LS_COMPACT_CUTOFF)
   } catch {
     // ignore quota / disabled storage
   }
@@ -687,7 +710,8 @@ export function isSavedGameLike(
     typeof s.savedAt === 'number' && Number.isFinite(s.savedAt) &&
     (hasNewSlots || hasOldScenario) &&
     hasChronicleOrSummary &&
-    typeof s.compactCutoff === 'number' && Number.isFinite(s.compactCutoff) &&
+    // Saves from before the chronicle index also carry the cutoff.
+    (s.compactCutoff === undefined || (typeof s.compactCutoff === 'number' && Number.isFinite(s.compactCutoff))) &&
     hasTurnsOrMessages &&
     isWorldStateLike(s.state) &&
     plotValid &&
@@ -771,14 +795,17 @@ export function normalizeSavedGame(
     turns = migrated.turns
     cutoff = migrated.cutoff
   }
-  let chronicle: Chronicle
+  // The cutoff from saves before the chronicle index lays a legacy chronicle
+  // over the turns; after that it follows from the chronicle.
+  let stored: StoredChronicle
   if (isChronicleLike(legacy.chronicle)) {
-    chronicle = legacy.chronicle
+    stored = legacy.chronicle
   } else if (typeof legacy.summary === 'string' && legacy.summary.length > 0) {
-    chronicle = summaryToChronicle(legacy.summary, cutoff)
+    stored = summaryToChronicle(legacy.summary, cutoff)
   } else {
-    chronicle = []
+    stored = []
   }
+  const chronicle: Chronicle = indexChronicle(stored, turns, cutoff)
   const memory: Memory = isMemoryLike(legacy.memory) ? legacy.memory : {}
   return {
     id: legacy.id,
@@ -791,6 +818,5 @@ export function normalizeSavedGame(
     ooc,
     chronicle,
     turns,
-    compactCutoff: cutoff,
   }
 }

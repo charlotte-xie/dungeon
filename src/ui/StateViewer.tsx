@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { withoutEntries } from '../engine/chronicle'
 import {
   MAX_OOC_ITEMS,
   MAX_OOC_ITEM_CHARS,
@@ -15,6 +16,8 @@ interface StateViewerProps {
   memory: Memory
   ooc: string[]
   chronicle: Chronicle
+  // Each chronicle entry's first and last turn, numbered as in the log.
+  entryTurns: Map<string, { first: number; last: number }>
   context: ContextConfig
   busy: boolean
   canCompact: boolean
@@ -36,6 +39,11 @@ interface StateViewerProps {
 }
 
 type Tab = 'memory' | 'state' | 'plot' | 'ooc' | 'chronicle'
+
+function turnsLabel(turns: { first: number; last: number } | undefined): string {
+  if (!turns) return 'turns unknown'
+  return turns.first === turns.last ? `turn ${turns.first}` : `turns ${turns.first}–${turns.last}`
+}
 
 function plotToDraft(plot: string[]): string {
   return plot.map((p, i) => `${i + 1}. ${p}`).join('\n')
@@ -61,6 +69,7 @@ export function StateViewer({
   memory,
   ooc,
   chronicle,
+  entryTurns,
   context,
   busy,
   canCompact,
@@ -220,13 +229,11 @@ export function StateViewer({
   }
 
   // Rebuild the chronicle with edited texts; entries cleared to empty are
-  // dropped. Metadata (id, turnsCovered, createdAt) is preserved.
+  // dropped, their turns joining a neighbouring entry. Metadata (id, turns,
+  // createdAt) is preserved.
   function buildEditedChronicle(): Chronicle {
-    return chronicle.map((level) =>
-      level
-        .map((e) => ({ ...e, text: entryText(e.id, e.text).trim() }))
-        .filter((e) => e.text.length > 0),
-    )
+    const edited = chronicle.map((level) => level.map((e) => ({ ...e, text: entryText(e.id, e.text).trim() })))
+    return withoutEntries(edited, new Set(edited.flat().filter((e) => !e.text).map((e) => e.id)))
   }
 
   const wantState = context.includeWorldState && stateDirty
@@ -514,7 +521,7 @@ export function StateViewer({
                       {entries.map((e) => (
                         <div key={e.id} className="chronicle-entry">
                           <div className="chronicle-entry-meta">
-                            covers {e.turnsCovered} turn{e.turnsCovered === 1 ? '' : 's'} ·{' '}
+                            {turnsLabel(entryTurns.get(e.id))} ·{' '}
                             {entryText(e.id, e.text).length.toLocaleString()} chars
                             {entryText(e.id, e.text) !== e.text && ' · edited'}
                           </div>

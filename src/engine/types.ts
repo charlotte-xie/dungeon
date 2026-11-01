@@ -178,20 +178,23 @@ export interface ContextConfig {
   nsfw: boolean
 }
 
+// A chronicle entry summarises a run of consecutive turns and points at them
+// by the ids of its first and last turn: the chronicle is an index over the
+// complete history, which is never trimmed.
 export interface ChronicleEntry {
   id: string
   text: string
-  // Number of original raw turns this entry represents. For chronicle[0]
-  // entries that's M; promoted entries multiply (one chronicle[k+1] entry
-  // covers M^(k+1) turns).
-  turnsCovered: number
+  firstTurnId: string
+  lastTurnId: string
   createdAt: number
 }
 
 // Outer index = level. chronicle[0] is the newest, least compressed level;
 // chronicle[chronicle.length - 1] is the topmost (oldest, most compressed).
 // When a level reaches N entries, the first M are promoted into one entry at
-// the next level up, and the structure can grow taller.
+// the next level up, and the structure can grow taller. Read in story order,
+// the topmost level first, the entries cover the folded turns from the first
+// onward with no gaps or overlaps; the turns after the last entry are live.
 export type Chronicle = ChronicleEntry[][]
 
 export interface SamplingParams {
@@ -207,7 +210,6 @@ export interface WorldSnapshot {
   memory: Memory
   ooc: string[]
   chronicle: Chronicle
-  compactCutoff: number
 }
 
 // The log only grows at its end, so Undo, Retry and Redo are moves on it:
@@ -233,7 +235,6 @@ export interface SavedGame {
   ooc: string[]
   chronicle: Chronicle
   turns: Turn[]
-  compactCutoff: number
 }
 
 // Pre-chronicle save shape (v2). Kept so existing saves migrate on load.

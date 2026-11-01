@@ -12,7 +12,7 @@ import {
 } from './turnRecovery'
 
 function world(plot: string[] = []): WorldSnapshot {
-  return { state: DEFAULT_STATE, plot, memory: {}, ooc: [], chronicle: [], compactCutoff: 0 }
+  return { state: DEFAULT_STATE, plot, memory: {}, ooc: [], chronicle: [] }
 }
 
 function turn(id: string, kind: Turn['kind'] = 'player', input = 'open the door'): Turn {
@@ -56,20 +56,13 @@ describe('turnRecoveryReducer', () => {
     expect(afterRedo).toEqual({ before: before('t2'), undone: null })
   })
 
-  it('compaction at the start of a turn changes only the chronicle and cutoff it restores', () => {
-    const chronicle = [[{ id: 'c1', text: 'Earlier.', turnsCovered: 2, createdAt: 1 }]]
+  it('compaction at the start of a turn changes only the chronicle it restores', () => {
+    const chronicle = [[{ id: 'c1', text: 'Earlier.', firstTurnId: 't1', lastTurnId: 't2', createdAt: 1 }]]
     const recovery: TurnRecovery = { before: before('t3'), undone: null }
-    const rebased = turnRecoveryReducer(recovery, {
-      type: 'rebase',
-      turnId: 't3',
-      chronicle,
-      compactCutoff: 2,
-    })
-    expect(rebased.before?.world).toEqual({ ...world(['before']), chronicle, compactCutoff: 2 })
+    const rebased = turnRecoveryReducer(recovery, { type: 'rebase', turnId: 't3', chronicle })
+    expect(rebased.before?.world).toEqual({ ...world(['before']), chronicle })
     expect(rebased.before?.turnId).toBe('t3')
-    expect(
-      turnRecoveryReducer(recovery, { type: 'rebase', turnId: 'other', chronicle, compactCutoff: 2 }),
-    ).toBe(recovery)
+    expect(turnRecoveryReducer(recovery, { type: 'rebase', turnId: 'other', chronicle })).toBe(recovery)
   })
 
   it('clears everything on reset', () => {

@@ -20,7 +20,6 @@ function validSave() {
     plot: [],
     memory: {},
     chronicle: [],
-    compactCutoff: 1,
     turns: [
       {
         id: 'turn-1',
@@ -37,12 +36,30 @@ describe('saved-game validation', () => {
     expect(isSavedGameLike({ ...validSave(), turns: [null] })).toBe(false)
   })
 
-  it('clamps a finite cutoff to the normalised turn list', () => {
-    const raw = { ...validSave(), compactCutoff: 999 }
+  it('keeps a chronicle that points at the saved turns and drops one that does not', () => {
+    const entry = { id: 'c1', text: 'Earlier.', firstTurnId: 'turn-1', lastTurnId: 'turn-1', createdAt: 1 }
+    const raw: unknown = { ...validSave(), chronicle: [[entry]] }
+    if (!isSavedGameLike(raw)) throw new Error('fixture unexpectedly invalid')
+    expect(normalizeSavedGame(raw).chronicle).toEqual([[entry]])
+
+    const stale: unknown = { ...validSave(), chronicle: [[{ ...entry, lastTurnId: 'turn-9' }]] }
+    if (!isSavedGameLike(stale)) throw new Error('fixture unexpectedly invalid')
+    expect(normalizeSavedGame(stale).chronicle).toEqual([])
+  })
+
+  it('lays a legacy chronicle over the turns, clamping the saved cutoff to the log', () => {
+    const raw = {
+      ...validSave(),
+      chronicle: [[{ id: 'c1', text: 'Earlier.', turnsCovered: 1, createdAt: 1 }]],
+      compactCutoff: 999,
+    }
     expect(isSavedGameLike(raw)).toBe(true)
     if (!isSavedGameLike(raw)) throw new Error('fixture unexpectedly invalid')
-
-    expect(normalizeSavedGame(raw).compactCutoff).toBe(1)
+    const normalized = normalizeSavedGame(raw)
+    expect(normalized.chronicle).toEqual([
+      [{ id: 'c1', text: 'Earlier.', firstTurnId: 'turn-1', lastTurnId: 'turn-1', createdAt: 1 }],
+    ])
+    expect(normalized).not.toHaveProperty('compactCutoff')
   })
 })
 
@@ -75,7 +92,7 @@ describe('legacy data tolerance', () => {
       state: {},
       memory: { note: 'a plain string entry' },
       summary: 'Earlier, things happened.',
-      compactCutoff: 0,
+      compactCutoff: 1,
       turns: [
         {
           id: 't1',
@@ -94,7 +111,9 @@ describe('legacy data tolerance', () => {
     const normalized = normalizeSavedGame(
       legacy as unknown as Parameters<typeof normalizeSavedGame>[0],
     )
-    expect(normalized.chronicle.length).toBeGreaterThan(0)
+    expect(normalized.chronicle).toEqual([
+      [expect.objectContaining({ text: 'Earlier, things happened.', firstTurnId: 't1', lastTurnId: 't1' })],
+    ])
     expect(normalized.plot).toEqual([])
     expect(normalized.ooc).toEqual([])
     expect(normalized.turns).toHaveLength(1)
@@ -243,7 +262,7 @@ describe('turn validation', () => {
 })
 
 describe('stored undo and redo', () => {
-  const world = { state: {}, plot: ['A beat.'], memory: {}, ooc: [], chronicle: [], compactCutoff: 0 }
+  const world = { state: {}, plot: ['A beat.'], memory: {}, ooc: [], chronicle: [] }
   const turn = {
     id: 'turn-2',
     kind: 'player' as const,
@@ -260,7 +279,7 @@ describe('stored undo and redo', () => {
       before: { turnId: 'turn-1', world, slots: { scenario: 'A vault.', extra: 1 } },
       undone: { afterId: 'turn-1', turn, world },
     })
-    const recovery = loadStoredRecovery()
+    const recovery = loadStoredRecovery([])
     expect(recovery.before).toEqual({
       turnId: 'turn-1',
       world,
@@ -274,20 +293,34 @@ describe('stored undo and redo', () => {
       before: { turnId: 'turn-1', world: { ...world, compactCutoff: -1 }, slots: {} },
       undone: { afterId: null, turn, world },
     })
-    expect(loadStoredRecovery()).toEqual({ before: null, undone: { afterId: null, turn, world } })
+    expect(loadStoredRecovery([])).toEqual({ before: null, undone: { afterId: null, turn, world } })
 
     stored({ before: { turnId: 'turn-1', world, slots: {} }, undone: { afterId: 3, turn, world } })
-    expect(loadStoredRecovery().undone).toBeNull()
+    expect(loadStoredRecovery([]).undone).toBeNull()
 
     stored({ before: { turnId: 'turn-1', world: { ...world, state: [] }, slots: {} }, undone: null })
-    expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
+    expect(loadStoredRecovery([])).toEqual({ before: null, undone: null })
+  })
+
+  it('lays each snapshot’s legacy chronicle over the log with its cutoff', () => {
+    const legacyWorld = {
+      ...world,
+      chronicle: [[{ id: 'c1', text: 'Earlier.', turnsCovered: 1, createdAt: 1 }]],
+      compactCutoff: 1,
+    }
+    stored({ before: { turnId: 'turn-2', world: legacyWorld, slots: {} }, undone: null })
+    const turns = [{ ...turn, id: 'turn-1' }, turn]
+    expect(loadStoredRecovery(turns).before?.world).toEqual({
+      ...world,
+      chronicle: [[{ id: 'c1', text: 'Earlier.', firstTurnId: 'turn-1', lastTurnId: 'turn-1', createdAt: 1 }]],
+    })
   })
 
   it('treats missing or unreadable storage as nothing to undo', () => {
     vi.stubGlobal('localStorage', { getItem: () => null })
-    expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
+    expect(loadStoredRecovery([])).toEqual({ before: null, undone: null })
     vi.stubGlobal('localStorage', { getItem: () => '{not json' })
-    expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
+    expect(loadStoredRecovery([])).toEqual({ before: null, undone: null })
   })
 
   it('loads the OOC and arc baselines only when they are lists of strings', () => {

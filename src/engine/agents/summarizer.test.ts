@@ -22,7 +22,7 @@ describe('summariser grounding', () => {
   })
 
   it('grounds the summary in the whole memory, as reference only', async () => {
-    // The inputs name none of these entries; "the priest" only matches
+    // The turns name none of these entries; "the priest" only matches
     // Father Aldo with the whole memory in view.
     const memory = {
       'Father Aldo': { is: 'Father Aldo is the village priest.' },
@@ -36,7 +36,7 @@ describe('summariser grounding', () => {
         baseUrl: 'http://x',
         protocol: 'chat-completions',
         memory,
-        inputs: ['DM: The priest hands you the sealed ledger.'],
+        turns: [{ number: 1, text: 'DM: The priest hands you the sealed ledger.' }],
         targetChars: 400,
       },
       new AbortController().signal,
@@ -56,11 +56,31 @@ describe('summariser grounding', () => {
         baseUrl: 'http://x',
         protocol: 'chat-completions',
         memory: {},
-        inputs: ['DM: Rain falls.'],
+        turns: [{ number: 1, text: 'DM: Rain falls.' }],
         targetChars: 400,
       },
       new AbortController().signal,
     )
     expect(mockedModel.mock.calls[0][0].messages[1].content).not.toContain('CANON')
+  })
+
+  it('sends every turn with its number from the log', async () => {
+    await runSummarizer(
+      {
+        model: 'test-model',
+        apiKey: 'k',
+        baseUrl: 'http://x',
+        protocol: 'chat-completions',
+        memory: {},
+        turns: [
+          { number: 17, text: 'DM: Rain falls.' },
+          { number: 18, text: 'DM: The river rises.' },
+        ],
+        targetChars: 400,
+      },
+      new AbortController().signal,
+    )
+    const content = mockedModel.mock.calls[0][0].messages[1].content
+    for (const part of ['17', 'DM: Rain falls.', '18', 'DM: The river rises.']) expect(content).toContain(part)
   })
 })

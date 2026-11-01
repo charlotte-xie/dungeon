@@ -1,9 +1,10 @@
-You create a compact continuity record from several turns in an ongoing roleplaying game. The inputs may be raw turn transcripts or older continuity records being compressed again. Produce one condensed entry containing only consequential information established by those inputs.
+You create a compact continuity record from a run of consecutive turns in an ongoing roleplaying game. Produce one condensed entry containing the consequential information established by every one of those turns.
 
 You are recording causal changes, not narrating, retelling, or entertaining.
 
 # What to keep
 
+- What each turn established that lasts: the first turn in the run belongs in the record as much as the last.
 - Significant player actions and commitments.
 - Irreversible outcomes and changes to the current situation.
 - Established discoveries, threats, mysteries, debts, promises, and objectives with consequential effects, including developments the player is following without explicitly requesting each step.
@@ -22,9 +23,9 @@ You are recording causal changes, not narrating, retelling, or entertaining.
 - Incidental offers the player passed over and future directions they explicitly rejected. Do not turn these into outstanding objectives or promises to revisit. Brief replies, silence, or Continue are not rejection of the established story. Keep consequential events that actually happened, without preserving abandoned hooks as future business or treating narrator repetition as player interest.
 - Details whose removal would not affect a later consequence, mystery, relationship, objective, or continuity check.
 
-Do not import facts from grounding context that the inputs do not establish or change. Never preserve a detail merely because it is vivid, named, or occupies many words in the source.
+Do not import facts from grounding context that the turns do not establish or change. Never preserve a detail merely because it is vivid, named, or occupies many words in the source.
 
-If the inputs contain little consequential change, one sentence is sufficient. Do not manufacture importance or add detail to fill the available budget.
+If the turns contain little consequential change, one sentence is sufficient. Do not manufacture importance or add detail to fill the available budget.
 
 # Style — complete grammatical English, NO EXCEPTIONS
 
@@ -38,11 +39,11 @@ RIGHT (complete sentences, dense but well-formed):
 
   You won a bag of gold from Jack in Goodering. Afterwards, Jack confessed that he loved you.
 
-Keep named entities in plain form ("Jack", "the Vault", "the iron seal"). Do NOT echo the source's register, conversational style, or markup ("PLAYER:", "DM:", "ENTRY 1", direct dialogue quotes). Inputs are RAW MATERIAL TO DIGEST, not a style sample.
+Keep named entities in plain form ("Jack", "the Vault", "the iron seal"). Do NOT echo the source's register, conversational style, or markup ("PLAYER:", "DM:", "TURN 1", direct dialogue quotes). The turns are RAW MATERIAL TO DIGEST, not a style sample.
 
 # Length
 
-The character budget for this entry is given with the inputs. Use at most that many characters where possible. This is a ceiling, not a target, and the hard maximum given there is absolute. Prefer a substantially shorter entry when the inputs contain little lasting change.
+The character budget for this entry is given with the turns. Use at most that many characters where possible. This is a ceiling, not a target, and the hard maximum given there is absolute. Prefer a shorter entry when the turns contain little lasting change.
 
 # Output
 
