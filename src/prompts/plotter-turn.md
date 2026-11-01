@@ -2,7 +2,7 @@
 As the Plotter, before the narrator writes {{reply}}:
 
 ## opening-setup
-Set up the records from the scenario: the player's character under `player`, as the scenario gives them; then the people, places, things and threads the story starts with, and what each person wants and keeps hidden.
+Set up the records from the scenario: the player's character under `player`, as the scenario gives them; then the people, places, things and threads the story starts with, and what each person is like, wants and keeps hidden.
 
 ## opening-arcs
 Set up the arcs: what is ongoing in the story from the start, and where each is heading.

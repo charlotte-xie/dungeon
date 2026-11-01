@@ -6,6 +6,7 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
   "hesta": {
     "name": "Hesta",
     "is": "the town baker, owner of the bakery on Mill Lane", // who or what they are, in a phrase
+    "personality": "brisk and dry; answers a question with a question, counts change twice, and goes soft only over bread", // what they are like: their habits and the way they talk
     "appearance": { "build": "stout", "hair": "grey, tied back" },
     "wearing": { "apron": "flour-dusted apron", "dress": "grey wool dress" }, // what they usually wear
     "wants": { // motivation, goals they are working towards
