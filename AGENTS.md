@@ -94,7 +94,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
 
 ## Working on this project
 
-- **Prompts meet the storytelling requirements.** Check prompt changes against [docs/storytelling.md](docs/storytelling.md), and update it first when the requirements change. It says what the story must be, not how the prompts get there. Play-test them with the scenarios in [docs/scenarios](docs/scenarios/README.md).
+- **Prompts meet the storytelling requirements.** Check prompt changes against [docs/storytelling.md](docs/storytelling.md), and update it first when the requirements change. It says what the story must be, not how the prompts get there. [docs/prompt-learnings.md](docs/prompt-learnings.md) records how wordings have led the models astray; read it before rewording a prompt. Play-test them with the scenarios in [docs/scenarios](docs/scenarios/README.md).
 - **Analyse before patching.** When play goes wrong, explain the mechanism first and let the maintainer choose the fix. Don't jump straight to prompt tweaks.
 - **Prompts guide; executors guard safety only.** Behaviour is shaped by prompts. Executors enforce only safety, such as state path safety. Size pressure is a soft advisory hint, not a structural cap, and the shape of stored context is the model's call.
 - **The maintainer owns vocabulary.** Names for memory facets, plot labels, and similar are the maintainer's decision. Propose, don't impose.
