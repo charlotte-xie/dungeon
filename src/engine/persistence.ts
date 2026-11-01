@@ -43,6 +43,7 @@ export const LS_SAVES = 'dm.saves'
 export const LS_SHOW_TRACE = 'dm.showTrace'
 export const LS_RECOVERY = 'dm.recovery'
 export const LS_OOC_BASELINE = 'dm.oocBaseline'
+export const LS_PLOT_BASELINE = 'dm.plotBaseline'
 
 const LS_MESSAGES_V1 = 'dm.messages'
 
@@ -438,11 +439,11 @@ export function persistRecovery(recovery: TurnRecovery) {
   }
 }
 
-// The OOC list as the engine last set it. Null when never stored, so the
-// caller falls back to the stored OOC list.
-export function loadStoredOocBaseline(): string[] | null {
+// A list as the engine last set it: the OOC list or the arcs. Null when never
+// stored, so the caller falls back to the stored list itself.
+function loadStoredBaseline(key: string): string[] | null {
   try {
-    const raw = localStorage.getItem(LS_OOC_BASELINE)
+    const raw = localStorage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw) as unknown
     return isStringList(parsed) ? parsed : null
@@ -451,12 +452,28 @@ export function loadStoredOocBaseline(): string[] | null {
   }
 }
 
-export function persistOocBaseline(ooc: string[]) {
+function persistBaseline(key: string, list: string[]) {
   try {
-    localStorage.setItem(LS_OOC_BASELINE, JSON.stringify(ooc))
+    localStorage.setItem(key, JSON.stringify(list))
   } catch {
     // ignore quota / disabled storage
   }
+}
+
+export function loadStoredOocBaseline(): string[] | null {
+  return loadStoredBaseline(LS_OOC_BASELINE)
+}
+
+export function persistOocBaseline(ooc: string[]) {
+  persistBaseline(LS_OOC_BASELINE, ooc)
+}
+
+export function loadStoredPlotBaseline(): string[] | null {
+  return loadStoredBaseline(LS_PLOT_BASELINE)
+}
+
+export function persistPlotBaseline(plot: string[]) {
+  persistBaseline(LS_PLOT_BASELINE, plot)
 }
 
 export function loadStoredSampling(): SamplingParams {

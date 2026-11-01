@@ -84,7 +84,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
   - `tools.ts`: tool schemas and the game-state executor. `state.ts`: path operations on world state.
   - `chronicle.ts`: recursive compaction of older turns into summaries.
   - `persistence.ts`: all `localStorage` IO, the save-file format, and its migrations.
-  - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying OOC edits across restores, undo/redo/retry, and coordination of the running operation.
+  - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying the player's OOC and arc edits across restores, undo/redo/retry, and coordination of the running operation.
 - `src/prompts/*.md`: the product's own LLM prompts (the narrator's and the Plotter's system prompts, the Plotter's per-turn steps and nudges, turn reminders, each record's rules for its tool's description, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. A file holding several short prompts splits them under `## name` headings. Prompt wording lives here rather than in code, and tests don't pin it. They are part of the game, not instructions for coding agents.
 - `src/hooks/`: React hooks. `useGameController.ts` drives turns.
 - `src/ui/`: panels and viewers (settings, saves, the Adventure menu, trace, and the Inspect screen: the engine state, and the next requests exactly as they will be posted).

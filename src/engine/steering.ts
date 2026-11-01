@@ -43,11 +43,12 @@ export function oocListFromText(text: string): string[] {
   return text.split('\n').map((line) => line.trim()).filter(Boolean)
 }
 
-// Retry, Undo and Redo restore the OOC list saved with a turn checkpoint,
-// which rolls back the plotter's edits from that turn. Player edits made since
-// the engine last set the list (`baseline`) are carried across: entries the
-// player removed stay removed, and entries they added are kept.
-export function carryOocEdits(target: string[], baseline: string[], current: string[]): string[] {
+// Retry, Undo and Redo restore the OOC list and the arcs saved with a turn
+// checkpoint, which rolls back the plotter's edits from that turn. Player
+// edits made since the engine last set the list (`baseline`) are carried
+// across: entries the player removed stay removed, and entries they added or
+// rewrote are kept.
+export function carryPlayerEdits(target: string[], baseline: string[], current: string[]): string[] {
   const removed = baseline.filter((entry) => !current.includes(entry))
   const added = current.filter((entry) => !baseline.includes(entry))
   const next = target.filter((entry) => !removed.includes(entry))

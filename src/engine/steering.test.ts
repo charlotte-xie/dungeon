@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carryOocEdits, isOutOfCharacterOnly, oocListFromText, withRetryGuidance } from './steering'
+import { carryPlayerEdits, isOutOfCharacterOnly, oocListFromText, withRetryGuidance } from './steering'
 
 describe('out-of-character input', () => {
   it("recognises direction with no move of the player's own", () => {
@@ -48,35 +48,35 @@ describe('default OOC instructions', () => {
   })
 })
 
-describe('carrying OOC edits across a restored checkpoint', () => {
+describe('carrying the player’s OOC and arc edits across a restored checkpoint', () => {
   it("keeps a preference saved after the reply and rolls back the plotter's entry", () => {
     const target = ['Keep it intimate.']
     const baseline = ['Keep it intimate.', 'Recorded by the plotter.']
     const current = [...baseline, 'Shorter replies.']
-    expect(carryOocEdits(target, baseline, current)).toEqual(['Keep it intimate.', 'Shorter replies.'])
+    expect(carryPlayerEdits(target, baseline, current)).toEqual(['Keep it intimate.', 'Shorter replies.'])
   })
 
   it('keeps a removal made after the reply', () => {
-    expect(carryOocEdits(['A', 'B'], ['A', 'B'], ['A'])).toEqual(['A'])
+    expect(carryPlayerEdits(['A', 'B'], ['A', 'B'], ['A'])).toEqual(['A'])
   })
 
   it('carries an edited entry as its new wording', () => {
-    expect(carryOocEdits(['Short replies.'], ['Short replies.'], ['Shorter replies.'])).toEqual(['Shorter replies.'])
+    expect(carryPlayerEdits(['Short replies.'], ['Short replies.'], ['Shorter replies.'])).toEqual(['Shorter replies.'])
   })
 
   it('restores the checkpoint exactly when the player changed nothing', () => {
     const target = ['A']
-    expect(carryOocEdits(target, ['A', 'X'], ['A', 'X'])).toEqual(['A'])
+    expect(carryPlayerEdits(target, ['A', 'X'], ['A', 'X'])).toEqual(['A'])
     expect(target).toEqual(['A'])
   })
 
   it('restores the checkpoint exactly when the current list is the checkpoint', () => {
     const target = ['A', 'P']
-    expect(carryOocEdits(target, ['A', 'X'], target)).toEqual(target)
-    expect(carryOocEdits(target, [], target)).toEqual(target)
+    expect(carryPlayerEdits(target, ['A', 'X'], target)).toEqual(target)
+    expect(carryPlayerEdits(target, [], target)).toEqual(target)
   })
 
   it('does not duplicate an entry the checkpoint already has', () => {
-    expect(carryOocEdits(['A', 'P'], ['A'], ['A', 'P'])).toEqual(['A', 'P'])
+    expect(carryPlayerEdits(['A', 'P'], ['A'], ['A', 'P'])).toEqual(['A', 'P'])
   })
 })

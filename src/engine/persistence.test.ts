@@ -5,6 +5,7 @@ import {
   isTurnLike,
   loadStoredContext,
   loadStoredOocBaseline,
+  loadStoredPlotBaseline,
   loadStoredRecovery,
   normalizeSavedGame,
 } from './persistence'
@@ -289,12 +290,14 @@ describe('stored undo and redo', () => {
     expect(loadStoredRecovery()).toEqual({ before: null, undone: null })
   })
 
-  it('loads the OOC baseline only when it is a list of strings', () => {
-    stored(['Keep it short.'])
-    expect(loadStoredOocBaseline()).toEqual(['Keep it short.'])
-    stored([1])
-    expect(loadStoredOocBaseline()).toBeNull()
-    vi.stubGlobal('localStorage', { getItem: () => null })
-    expect(loadStoredOocBaseline()).toBeNull()
+  it('loads the OOC and arc baselines only when they are lists of strings', () => {
+    for (const load of [loadStoredOocBaseline, loadStoredPlotBaseline]) {
+      stored(['Keep it short.'])
+      expect(load()).toEqual(['Keep it short.'])
+      stored([1])
+      expect(load()).toBeNull()
+      vi.stubGlobal('localStorage', { getItem: () => null })
+      expect(load()).toBeNull()
+    }
   })
 })

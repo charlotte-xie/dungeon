@@ -20,7 +20,7 @@ import {
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
-import { carryOocEdits, oocListFromText, withRetryGuidance } from '../engine/steering'
+import { carryPlayerEdits, oocListFromText, withRetryGuidance } from '../engine/steering'
 import {
   recoveryForLog,
   removeFromBox,
@@ -37,6 +37,7 @@ import {
   loadStoredOoc,
   loadStoredOocBaseline,
   loadStoredPlot,
+  loadStoredPlotBaseline,
   loadStoredRecovery,
   loadStoredSlots,
   loadStoredState,
@@ -46,6 +47,7 @@ import {
   persistOoc,
   persistOocBaseline,
   persistPlot,
+  persistPlotBaseline,
   persistRecovery,
   persistSlots,
   persistState,
@@ -122,11 +124,14 @@ export function useGameController(settings: GameSettings) {
   const [plot, setPlot] = useState<string[]>(() => loadStoredPlot())
   const [memory, setMemory] = useState<Memory>(() => loadStoredMemory())
   const [ooc, setOoc] = useState<string[]>(() => loadStoredOoc())
-  // The OOC list as the engine last set it (turn result, restore, load). Edits
-  // made since then are the player's own and survive Retry, Undo and Redo.
-  // Stored, so a reload still knows which entries are the player's.
+  // The OOC list and the arcs as the engine last set them (turn result,
+  // restore, load). Edits made since then are the player's own and survive
+  // Retry, Undo and Redo. Stored, so a reload still knows which entries are
+  // the player's.
   const [storedOocBaseline] = useState(() => loadStoredOocBaseline() ?? ooc)
   const oocBaseline = useRef<string[]>(storedOocBaseline)
+  const [storedPlotBaseline] = useState(() => loadStoredPlotBaseline() ?? plot)
+  const plotBaseline = useRef<string[]>(storedPlotBaseline)
   const [chronicle, setChronicle] = useState<Chronicle>(() => loadStoredChronicle())
   const [{ turns: initialTurns, cutoff: initialCutoff }] = useState(() => loadStoredTurnsAndCutoff())
   const [turns, setTurns] = useState<Turn[]>(initialTurns)
@@ -242,6 +247,16 @@ export function useGameController(settings: GameSettings) {
     persistPlot(next)
   }
 
+  function setPlotBaseline(next: string[]) {
+    plotBaseline.current = next
+    persistPlotBaseline(next)
+  }
+
+  function commitEnginePlot(next: string[]) {
+    setPlotBaseline(next)
+    commitPlot(next)
+  }
+
   function commitOoc(next: string[]) {
     setOoc(next)
     persistOoc(next)
@@ -286,18 +301,24 @@ export function useGameController(settings: GameSettings) {
     return { state, plot, memory, ooc, chronicle, compactCutoff }
   }
 
-  // Returns the restored OOC list: the snapshot's, plus the player's own
-  // edits since the engine last set it.
-  function restoreWorld(saved: WorldSnapshot, currentOoc: string[] = ooc): string[] {
-    const nextOoc = carryOocEdits(saved.ooc, oocBaseline.current, currentOoc)
+  // Returns the restored OOC list and arcs: the snapshot's, plus the
+  // player's own edits since the engine last set them. A cancelled turn
+  // passes the snapshot's own lists, so it is put back exactly.
+  function restoreWorld(
+    saved: WorldSnapshot,
+    current: { ooc: string[]; plot: string[] } = { ooc, plot },
+  ): { ooc: string[]; plot: string[] } {
+    const nextOoc = carryPlayerEdits(saved.ooc, oocBaseline.current, current.ooc)
+    const nextPlot = carryPlayerEdits(saved.plot, plotBaseline.current, current.plot)
     commitState(saved.state)
-    commitPlot([...saved.plot])
+    commitPlot(nextPlot)
+    setPlotBaseline([...saved.plot])
     commitMemory(structuredClone(saved.memory))
     commitOoc(nextOoc)
     setOocBaseline([...saved.ooc])
     commitChronicle(saved.chronicle)
     commitCompactCutoff(saved.compactCutoff)
-    return nextOoc
+    return { ooc: nextOoc, plot: nextPlot }
   }
 
   function editTurnInput(id: string, next: string) {
@@ -422,7 +443,7 @@ export function useGameController(settings: GameSettings) {
     // A cancelled turn puts back the world it started from, exactly, and the
     // player's action goes back in the box.
     const restoreCancelled = () => {
-      restoreWorld(before.world, before.world.ooc)
+      restoreWorld(before.world, before.world)
       setTurns((ts) => ts.filter((t) => t.id !== pendingTurn.id))
       setInput((box) => restoreIntoBox(box, restoreInputFor(pendingTurn)))
       dispatchRecovery({ type: 'abort', turnId: pendingTurn.id })
@@ -601,7 +622,7 @@ export function useGameController(settings: GameSettings) {
       if (!operationCanCommit(operation)) return stopIfCancelled()
       updateTurn(reply)
       commitState(result.data.state)
-      commitPlot(result.data.plot)
+      commitEnginePlot(result.data.plot)
       commitMemory(result.data.memory)
       commitEngineOoc(result.data.ooc)
     } catch (err) {
@@ -677,10 +698,10 @@ export function useGameController(settings: GameSettings) {
     const before = latestTurnStart()
     const last = turns[turns.length - 1]
     if (operations.busy || !before || !last) return
-    // Keep what the turn left so Redo can put it back. The OOC list is
-    // recorded as the engine left it; the player's own edits are carried
-    // separately, so they survive both directions.
-    const after = { ...worldSnapshot(), ooc: oocBaseline.current }
+    // Keep what the turn left so Redo can put it back. The OOC list and the
+    // arcs are recorded as the engine left them; the player's own edits are
+    // carried separately, so they survive both directions.
+    const after = { ...worldSnapshot(), ooc: oocBaseline.current, plot: plotBaseline.current }
     const afterId = turns.length > 1 ? turns[turns.length - 2].id : null
     restoreWorld(before.world)
     setTurns(turns.slice(0, -1))
@@ -706,13 +727,13 @@ export function useGameController(settings: GameSettings) {
     const before = latestTurnStart()
     const last = turns[turns.length - 1]
     if (operations.busy || !before || !last) return
-    const restoredOoc = restoreWorld(before.world)
+    const restored = restoreWorld(before.world)
     commitSlots(before.slots)
     const input = withRetryGuidance(last.input ?? '', options.guidance ?? '')
     await runTurn({
       pendingTurn: makePendingTurn(last.kind, input),
       baseTurns: turns.slice(0, -1),
-      world: { ...before.world, ooc: restoredOoc },
+      world: { ...before.world, ...restored },
       slots: before.slots,
     })
   }
@@ -782,7 +803,7 @@ export function useGameController(settings: GameSettings) {
     // The adventure starts with the standing instructions from the settings.
     const startOoc = context.includeOoc ? oocListFromText(context.defaultOoc) : []
     commitState(freshState)
-    commitPlot([])
+    commitEnginePlot([])
     commitMemory({})
     commitEngineOoc(startOoc)
     commitChronicle([])
@@ -819,7 +840,7 @@ export function useGameController(settings: GameSettings) {
     setCompactionError(null)
     commitSlots({ ...defaultSlots(), ...save.slots })
     commitState(structuredClone(save.state))
-    commitPlot([...(save.plot ?? [])])
+    commitEnginePlot([...(save.plot ?? [])])
     commitMemory(structuredClone(save.memory ?? {}))
     commitEngineOoc([...(save.ooc ?? [])])
     commitChronicle(save.chronicle ?? [])
