@@ -52,7 +52,6 @@ export type PlotterTurnSection =
   | 'develop-continue'
   | 'recall'
   | 'steer'
-  | 'steer-continue'
   | 'order'
   | 'order-records'
   | 'done'

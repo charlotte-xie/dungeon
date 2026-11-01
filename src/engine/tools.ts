@@ -195,13 +195,13 @@ export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
 export const STEER_TOOL: ModelToolDefinition = {
     name: 'steer',
     description:
-      'Guide the narrator: brief guidance on where the story goes next, such as an NPC pursuing their goal, a move to the next scene, or the consequences of a player action.',
+      'Give the narrator a short director’s note for the next reply, to play out in its own way.',
     parameters: {
       type: 'object',
       properties: {
         text: {
           type: 'string',
-          description: 'What happens next in the story: who does what, and what it changes. The narrator already has the player’s OOC instructions and the style guide.',
+          description: 'Your note for this reply. The narrator already has the player’s OOC instructions and the style guide.',
         },
       },
       required: ['text'],
