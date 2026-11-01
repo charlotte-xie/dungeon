@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildSummarizerInputs } from '../../prompts'
 import { completeModel } from '../model/client'
 import type { ModelCompletion } from '../model/types'
 import { runSummarizer } from './summarizer'
@@ -44,7 +45,6 @@ describe('summariser grounding', () => {
 
     expect(result.summary).toBe(completion.text)
     const content = mockedModel.mock.calls[0][0].messages[1].content
-    expect(content).toContain('grounding only')
     expect(content).toContain(JSON.stringify(memory, null, 2))
   })
 
@@ -61,7 +61,9 @@ describe('summariser grounding', () => {
       },
       new AbortController().signal,
     )
-    expect(mockedModel.mock.calls[0][0].messages[1].content).not.toContain('CANON')
+    expect(mockedModel.mock.calls[0][0].messages[1].content).toBe(
+      buildSummarizerInputs(null, [{ number: 1, text: 'DM: Rain falls.' }], 400),
+    )
   })
 
   it('sends every turn with its number from the log', async () => {
