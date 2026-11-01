@@ -20,6 +20,8 @@ interface AdventurePanelProps {
   onSaveSlots: (next: AdventureSlots) => void
   onSaveOoc: (next: string[]) => void
   onSavePlot: (next: string[]) => void
+  // Opens the New adventure dialog with the brief as it stands here.
+  onNewAdventure: (slots: AdventureSlots) => void
   onDirtyChange: (dirty: boolean) => void
 }
 
@@ -74,6 +76,7 @@ export function AdventurePanel({
   onSaveSlots,
   onSaveOoc,
   onSavePlot,
+  onNewAdventure,
   onDirtyChange,
 }: AdventurePanelProps) {
   const [slotDrafts, setSlotDrafts] = useState<AdventureSlots>(() => ({ ...slots }))
@@ -247,6 +250,15 @@ export function AdventurePanel({
         )}
       </div>
       <footer className="page-actions">
+        <button
+          className="ghost"
+          onClick={() => onNewAdventure(trimSlots(slotDrafts))}
+          title={busy
+            ? 'Start a new adventure and cancel the current generation'
+            : 'Start a new adventure from the brief above — you can check it first'}
+        >
+          New adventure…
+        </button>
         <span className="spacer" />
         <button className="ghost" onClick={revert} disabled={!anyDirty}>
           Revert

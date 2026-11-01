@@ -5,7 +5,7 @@ import { entryTurnNumbers, totalChronicleEntries } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
 import { replyStatus } from './engine/turnRecovery'
-import type { Turn } from './engine/types'
+import type { AdventureSlots, Turn } from './engine/types'
 import { useGameController } from './hooks/useGameController'
 import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
@@ -49,7 +49,8 @@ function App() {
   const [tab, setTab] = useState<AppTab>('play')
   // Whether the open tab holds unsaved edits.
   const [tabDirty, setTabDirty] = useState(false)
-  const [showNewAdventure, setShowNewAdventure] = useState(false)
+  // The brief the New adventure dialog opens with, while it is open.
+  const [newAdventureSlots, setNewAdventureSlots] = useState<AdventureSlots | null>(null)
   const [rewriting, setRewriting] = useState(false)
   const [rewriteText, setRewriteText] = useState('')
   const [rewriteError, setRewriteError] = useState<string | null>(null)
@@ -184,18 +185,9 @@ function App() {
   return (
     <main className={`app ${devMode ? 'app-wide' : ''}`}>
       <header>
-        <h1>AI Dungeon Master</h1>
-        <button
-          className="ghost"
-          onClick={() => setShowNewAdventure(true)}
-          title={thinking
-            ? 'Start a new adventure and cancel the current generation'
-            : 'Start a new adventure — confirm or edit the scenario brief'}
-        >
-          New adventure
-        </button>
+        <h1 title="AI Dungeon Master">DM</h1>
+        <TabBar tab={tab} devMode={devMode} onChange={switchTab} />
       </header>
-      <TabBar tab={tab} devMode={devMode} onChange={switchTab} />
       {/* The story stays in place under the other tabs, so a reply being
           written or a message being edited carries on while they are open. */}
       <div className="play" hidden={!playing}>
@@ -205,7 +197,7 @@ function App() {
           {turns.length === 0 && !thinking && (
             <div className="empty-log">
               <p>No adventure in progress.</p>
-              <button onClick={() => setShowNewAdventure(true)}>Begin Adventure</button>
+              <button onClick={() => setNewAdventureSlots(game.slots)}>Begin Adventure</button>
               {game.canRedo && (
                 <button className="link" onClick={game.redo} title="Restore the opening you just undid">
                   Redo
@@ -466,6 +458,7 @@ function App() {
           onSaveSlots={game.commitSlots}
           onSaveOoc={game.commitOoc}
           onSavePlot={game.commitPlot}
+          onNewAdventure={setNewAdventureSlots}
           onDirtyChange={setTabDirty}
         />
       )}
@@ -521,14 +514,17 @@ function App() {
         />
       )}
       {devMode && tab === 'context' && <ContextViewer requests={game.nextRequests()} />}
-      {showNewAdventure && (
+      {newAdventureSlots && (
         <NewAdventurePrompt
-          slots={game.slots}
+          slots={newAdventureSlots}
           inProgress={turns.length > 0}
-          onCancel={() => setShowNewAdventure(false)}
+          onCancel={() => setNewAdventureSlots(null)}
           onBegin={(nextSlots) => {
-            if (!switchTab('play')) return
-            setShowNewAdventure(false)
+            // The new adventure replaces everything a tab could hold unsaved:
+            // only Adventure offers it, and its brief came along.
+            setTabDirty(false)
+            setTab('play')
+            setNewAdventureSlots(null)
             void game.newAdventure(nextSlots)
           }}
         />
