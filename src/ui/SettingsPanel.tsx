@@ -404,7 +404,7 @@ export function SettingsPanel({
             value={draftContext.defaultOoc}
             onChange={(e) => setContextField('defaultOoc', e.target.value)}
             rows={3}
-            placeholder="e.g. Keep replies to two or three paragraphs."
+            placeholder="e.g. Keep any gore off-screen."
             disabled={!draftContext.includeOoc}
           />
         </label>
