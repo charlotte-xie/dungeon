@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { WireRequest } from '../engine/model/types'
 import { InspectScreen } from './InspectScreen'
-import type { InspectView } from './InspectSwitch'
 
 export interface NextRequest {
   role: 'plotter' | 'narrator' | 'reviser'
@@ -10,8 +9,6 @@ export interface NextRequest {
 
 interface ContextViewerProps {
   requests: NextRequest[]
-  onClose: () => void
-  onInspect: (view: InspectView) => void
 }
 
 const ROLE_LABELS: Record<NextRequest['role'], string> = {
@@ -88,7 +85,7 @@ function JsonNode({ name, value }: { name: string; value: JsonValue }) {
   )
 }
 
-export function ContextViewer({ requests, onClose, onInspect }: ContextViewerProps) {
+export function ContextViewer({ requests }: ContextViewerProps) {
   const [selected, setSelected] = useState<NextRequest['role']>(requests[0]?.role ?? 'narrator')
   const [raw, setRaw] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -104,13 +101,10 @@ export function ContextViewer({ requests, onClose, onInspect }: ContextViewerPro
 
   return (
     <InspectScreen
-      view="context"
       title="Next requests"
       sections={requests.map((r) => ({ id: r.role, label: ROLE_LABELS[r.role] }))}
       selected={current?.role ?? ''}
       onSelect={(id) => setSelected(id as NextRequest['role'])}
-      onInspect={onInspect}
-      onClose={onClose}
     >
       {current && (
         <>

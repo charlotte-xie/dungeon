@@ -5,6 +5,7 @@ import {
   isTurnLike,
   loadStoredChronicle,
   loadStoredContext,
+  loadStoredDevMode,
   loadStoredOocBaseline,
   loadStoredPlotBaseline,
   loadStoredRecovery,
@@ -210,6 +211,46 @@ describe('role settings', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('developer mode', () => {
+  function stubStorage(items: Record<string, string>) {
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => items[key] ?? null,
+      removeItem: (key: string) => {
+        delete items[key]
+      },
+    })
+  }
+
+  it('is off for a browser that never turned it on', () => {
+    stubStorage({})
+    expect(loadStoredDevMode()).toBe(false)
+  })
+
+  it('stays on once turned on', () => {
+    stubStorage({ 'dm.devMode': 'true' })
+    expect(loadStoredDevMode()).toBe(true)
+  })
+
+  it('does not inherit the old trace setting, and forgets it', () => {
+    const items: Record<string, string> = { 'dm.showTrace': 'true' }
+    stubStorage(items)
+    expect(loadStoredDevMode()).toBe(false)
+    expect(items).toEqual({})
+  })
+
+  it('is off when storage is unavailable', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      removeItem: () => {
+        throw new Error('blocked')
+      },
+    })
+    expect(loadStoredDevMode()).toBe(false)
+  })
 })
 
 describe('stored chronicle migration', () => {

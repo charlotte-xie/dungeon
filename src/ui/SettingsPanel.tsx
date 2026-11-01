@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ADVENTURE_SLOTS,
   DEFAULT_BASE_URL,
   DEFAULT_CONTEXT,
   DEFAULT_MODEL,
@@ -14,12 +13,8 @@ import {
 } from '../engine/config'
 import { listModels } from '../engine/model/client'
 import type { ReasoningEffort } from '../engine/model/types'
-import type {
-  AdventureSlots,
-  ContextConfig,
-  SamplingParams,
-  SlotKey,
-} from '../engine/types'
+import type { ContextConfig, SamplingParams } from '../engine/types'
+import { useReportDirty } from '../hooks/useReportDirty'
 
 const ROLE_NAMES: Record<ModelRole, string> = {
   narrator: 'Narrator',
@@ -31,20 +26,18 @@ interface SettingsPanelProps {
   model: string
   apiKey: string
   baseUrl: string
-  slots: AdventureSlots
   sampling: SamplingParams
   context: ContextConfig
-  showTrace: boolean
-  onClose: () => void
+  devMode: boolean
   onSave: (
     model: string,
     apiKey: string,
     baseUrl: string,
-    slots: AdventureSlots,
     sampling: SamplingParams,
     context: ContextConfig,
-    showTrace: boolean,
+    devMode: boolean,
   ) => void
+  onDirtyChange: (dirty: boolean) => void
 }
 
 function ReasoningPicker({ label, value, onChange }: {
@@ -71,20 +64,18 @@ export function SettingsPanel({
   model,
   apiKey,
   baseUrl,
-  slots,
   sampling,
   context,
-  showTrace,
-  onClose,
+  devMode,
   onSave,
+  onDirtyChange,
 }: SettingsPanelProps) {
   const [draftModel, setDraftModel] = useState(model)
   const [draftApiKey, setDraftApiKey] = useState(apiKey)
   const [draftBaseUrl, setDraftBaseUrl] = useState(baseUrl || DEFAULT_BASE_URL)
-  const [draftSlots, setDraftSlots] = useState<AdventureSlots>(() => ({ ...slots }))
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
-  const [draftShowTrace, setDraftShowTrace] = useState<boolean>(showTrace)
+  const [draftDevMode, setDraftDevMode] = useState<boolean>(devMode)
   const [detectedModels, setDetectedModels] = useState<string[] | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
@@ -137,10 +128,6 @@ export function SettingsPanel({
   const modelChoices: readonly string[] =
     detectedModels && detectedModels.length > 0 ? detectedModels : MODEL_OPTIONS
 
-  function setSlotField(key: SlotKey, value: string) {
-    setDraftSlots((s) => ({ ...s, [key]: value }))
-  }
-
   function setSamplingField<K extends keyof SamplingParams>(key: K, value: number) {
     setDraftSampling((s) => ({ ...s, [key]: value }))
   }
@@ -149,29 +136,47 @@ export function SettingsPanel({
     setDraftContext((c) => ({ ...c, [key]: value }))
   }
 
+  const dirty =
+    draftModel !== model ||
+    draftApiKey !== apiKey ||
+    draftBaseUrl !== (baseUrl || DEFAULT_BASE_URL) ||
+    JSON.stringify(draftSampling) !== JSON.stringify(sampling) ||
+    JSON.stringify(draftContext) !== JSON.stringify(context) ||
+    draftDevMode !== devMode
+  useReportDirty(dirty, onDirtyChange)
+
   function save() {
-    const context: ContextConfig = {
+    const nextContext: ContextConfig = {
       ...draftContext,
       plotterModel: draftContext.plotterModel.trim(),
       summarizerModel: draftContext.summarizerModel.trim(),
     }
-    const conflict = reasoningOffConflict(draftModel, context)
+    const conflict = reasoningOffConflict(draftModel, nextContext)
     if (conflict) {
       setSettingsError(`${ROLE_NAMES[conflict]}: Grok 4.7 requires reasoning. Choose Low or higher.`)
       return
     }
-    const trimmed = {} as AdventureSlots
-    for (const def of ADVENTURE_SLOTS) trimmed[def.key] = (draftSlots[def.key] ?? '').trim()
-    onSave(
-      draftModel.trim(),
-      draftApiKey.trim(),
-      draftBaseUrl.trim() || DEFAULT_BASE_URL,
-      trimmed,
-      draftSampling,
-      context,
-      draftShowTrace,
-    )
-    onClose()
+    const nextModel = draftModel.trim()
+    const nextApiKey = draftApiKey.trim()
+    const nextBaseUrl = draftBaseUrl.trim() || DEFAULT_BASE_URL
+    onSave(nextModel, nextApiKey, nextBaseUrl, draftSampling, nextContext, draftDevMode)
+    // The drafts become what was saved, so the tab is no longer dirty.
+    setDraftModel(nextModel)
+    setDraftApiKey(nextApiKey)
+    setDraftBaseUrl(nextBaseUrl)
+    setDraftContext(nextContext)
+    setSettingsError(null)
+  }
+
+  function revert() {
+    resetDetection()
+    setDraftModel(model)
+    setDraftApiKey(apiKey)
+    setDraftBaseUrl(baseUrl || DEFAULT_BASE_URL)
+    setDraftSampling(sampling)
+    setDraftContext(context)
+    setDraftDevMode(devMode)
+    setSettingsError(null)
   }
 
   function resetDefaults() {
@@ -193,12 +198,8 @@ export function SettingsPanel({
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal">
-        <div className="modal-header">
-          <h2>Settings</h2>
-          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
-        </div>
+    <section className="page" aria-label="Settings">
+      <div className="page-main">
         <label
           title={`OpenAI-compatible chat completions endpoint. Default: ${DEFAULT_BASE_URL} (xAI). Mistral's La Plateforme works via the Mistral button (needs a Mistral API key; the button also switches to Chat Completions). For LM Studio, click the LM Studio button — make sure the local server is running on the same port. Any other server that exposes /chat/completions in OpenAI shape works too.`}
         >
@@ -360,44 +361,6 @@ export function SettingsPanel({
           a supported reasoning level or Provider default. Grok 4.7 requires reasoning;
           choose Low or higher.
         </p>
-        <label
-          title={`Model id used for the optional reviser pass. A small, fast instruction-following model is usually sufficient. Default: ${DEFAULT_REVISER_MODEL}.`}
-        >
-          <span>Reviser model</span>
-          <div className="model-picker">
-            <select
-              value={modelChoices.includes(draftContext.reviserModel) ? draftContext.reviserModel : ''}
-              onChange={(e) => {
-                if (e.target.value) setContextField('reviserModel', e.target.value)
-              }}
-              disabled={!draftContext.useReviser}
-            >
-              <option value="">— pick a preset —</option>
-              {modelChoices.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={draftContext.reviserModel}
-              onChange={(e) => setContextField('reviserModel', e.target.value)}
-              placeholder={DEFAULT_REVISER_MODEL}
-              spellCheck={false}
-              disabled={!draftContext.useReviser}
-            />
-          </div>
-        </label>
-        {ADVENTURE_SLOTS.map((def) => (
-          <label key={def.key} title={def.hint}>
-            <span>{def.label}</span>
-            <textarea
-              value={draftSlots[def.key] ?? ''}
-              onChange={(e) => setSlotField(def.key, e.target.value)}
-              rows={def.rows}
-              placeholder={def.placeholder}
-            />
-          </label>
-        ))}
         <label title="Standing out-of-character instructions every new adventure starts with, one per line. The DM keeps them, and any you give in play, in the adventure's OOC list.">
           <span>Default OOC instructions</span>
           <textarea
@@ -409,161 +372,8 @@ export function SettingsPanel({
           />
         </label>
 
-        <div className="sampling-grid">
-          <label
-            className="sampling-field"
-            title={`Higher = more varied prose and rhythm. Default ${DEFAULT_SAMPLING.temperature}. If a model rejects this setting, the adapter retries without it and remembers that capability for the session.`}
-          >
-            <span>Temperature</span>
-            <input
-              type="number"
-              min={0}
-              max={2}
-              step={0.05}
-              value={draftSampling.temperature}
-              onChange={(e) => setSamplingField('temperature', Number(e.target.value))}
-            />
-          </label>
-        </div>
-
-        <div className="sampling-grid">
-          <label
-            className="sampling-field"
-            title={`High watermark: when the live tail (turns past the cutoff) reaches this many turns, one compaction event drains it down to the floor. Rarer events preserve the provider's context cache. Also the per-level promotion threshold. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
-          >
-            <span>Compaction threshold (N)</span>
-            <input
-              type="number"
-              min={2}
-              step={1}
-              value={draftContext.compactionThreshold}
-              onChange={(e) => setContextField('compactionThreshold', Number(e.target.value))}
-            />
-          </label>
-          <label
-            className="sampling-field"
-            title={`Low watermark: a compaction event folds turns until this many remain live, so events recur every (threshold − floor) turns and the chronicle stays frozen in between. Clamped to at most threshold − batch. Default ${DEFAULT_CONTEXT.compactionFloor}.`}
-          >
-            <span>Compaction floor</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={draftContext.compactionFloor}
-              onChange={(e) => setContextField('compactionFloor', Number(e.target.value))}
-            />
-          </label>
-          <label
-            className="sampling-field"
-            title={`How many turns or entries to fold per chronicle entry (sub-batch size within a drain event). One chronicle entry covers M raw turns; a level-1 entry covers M²; and so on. Default ${DEFAULT_CONTEXT.compactionBatch}.`}
-          >
-            <span>Compaction batch (M)</span>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={draftContext.compactionBatch}
-              onChange={(e) => setContextField('compactionBatch', Number(e.target.value))}
-            />
-          </label>
-          <label
-            className="sampling-field"
-            title={`When the state JSON exceeds this, a cleanup reminder is appended to the state system message. Default ${DEFAULT_CONTEXT.stateCleanupChars.toLocaleString()}.`}
-          >
-            <span>State cleanup nudge (chars)</span>
-            <input
-              type="number"
-              min={1000}
-              step={500}
-              value={draftContext.stateCleanupChars}
-              onChange={(e) => setContextField('stateCleanupChars', Number(e.target.value))}
-            />
-          </label>
-        </div>
-
-        <h3 className="saves-subhead">Display</h3>
+        <h3 className="saves-subhead">Content</h3>
         <div className="flag-list">
-          <label
-            className="flag-field"
-            title="Display the per-turn trace toggle and reasoning / tool-call boxes under each DM reply. Turn off to hide them entirely. Default on."
-          >
-            <input
-              type="checkbox"
-              checked={draftShowTrace}
-              onChange={(e) => setDraftShowTrace(e.target.checked)}
-            />
-            <strong>Show trace and error details beside DM messages</strong>
-          </label>
-        </div>
-
-        <h3 className="saves-subhead">Experimental flags</h3>
-        <div className="flag-list">
-          <label
-            className="flag-field"
-            title={`When off, only the current player message is sent; earlier player messages are dropped (their content already lives in the DM narration that followed). Saves tokens but loses the literal wording for reference. Default ${DEFAULT_CONTEXT.includePriorPlayerTurns ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.includePriorPlayerTurns}
-              onChange={(e) => setContextField('includePriorPlayerTurns', e.target.checked)}
-            />
-            <strong>Include prior player turns in context</strong>
-          </label>
-          <label
-            className="flag-field"
-            title={`When on (default), the turn reminder is sent as a trailing system message after the player's input — clean separation, treated as just-in-time guidance. When off, the reminder is sent as an extra user message wrapped in (OOC: …); the dm-system prompt treats parens-wrapped player text as out-of-character directives, which can give the reminder more behavioral weight at the cost of breaking strict user/assistant alternation. Flip this off if the model under-weights the checklist as a system message. Default ${DEFAULT_CONTEXT.reminderAsSystem ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.reminderAsSystem}
-              onChange={(e) => setContextField('reminderAsSystem', e.target.checked)}
-            />
-            <strong>Send turn reminder as system message</strong>
-          </label>
-          <label
-            className="flag-field"
-            title={`When off, the memory tools are not offered — the model has no persistent record of NPCs, locations, plot themes, or key past events. Default ${DEFAULT_CONTEXT.includeMemory ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.includeMemory}
-              onChange={(e) => setContextField('includeMemory', e.target.checked)}
-            />
-            <strong>Include long-term memory</strong>
-          </label>
-          <label
-            className="flag-field"
-            title={`When off, the live-state tools are not offered — the model has no record of the current scene. Useful for comparing prose quality with/without structured grounding. Default ${DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.includeWorldState}
-              onChange={(e) => setContextField('includeWorldState', e.target.checked)}
-            />
-            <strong>Include live state</strong>
-          </label>
-          <label
-            className="flag-field"
-            title={`When off, the update_arcs and steer tools are not offered — the narrator writes without arcs or a steer. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.includePlotOutline}
-              onChange={(e) => setContextField('includePlotOutline', e.target.checked)}
-            />
-            <strong>Include story arcs</strong>
-          </label>
-          <label
-            className="flag-field"
-            title={`When off, the OOC-instruction tools are not offered — standing player directives only apply while their message remains in the live transcript. Default ${DEFAULT_CONTEXT.includeOoc ? 'on' : 'off'}.`}
-          >
-            <input
-              type="checkbox"
-              checked={draftContext.includeOoc}
-              onChange={(e) => setContextField('includeOoc', e.target.checked)}
-            />
-            <strong>Include OOC instructions</strong>
-          </label>
           <label
             className="flag-field"
             title={`When on, the DM is told the player is a consenting adult and may include dark, mature, or NSFW themes if they fit the story. When off, the DM is told to avoid NSFW descriptions or plot developments. Default ${DEFAULT_CONTEXT.nsfw ? 'on' : 'off'}.`}
@@ -575,36 +385,222 @@ export function SettingsPanel({
             />
             <strong>Allow NSFW / mature themes</strong>
           </label>
+        </div>
+
+        <h3 className="saves-subhead">Developer</h3>
+        <div className="flag-list">
           <label
             className="flag-field"
-            title={`When on, a reviser pass runs after the narrator: the model picked above (Reviser model) takes the narrator's draft and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`}
+            title="Shows the State and Context tabs, the trace and error details beside each reply, and the technical settings below. Remembered in this browser. Default off."
           >
             <input
               type="checkbox"
-              checked={draftContext.useReviser}
-              onChange={(e) => setContextField('useReviser', e.target.checked)}
+              checked={draftDevMode}
+              onChange={(e) => setDraftDevMode(e.target.checked)}
             />
-            <strong>Run reviser after narrator</strong>
+            <strong>Developer mode</strong>
           </label>
         </div>
+        {draftDevMode && (
+          <>
+            <label
+              title={`Model id used for the optional reviser pass. A small, fast instruction-following model is usually sufficient. Default: ${DEFAULT_REVISER_MODEL}.`}
+            >
+              <span>Reviser model</span>
+              <div className="model-picker">
+                <select
+                  value={modelChoices.includes(draftContext.reviserModel) ? draftContext.reviserModel : ''}
+                  onChange={(e) => {
+                    if (e.target.value) setContextField('reviserModel', e.target.value)
+                  }}
+                  disabled={!draftContext.useReviser}
+                >
+                  <option value="">— pick a preset —</option>
+                  {modelChoices.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={draftContext.reviserModel}
+                  onChange={(e) => setContextField('reviserModel', e.target.value)}
+                  placeholder={DEFAULT_REVISER_MODEL}
+                  spellCheck={false}
+                  disabled={!draftContext.useReviser}
+                />
+              </div>
+            </label>
+
+            <div className="sampling-grid">
+              <label
+                className="sampling-field"
+                title={`Higher = more varied prose and rhythm. Default ${DEFAULT_SAMPLING.temperature}. If a model rejects this setting, the adapter retries without it and remembers that capability for the session.`}
+              >
+                <span>Temperature</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={draftSampling.temperature}
+                  onChange={(e) => setSamplingField('temperature', Number(e.target.value))}
+                />
+              </label>
+            </div>
+
+            <div className="sampling-grid">
+              <label
+                className="sampling-field"
+                title={`High watermark: when the live tail (turns past the cutoff) reaches this many turns, one compaction event drains it down to the floor. Rarer events preserve the provider's context cache. Also the per-level promotion threshold. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
+              >
+                <span>Compaction threshold (N)</span>
+                <input
+                  type="number"
+                  min={2}
+                  step={1}
+                  value={draftContext.compactionThreshold}
+                  onChange={(e) => setContextField('compactionThreshold', Number(e.target.value))}
+                />
+              </label>
+              <label
+                className="sampling-field"
+                title={`Low watermark: a compaction event folds turns until this many remain live, so events recur every (threshold − floor) turns and the chronicle stays frozen in between. Clamped to at most threshold − batch. Default ${DEFAULT_CONTEXT.compactionFloor}.`}
+              >
+                <span>Compaction floor</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={draftContext.compactionFloor}
+                  onChange={(e) => setContextField('compactionFloor', Number(e.target.value))}
+                />
+              </label>
+              <label
+                className="sampling-field"
+                title={`How many turns or entries to fold per chronicle entry (sub-batch size within a drain event). One chronicle entry covers M raw turns; a level-1 entry covers M²; and so on. Default ${DEFAULT_CONTEXT.compactionBatch}.`}
+              >
+                <span>Compaction batch (M)</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={draftContext.compactionBatch}
+                  onChange={(e) => setContextField('compactionBatch', Number(e.target.value))}
+                />
+              </label>
+              <label
+                className="sampling-field"
+                title={`When the state JSON exceeds this, a cleanup reminder is appended to the state system message. Default ${DEFAULT_CONTEXT.stateCleanupChars.toLocaleString()}.`}
+              >
+                <span>State cleanup nudge (chars)</span>
+                <input
+                  type="number"
+                  min={1000}
+                  step={500}
+                  value={draftContext.stateCleanupChars}
+                  onChange={(e) => setContextField('stateCleanupChars', Number(e.target.value))}
+                />
+              </label>
+            </div>
+
+            <h3 className="saves-subhead">Experimental flags</h3>
+            <div className="flag-list">
+              <label
+                className="flag-field"
+                title={`When off, only the current player message is sent; earlier player messages are dropped (their content already lives in the DM narration that followed). Saves tokens but loses the literal wording for reference. Default ${DEFAULT_CONTEXT.includePriorPlayerTurns ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.includePriorPlayerTurns}
+                  onChange={(e) => setContextField('includePriorPlayerTurns', e.target.checked)}
+                />
+                <strong>Include prior player turns in context</strong>
+              </label>
+              <label
+                className="flag-field"
+                title={`When on (default), the turn reminder is sent as a trailing system message after the player's input — clean separation, treated as just-in-time guidance. When off, the reminder is sent as an extra user message wrapped in (OOC: …); the dm-system prompt treats parens-wrapped player text as out-of-character directives, which can give the reminder more behavioral weight at the cost of breaking strict user/assistant alternation. Flip this off if the model under-weights the checklist as a system message. Default ${DEFAULT_CONTEXT.reminderAsSystem ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.reminderAsSystem}
+                  onChange={(e) => setContextField('reminderAsSystem', e.target.checked)}
+                />
+                <strong>Send turn reminder as system message</strong>
+              </label>
+              <label
+                className="flag-field"
+                title={`When off, the memory tools are not offered — the model has no persistent record of NPCs, locations, plot themes, or key past events. Default ${DEFAULT_CONTEXT.includeMemory ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.includeMemory}
+                  onChange={(e) => setContextField('includeMemory', e.target.checked)}
+                />
+                <strong>Include long-term memory</strong>
+              </label>
+              <label
+                className="flag-field"
+                title={`When off, the live-state tools are not offered — the model has no record of the current scene. Useful for comparing prose quality with/without structured grounding. Default ${DEFAULT_CONTEXT.includeWorldState ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.includeWorldState}
+                  onChange={(e) => setContextField('includeWorldState', e.target.checked)}
+                />
+                <strong>Include live state</strong>
+              </label>
+              <label
+                className="flag-field"
+                title={`When off, the update_arcs and steer tools are not offered — the narrator writes without arcs or a steer. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.includePlotOutline}
+                  onChange={(e) => setContextField('includePlotOutline', e.target.checked)}
+                />
+                <strong>Include story arcs</strong>
+              </label>
+              <label
+                className="flag-field"
+                title={`When off, the OOC-instruction tools are not offered — standing player directives only apply while their message remains in the live transcript. Default ${DEFAULT_CONTEXT.includeOoc ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.includeOoc}
+                  onChange={(e) => setContextField('includeOoc', e.target.checked)}
+                />
+                <strong>Include OOC instructions</strong>
+              </label>
+              <label
+                className="flag-field"
+                title={`When on, a reviser pass runs after the narrator: the model picked above (Reviser model) takes the narrator's draft and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`}
+              >
+                <input
+                  type="checkbox"
+                  checked={draftContext.useReviser}
+                  onChange={(e) => setContextField('useReviser', e.target.checked)}
+                />
+                <strong>Run reviser after narrator</strong>
+              </label>
+            </div>
+          </>
+        )}
 
         <p className="hint">
-          Saving persists to this browser. Sampling and flags take effect on the next
-          turn. Click <em>New Adventure</em> in the header to restart — the DM
-          will generate a fresh opening from the brief above.
+          Saving keeps these settings in this browser. They take effect on the next turn.
         </p>
         {settingsError && <p className="error-text" role="alert">{settingsError}</p>}
-        <div className="modal-actions">
-          <button className="ghost" onClick={resetDefaults}>
-            Reset to defaults
-          </button>
-          <span className="spacer" />
-          <button className="ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button onClick={save}>Save</button>
-        </div>
       </div>
-    </div>
+      <footer className="page-actions">
+        <button className="ghost" onClick={resetDefaults}>
+          Reset to defaults
+        </button>
+        <span className="spacer" />
+        <button className="ghost" onClick={revert} disabled={!dirty}>
+          Revert
+        </button>
+        <button onClick={save} disabled={!dirty}>Save</button>
+      </footer>
+    </section>
   )
 }

@@ -40,12 +40,14 @@ export const LS_SAMPLING = 'dm.sampling'
 export const LS_CONTEXT = 'dm.context'
 export const LS_COMPACT_CUTOFF = 'dm.compactCutoff'
 export const LS_SAVES = 'dm.saves'
-export const LS_SHOW_TRACE = 'dm.showTrace'
+export const LS_DEV_MODE = 'dm.devMode'
 export const LS_RECOVERY = 'dm.recovery'
 export const LS_OOC_BASELINE = 'dm.oocBaseline'
 export const LS_PLOT_BASELINE = 'dm.plotBaseline'
 
 const LS_MESSAGES_V1 = 'dm.messages'
+// The trace toggle that developer mode replaced; every browser stored it.
+const LS_SHOW_TRACE_LEGACY = 'dm.showTrace'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -197,6 +199,16 @@ export function loadStored(key: string, fallback: string): string {
     return localStorage.getItem(key) ?? fallback
   } catch {
     return fallback
+  }
+}
+
+// Developer mode is off unless this browser turned it on.
+export function loadStoredDevMode(): boolean {
+  try {
+    localStorage.removeItem(LS_SHOW_TRACE_LEGACY)
+    return localStorage.getItem(LS_DEV_MODE) === 'true'
+  } catch {
+    return false
   }
 }
 

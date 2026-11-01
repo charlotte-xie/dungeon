@@ -1,20 +1,12 @@
 import { useState } from 'react'
 import { withoutEntries } from '../engine/chronicle'
-import {
-  MAX_OOC_ITEMS,
-  MAX_OOC_ITEM_CHARS,
-  MAX_PLOT_ITEMS,
-  MAX_PLOT_ITEM_CHARS,
-} from '../engine/tools'
 import type { Chronicle, ContextConfig, Memory, WorldState } from '../engine/types'
+import { useReportDirty } from '../hooks/useReportDirty'
 import { InspectScreen } from './InspectScreen'
-import type { InspectView } from './InspectSwitch'
 
 interface StateViewerProps {
   state: WorldState
-  plot: string[]
   memory: Memory
-  ooc: string[]
   chronicle: Chronicle
   // Each chronicle entry's first and last turn, numbered as in the log.
   entryTurns: Map<string, { first: number; last: number }>
@@ -24,53 +16,28 @@ interface StateViewerProps {
   busy: boolean
   canCompact: boolean
   canForceCompact: boolean
-  onClose: () => void
-  onInspect: (view: InspectView) => void
   onCompact: () => void
   onForceCompact: () => void
   onRebuildChronicle: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
-  onSavePlot: (next: string[]) => void
   onSaveMemory: (next: Memory) => void
-  onSaveOoc: (next: string[]) => void
   onSaveChronicle: (next: Chronicle) => void
-  onClearPlot: () => void
   onClearMemory: () => void
-  onClearOoc: () => void
   onClearChronicle: () => void
+  onDirtyChange: (dirty: boolean) => void
 }
 
-type Tab = 'memory' | 'state' | 'plot' | 'ooc' | 'chronicle'
+type Tab = 'memory' | 'state' | 'chronicle'
 
 function turnsLabel(turns: { first: number; last: number } | undefined): string {
   if (!turns) return 'turns unknown'
   return turns.first === turns.last ? `turn ${turns.first}` : `turns ${turns.first}–${turns.last}`
 }
 
-function plotToDraft(plot: string[]): string {
-  return plot.map((p, i) => `${i + 1}. ${p}`).join('\n')
-}
-
-function parsePlotDraft(draft: string): string[] {
-  return draft
-    .split('\n')
-    .map((line) =>
-      line
-        // Strip any line-leading list prefix: an arbitrary positive integer
-        // followed by ., ), :, or ] (so re-ordered/non-sequential numbering
-        // survives a round-trip), or a -, *, or • bullet.
-        .replace(/^\s*(?:\d+[.):\]]\s+|[-*•]\s+)/, '')
-        .trim(),
-    )
-    .filter((line) => line.length > 0)
-}
-
 export function StateViewer({
   state,
-  plot,
   memory,
-  ooc,
   chronicle,
   entryTurns,
   compacting,
@@ -78,39 +45,26 @@ export function StateViewer({
   busy,
   canCompact,
   canForceCompact,
-  onClose,
-  onInspect,
   onCompact,
   onForceCompact,
   onRebuildChronicle,
   onResetState,
   onSaveState,
-  onSavePlot,
   onSaveMemory,
-  onSaveOoc,
   onSaveChronicle,
-  onClearPlot,
   onClearMemory,
-  onClearOoc,
   onClearChronicle,
+  onDirtyChange,
 }: StateViewerProps) {
   const [tab, setTab] = useState<Tab>(() =>
     context.includeMemory
       ? 'memory'
       : context.includeWorldState
         ? 'state'
-        : context.includePlotOutline
-          ? 'plot'
-          : context.includeOoc
-            ? 'ooc'
-            : 'chronicle',
+        : 'chronicle',
   )
   const [draft, setDraft] = useState(() => JSON.stringify(state, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
-  const [plotDraft, setPlotDraft] = useState(() => plotToDraft(plot))
-  const [plotError, setPlotError] = useState<string | null>(null)
-  const [oocDraft, setOocDraft] = useState(() => plotToDraft(ooc))
-  const [oocError, setOocError] = useState<string | null>(null)
   const [memoryDraft, setMemoryDraft] = useState(() => JSON.stringify(memory, null, 2))
   const [memoryError, setMemoryError] = useState<string | null>(null)
   // Chronicle entry edits, keyed by entry id; an entry not in the map is
@@ -118,7 +72,7 @@ export function StateViewer({
   const [chronicleDraft, setChronicleDraft] = useState<Record<string, string>>({})
 
   // Reset local drafts when the parent's prop changes (e.g. after a turn that
-  // mutated state/plot/memory). Adjusting state during render — a documented
+  // mutated state or memory). Adjusting state during render — a documented
   // React pattern — instead of useEffect avoids cascading-render lints.
   const [prevState, setPrevState] = useState(state)
   if (prevState !== state) {
@@ -126,23 +80,11 @@ export function StateViewer({
     setDraft(JSON.stringify(state, null, 2))
     setParseError(null)
   }
-  const [prevPlot, setPrevPlot] = useState(plot)
-  if (prevPlot !== plot) {
-    setPrevPlot(plot)
-    setPlotDraft(plotToDraft(plot))
-    setPlotError(null)
-  }
   const [prevMemory, setPrevMemory] = useState(memory)
   if (prevMemory !== memory) {
     setPrevMemory(memory)
     setMemoryDraft(JSON.stringify(memory, null, 2))
     setMemoryError(null)
-  }
-  const [prevOoc, setPrevOoc] = useState(ooc)
-  if (prevOoc !== ooc) {
-    setPrevOoc(ooc)
-    setOocDraft(plotToDraft(ooc))
-    setOocError(null)
   }
   const [prevChronicle, setPrevChronicle] = useState(chronicle)
   if (prevChronicle !== chronicle) {
@@ -153,8 +95,6 @@ export function StateViewer({
   const currentJson = JSON.stringify(state, null, 2)
   const currentMemoryJson = JSON.stringify(memory, null, 2)
   const stateDirty = draft !== currentJson
-  const plotDirty = plotDraft !== plotToDraft(plot)
-  const oocDirty = oocDraft !== plotToDraft(ooc)
   const memoryDirty = memoryDraft !== currentMemoryJson
   const entryText = (id: string, original: string) => chronicleDraft[id] ?? original
   const chronicleDirty = chronicle.some((level) =>
@@ -187,36 +127,6 @@ export function StateViewer({
     return parsed as WorldState
   }
 
-  function validatePlot(): string[] | null {
-    const parsed = parsePlotDraft(plotDraft)
-    if (parsed.length > MAX_PLOT_ITEMS) {
-      setPlotError(`Too many arcs (${parsed.length}, max ${MAX_PLOT_ITEMS}).`)
-      return null
-    }
-    const tooLong = parsed.find((s) => s.length > MAX_PLOT_ITEM_CHARS)
-    if (tooLong) {
-      setPlotError(`An arc is too long (${tooLong.length} chars, max ${MAX_PLOT_ITEM_CHARS}).`)
-      return null
-    }
-    setPlotError(null)
-    return parsed
-  }
-
-  function validateOoc(): string[] | null {
-    const parsed = parsePlotDraft(oocDraft)
-    if (parsed.length > MAX_OOC_ITEMS) {
-      setOocError(`Too many entries (${parsed.length}, max ${MAX_OOC_ITEMS}).`)
-      return null
-    }
-    const tooLong = parsed.find((s) => s.length > MAX_OOC_ITEM_CHARS)
-    if (tooLong) {
-      setOocError(`An entry is too long (${tooLong.length} chars, max ${MAX_OOC_ITEM_CHARS}).`)
-      return null
-    }
-    setOocError(null)
-    return parsed
-  }
-
   function validateMemory(): Memory | null {
     let parsed: unknown
     try {
@@ -242,15 +152,12 @@ export function StateViewer({
   }
 
   const wantState = context.includeWorldState && stateDirty
-  const wantPlot = context.includePlotOutline && plotDirty
-  const wantOoc = context.includeOoc && oocDirty
   const wantMemory = context.includeMemory && memoryDirty
-  const anyDirty = wantState || wantPlot || wantOoc || wantMemory || chronicleDirty
+  const anyDirty = wantState || wantMemory || chronicleDirty
+  useReportDirty(anyDirty, onDirtyChange)
 
   function handleSaveChanges() {
     const nextState = wantState ? validateState() : undefined
-    const nextPlot = wantPlot ? validatePlot() : undefined
-    const nextOoc = wantOoc ? validateOoc() : undefined
     const nextMemory = wantMemory ? validateMemory() : undefined
     // On validation failure, jump to the first failing tab so the inline
     // error is visible even if the user edited it on another tab.
@@ -259,18 +166,12 @@ export function StateViewer({
         ? 'memory'
         : wantState && nextState === null
           ? 'state'
-          : wantPlot && nextPlot === null
-            ? 'plot'
-            : wantOoc && nextOoc === null
-              ? 'ooc'
-              : null
+          : null
     if (firstInvalid) {
       setTab(firstInvalid)
       return
     }
     if (nextState !== undefined && nextState !== null) onSaveState(nextState)
-    if (nextPlot !== undefined && nextPlot !== null) onSavePlot(nextPlot)
-    if (nextOoc !== undefined && nextOoc !== null) onSaveOoc(nextOoc)
     if (nextMemory !== undefined && nextMemory !== null) onSaveMemory(nextMemory)
     if (chronicleDirty) onSaveChronicle(buildEditedChronicle())
   }
@@ -282,27 +183,15 @@ export function StateViewer({
     ...(context.includeWorldState
       ? [{ id: 'state' as Tab, label: 'Live state', dirty: stateDirty }]
       : []),
-    ...(context.includePlotOutline
-      ? [{ id: 'plot' as Tab, label: `Arcs (${plot.length})`, dirty: plotDirty }]
-      : []),
-    ...(context.includeOoc
-      ? [{ id: 'ooc' as Tab, label: `OOC (${ooc.length})`, dirty: oocDirty }]
-      : []),
     { id: 'chronicle' as Tab, label: `Chronicle (${totalEntries})`, dirty: chronicleDirty },
   ]
 
   return (
     <InspectScreen
-      view="state"
       title="Engine state"
       sections={tabs}
       selected={tab}
       onSelect={(id) => setTab(id as Tab)}
-      onInspect={(next) => {
-        if (anyDirty && !confirm('Discard your unsaved state edits?')) return
-        onInspect(next)
-      }}
-      onClose={onClose}
       actions={
         <>
           {tab === 'memory' && (
@@ -325,28 +214,6 @@ export function StateViewer({
               disabled={busy}
             >
               Reset state
-            </button>
-          )}
-          {tab === 'plot' && (
-            <button
-              className="ghost"
-              onClick={() => {
-                if (plot.length && confirm('Clear the arcs?')) onClearPlot()
-              }}
-              disabled={busy || plot.length === 0}
-            >
-              Clear arcs
-            </button>
-          )}
-          {tab === 'ooc' && (
-            <button
-              className="ghost"
-              onClick={() => {
-                if (ooc.length && confirm('Clear all standing OOC instructions?')) onClearOoc()
-              }}
-              disabled={busy || ooc.length === 0}
-            >
-              Clear OOC
             </button>
           )}
           {tab === 'chronicle' && canCompact && (
@@ -447,56 +314,6 @@ export function StateViewer({
             readOnly={busy}
           />
           {parseError && <p className="error-text">{parseError}</p>}
-        </>
-      )}
-
-      {tab === 'plot' && context.includePlotOutline && (
-        <>
-          <p className="hint">
-            The story's arcs: what is ongoing in it, such as a quarrel, a rivalry or
-            a secret working its way out, and where each is heading. The plotter
-            sets them up, moves one on a little with each steer, and revises or
-            removes them as the story turns. The narrator sees them whenever they
-            change. Edit them to take the story your way: the plotter keeps to what
-            you write. One arc per line; leading <code>-</code>,{' '}
-            <code>*</code>, or <code>1.</code> numbering is stripped on save. Max{' '}
-            {MAX_PLOT_ITEMS} arcs, each up to {MAX_PLOT_ITEM_CHARS} chars. Current:{' '}
-            {plot.length} arc{plot.length === 1 ? '' : 's'}.
-          </p>
-          <textarea
-            className="state-json state-json-editor tab-editor"
-            spellCheck={false}
-            value={plotDraft}
-            onChange={(e) => setPlotDraft(e.target.value)}
-            readOnly={busy}
-            placeholder="(no arcs yet — one arc per line)"
-          />
-          {plotError && <p className="error-text">{plotError}</p>}
-        </>
-      )}
-
-      {tab === 'ooc' && context.includeOoc && (
-        <>
-          <p className="hint">
-            The DM maintains this numbered list via the <code>update_ooc</code> tool
-            (append/insert/update/delete by 1-indexed position) — the player's{' '}
-            <strong>standing out-of-character directives</strong>: style and pacing
-            preferences, boundaries, and corrections that should keep applying. Entries
-            are deleted when withdrawn, completed, or no longer relevant. One entry per
-            line; leading <code>-</code>, <code>*</code>, or <code>1.</code> numbering
-            is stripped on save. Max {MAX_OOC_ITEMS} entries, each up to{' '}
-            {MAX_OOC_ITEM_CHARS} chars. Current: {ooc.length} entr
-            {ooc.length === 1 ? 'y' : 'ies'}.
-          </p>
-          <textarea
-            className="state-json state-json-editor tab-editor"
-            spellCheck={false}
-            value={oocDraft}
-            onChange={(e) => setOocDraft(e.target.value)}
-            readOnly={busy}
-            placeholder="(no standing OOC instructions — one entry per line)"
-          />
-          {oocError && <p className="error-text">{oocError}</p>}
         </>
       )}
 

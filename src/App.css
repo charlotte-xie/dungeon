@@ -17,7 +17,7 @@ header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin: 0 0 1rem;
+  margin: 0 0 0.75rem;
   gap: 1rem;
 }
 
@@ -27,44 +27,124 @@ header h1 {
   letter-spacing: 0.04em;
 }
 
-.header-actions {
+/* The screens, as tabs along the top; the developer ones follow a divider. */
+.tab-bar {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.25rem;
+  margin: 0 0 0.75rem;
+  border-bottom: 1px solid #3a3a3a;
 }
 
-.menu {
-  position: relative;
-}
-
-.menu-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  min-width: 10rem;
-  padding: 0.25rem;
-  background: #161616;
-  border: 1px solid #3a3a3a;
-  border-radius: 4px;
-}
-
-.menu-list button {
-  padding: 0.45rem 0.6rem;
+.tab {
+  margin-bottom: -1px;
+  padding: 0.45rem 0.9rem;
   font: inherit;
-  font-size: 0.85rem;
-  text-align: left;
-  color: #e6e6e6;
+  font-size: 0.9rem;
+  color: #aaa;
   background: transparent;
-  border: 0;
-  border-radius: 3px;
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
   cursor: pointer;
 }
 
-.menu-list button:hover {
+.tab:hover:not(.active) {
+  color: #d8d2c0;
+}
+
+.tab.active {
   color: #c9a959;
-  background: #222;
+  background: #121212;
+  border-color: #3a3a3a;
+  border-bottom-color: #121212;
+}
+
+.tab-divider {
+  align-self: center;
+  width: 1px;
+  height: 1.1rem;
+  margin: 0 0.4rem;
+  background: #3a3a3a;
+}
+
+/* The story and its composer, kept in place while another tab is open. */
+.play {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.play[hidden] {
+  display: none;
+}
+
+/* A player tab: its content scrolling, its actions along the bottom. */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #121212;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+}
+
+.page-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.25rem;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  background: #161616;
+  border-top: 1px solid #2a2a2a;
+  border-radius: 0 0 6px 6px;
+}
+
+.page-actions .spacer {
+  flex: 1;
+}
+
+.page-actions > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.arcs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.arcs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  color: #c9a959;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.reveal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 /* Actions that fix the latest reply sit under it, not in the action bar. */
@@ -117,12 +197,6 @@ header h1 {
 
 .rewrite-form .error-text {
   flex-basis: 100%;
-}
-
-.inspect-switch {
-  display: flex;
-  gap: 0.25rem;
-  margin-left: auto;
 }
 
 .ghost {
@@ -515,47 +589,23 @@ header h1 {
   width: min(960px, 100%);
 }
 
-/* The Inspect screen fills the window: its bar across the top, its sections
-   down the side, the content scrolling in the middle, and the section's
-   actions along the bottom. */
+/* A developer tab fills the space under the tab bar: its sections down the
+   side, the content scrolling in the middle, and the section's actions along
+   the bottom. */
 .inspect-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 13rem minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
-    'bar bar'
     'nav main'
     'nav actions';
   background: #121212;
   color: #e6e6e6;
-}
-
-.inspect-bar {
-  grid-area: bar;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 1.25rem;
-  background: #161616;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.inspect-bar h2 {
-  margin: 0;
-  font-family: 'Cinzel', 'Georgia', serif;
-  letter-spacing: 0.04em;
-  font-size: 1.2rem;
-}
-
-.inspect-bar .inspect-switch {
-  margin-left: 0.5rem;
-}
-
-.inspect-bar .spacer {
-  flex: 1;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .inspect-nav {
@@ -621,15 +671,13 @@ header h1 {
 @media (max-width: 700px) {
   .inspect-screen {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
-      'bar'
       'nav'
       'main'
       'actions';
   }
 
-  .inspect-bar,
   .inspect-main,
   .inspect-actions {
     padding-left: 1rem;
@@ -643,26 +691,6 @@ header h1 {
     border-right: 0;
     border-bottom: 1px solid #2a2a2a;
   }
-}
-
-.ctx-tab {
-  background: transparent;
-  border: 1px solid #2a2a2a;
-  color: #aaa;
-  padding: 0.3rem 0.8rem;
-  border-radius: 4px 4px 0 0;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.ctx-tab.active {
-  background: #1a1a1a;
-  color: #d8d2c0;
-  border-color: #3a3a3a;
-}
-
-.ctx-tab:hover:not(.active) {
-  color: #d8d2c0;
 }
 
 /* A request as posted: the endpoint, then its JSON body whole, every key in
@@ -781,7 +809,8 @@ header h1 {
   gap: 1rem;
 }
 
-.modal label {
+.modal label,
+.page-main label {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -792,6 +821,7 @@ header h1 {
 }
 
 .modal textarea,
+.page-main textarea,
 .inspect-main textarea {
   font: inherit;
   padding: 0.6rem;
@@ -804,7 +834,8 @@ header h1 {
   letter-spacing: normal;
 }
 
-.modal input[type='number'] {
+.modal input[type='number'],
+.page-main input[type='number'] {
   font: inherit;
   padding: 0.4rem 0.5rem;
   background: #1a1a1a;
@@ -838,15 +869,25 @@ header h1 {
   }
 }
 
+/* Hints and errors read as sentences, even inside an uppercase field label. */
 .modal .hint,
+.page-main .hint,
 .inspect-main .hint {
   margin: 0;
   font-size: 0.8rem;
   opacity: 0.7;
   line-height: 1.4;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.page-main label .error-text {
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .modal .hint code,
+.page-main .hint code,
 .inspect-main .hint code {
   background: #222;
   padding: 0.05rem 0.3rem;
@@ -1336,6 +1377,7 @@ textarea.state-json-editor.tab-editor {
 }
 
 .modal-actions > button:not(.ghost),
+.page-actions > button:not(.ghost),
 .inspect-actions > button:not(.ghost) {
   padding: 0.45rem 1rem;
   font: inherit;

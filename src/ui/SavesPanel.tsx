@@ -6,7 +6,6 @@ interface SavesPanelProps {
   canSave: boolean
   busy: boolean
   turnCount: number
-  onClose: () => void
   onSave: (name: string) => void
   onOverwrite: (id: string) => void
   onLoad: (id: string) => void
@@ -31,7 +30,6 @@ export function SavesPanel({
   canSave,
   busy,
   turnCount,
-  onClose,
   onSave,
   onOverwrite,
   onLoad,
@@ -58,13 +56,8 @@ export function SavesPanel({
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal">
-        <div className="modal-header">
-          <h2>Saved games</h2>
-          <button className="modal-close" aria-label="Close" onClick={onClose}>×</button>
-        </div>
-
+    <section className="page" aria-label="Saved games">
+      <div className="page-main">
         {busy && (
           <p className="hint">
             Generation is continuing in the background. Loading a save will cancel it; completed saves can still be inspected, exported, or deleted.
@@ -120,22 +113,19 @@ export function SavesPanel({
             ))}
           </div>
         )}
-
-        <div className="modal-actions">
-          <button className="ghost" onClick={handleImportClick}>
-            Import from file…
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
-          <span className="spacer" />
-          <button onClick={onClose}>Close</button>
-        </div>
       </div>
-    </div>
+      <footer className="page-actions">
+        <button className="ghost" onClick={handleImportClick}>
+          Import from file…
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+      </footer>
+    </section>
   )
 }

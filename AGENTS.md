@@ -70,8 +70,11 @@ In **Settings**:
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
 - The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
-- System prompt, scenario, style guide, sampling params, context limits.
 - **Default OOC instructions** — the standing instructions each new adventure starts with, one per line. They ship empty, and the player changes them in play like any OOC direction. British English and the usual reply length are set in the narrator's system prompt, so the Plotter never reads them.
+- **Allow NSFW / mature themes** — the content stance both roles are given.
+- **Developer mode** — off by default and remembered in the browser. It adds the **State** and **Context** tabs, the trace and error details beside each reply, and the technical settings: the reviser, temperature, compaction limits, the state cleanup nudge, and the experimental flags that switch records and context options on or off.
+
+The scenario brief and style guide are the adventure's own, edited in the **Adventure** tab beside its OOC list and arcs.
 
 New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The plotter runs first: it updates the records, recalls memories and steers the reply, and the narrator then writes from that briefing. The two send separate requests, and each reuses its own cached prefix from the previous turn, so the plotter model can differ from the narrator model without losing caching.
 
@@ -87,7 +90,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
   - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying the player's OOC and arc edits across restores, undo/redo/retry, and coordination of the running operation.
 - `src/prompts/*.md`: the product's own LLM prompts (the narrator's and the Plotter's system prompts, the Plotter's per-turn steps and nudges, turn reminders, each record's rules for its tool's description, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. A file holding several short prompts splits them under `## name` headings. Prompt wording lives here rather than in code, and tests don't pin it. They are part of the game, not instructions for coding agents.
 - `src/hooks/`: React hooks. `useGameController.ts` drives turns.
-- `src/ui/`: panels and viewers (settings, saves, the Adventure menu, trace, and the Inspect screen: the engine state, and the next requests exactly as they will be posted).
+- `src/ui/`: the tabs and their panels. Every player sees Play, Adventure (the scenario brief, style guide, OOC list, and the arcs, hidden until revealed because they give the plot away), Saves and Settings. Developer mode adds State (memory, live state and the chronicle) and Context (the next requests exactly as they will be posted), and the trace beside each reply.
 
 ## Working on this project
 

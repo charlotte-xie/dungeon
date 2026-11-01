@@ -21,7 +21,7 @@ Each scenario file gives the premise to paste in, a script of inputs, what that 
 
 ## Driving the app
 
-**By hand.** Open **Adventure › New adventure**, paste the scenario's brief and style guide, and begin. Type each input and press **Act**; press **Continue** for a Continue turn. The trace under each reply shows the Plotter's calls, the steer, timings and cached tokens, and **Inspect** shows the arcs and memory.
+**By hand.** Turn on **Developer mode** in Settings. Press **New adventure**, paste the scenario's brief and style guide, and begin. Type each input and press **Act**; press **Continue** for a Continue turn. The trace beside each reply shows the Plotter's calls, the steer, timings and cached tokens; the **Adventure** tab shows the arcs, and the **State** tab the memory.
 
 **By script.** With a browser tool, paste the helper below into the page. It records each model request and response body (never the headers, so the key is never touched) and drives the app's own buttons. It assumes the Responses API and is lost when the page reloads.
 
