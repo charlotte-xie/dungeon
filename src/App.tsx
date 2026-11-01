@@ -479,6 +479,7 @@ function App() {
           onInspect={setInspect}
           onCompact={() => void game.compactNow()}
           onForceCompact={() => void game.compactNow(true)}
+          onRebuildChronicle={() => void game.rebuildChronicleNow()}
           onResetState={() => game.commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={game.commitState}
           onSavePlot={game.commitPlot}

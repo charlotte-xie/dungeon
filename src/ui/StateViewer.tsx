@@ -26,6 +26,7 @@ interface StateViewerProps {
   onInspect: (view: InspectView) => void
   onCompact: () => void
   onForceCompact: () => void
+  onRebuildChronicle: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
   onSavePlot: (next: string[]) => void
@@ -78,6 +79,7 @@ export function StateViewer({
   onInspect,
   onCompact,
   onForceCompact,
+  onRebuildChronicle,
   onResetState,
   onSaveState,
   onSavePlot,
@@ -368,11 +370,21 @@ export function StateViewer({
               Force compact
             </button>
           )}
+          {tab === 'chronicle' && totalEntries > 0 && (
+            <button
+              className="ghost"
+              onClick={onRebuildChronicle}
+              disabled={busy || anyDirty}
+              title={anyDirty ? 'Save or discard your edits first' : 'Write every summary afresh from the turns it covers'}
+            >
+              Rebuild
+            </button>
+          )}
           {tab === 'chronicle' && (
             <button
               className="ghost"
               onClick={() => {
-                if (totalEntries > 0 && confirm('Clear the chronicle and reset compaction cutoff?')) onClearChronicle()
+                if (totalEntries > 0 && confirm('Clear the chronicle? The model sees every turn in full again.')) onClearChronicle()
               }}
               disabled={busy || totalEntries === 0}
             >

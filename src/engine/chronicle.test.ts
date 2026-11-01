@@ -6,6 +6,7 @@ import {
   entryTurnNumbers,
   indexChronicle,
   memoryForCompaction,
+  rebuildChronicle,
   withoutEntries,
   type LegacyChronicleEntry,
 } from './chronicle'
@@ -241,6 +242,28 @@ describe('compactCascade drain events', () => {
     expect(chronicleCutoff(chronicle, turns)).toBe(4)
     expect(chronicle[0]).toHaveLength(1)
     expect(mockedSummarizer).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('rebuildChronicle', () => {
+  beforeEach(() => {
+    mockedSummarizer.mockClear()
+  })
+
+  it('writes every entry afresh from its own turns, keeping its place and turns', async () => {
+    const chronicle: Chronicle = [
+      [entry('b', 't4', 't5'), entry('c', 't6', 't6')],
+      [entry('a', 't0', 't3')],
+    ]
+    const progress: number[] = []
+    const rebuilt = await rebuildChronicle(TEN, chronicle, AGENT, new AbortController().signal, (done) =>
+      progress.push(done),
+    )
+    expect(spans(rebuilt, TEN)).toEqual(spans(chronicle, TEN))
+    expect(rebuilt[1][0].text).toBe('SUMMARY[1:PLAYER: p0\n\nDM: d0|2:PLAYER: p1\n\nDM: d1|3:PLAYER: p2\n\nDM: d2|4:PLAYER: p3\n\nDM: d3]')
+    expect(rebuilt[0][1].text).toBe('SUMMARY[7:PLAYER: p6\n\nDM: d6]')
+    expect(mockedSummarizer).toHaveBeenCalledTimes(3)
+    expect(progress).toEqual([1, 2, 3])
   })
 })
 

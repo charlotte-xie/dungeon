@@ -344,6 +344,42 @@ export async function compactCascade(
   return next
 }
 
+// How many summaries a rebuild writes at once.
+const REBUILD_CONCURRENCY = 4
+
+// The chronicle with every entry written afresh from the turns it covers,
+// each keeping its place and its turns: for after the summariser, its prompt
+// or the memory it grounds on has changed. An entry with no narrated turns to
+// read keeps its text.
+export async function rebuildChronicle(
+  turns: Turn[],
+  chronicle: Chronicle,
+  agent: ChronicleAgentArgs,
+  signal: AbortSignal,
+  onProgress?: (done: number, total: number) => void,
+): Promise<Chronicle> {
+  const ranges = chronicleRanges(chronicle, turns) ?? []
+  const texts = new Map<string, string>()
+  let nextRange = 0
+  let done = 0
+  async function worker() {
+    while (nextRange < ranges.length) {
+      const { entry, start, end } = ranges[nextRange++]
+      const inputs = turnsForSummary(turns, start, end)
+      if (inputs.length) texts.set(entry.id, await summarise(inputs, agent, signal))
+      onProgress?.(++done, ranges.length)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(REBUILD_CONCURRENCY, ranges.length) }, worker))
+  const createdAt = Date.now()
+  return chronicle.map((level) =>
+    level.map((entry) => {
+      const text = texts.get(entry.id)
+      return text === undefined ? entry : { ...entry, text, createdAt }
+    }),
+  )
+}
+
 // A forced compaction has something to fold once there is a live turn
 // before the latest.
 export function canForceCompaction(turns: Turn[], chronicle: Chronicle): boolean {

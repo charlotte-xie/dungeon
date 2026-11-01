@@ -18,7 +18,10 @@ import {
   chronicleNeedsCompaction,
   compactCascade,
   memoryForCompaction,
+  rebuildChronicle,
   stripTracesBefore,
+  totalChronicleEntries,
+  type ChronicleAgentArgs,
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
@@ -329,6 +332,19 @@ export function useGameController(settings: GameSettings) {
     return { id: crypto.randomUUID(), kind, input: turnInput, reply }
   }
 
+  // The summariser's model and connection, grounded on the given memory.
+  function summariserArgs(cacheKey: string | undefined, groundingMemory: Memory): ChronicleAgentArgs {
+    return {
+      model: context.summarizerModel.trim() || model,
+      reasoningEffort: context.summarizerReasoning,
+      apiKey,
+      baseUrl,
+      protocol: context.apiProtocol,
+      cacheKey,
+      memory: memoryForCompaction(groundingMemory, context.includeMemory),
+    }
+  }
+
   // The context a turn is played in, from the settings and the world it
   // starts from. runTurn plays it, and nextRequests previews the next one.
   function narratorContext(turn: {
@@ -532,15 +548,7 @@ export function useGameController(settings: GameSettings) {
             baseTurns,
             workingChronicle,
             settings,
-            {
-              model: context.summarizerModel.trim() || model,
-              reasoningEffort: context.summarizerReasoning,
-              apiKey,
-              baseUrl,
-              protocol: context.apiProtocol,
-              cacheKey,
-              memory: memoryForCompaction(baseData.memory, context.includeMemory),
-            },
+            summariserArgs(cacheKey, baseData.memory),
             controller.signal,
             (label) => {
               if (operationCanCommit(operation)) setStatusText(label)
@@ -750,15 +758,7 @@ export function useGameController(settings: GameSettings) {
         turns,
         chronicle,
         settings,
-        {
-          model: context.summarizerModel.trim() || model,
-          reasoningEffort: context.summarizerReasoning,
-          apiKey,
-          baseUrl,
-          protocol: context.apiProtocol,
-          cacheKey: turns[0]?.id,
-          memory: memoryForCompaction(memory, context.includeMemory),
-        },
+        summariserArgs(turns[0]?.id, memory),
         controller.signal,
         (label) => {
           if (operationCanCommit(operation)) setStatusText(label)
@@ -772,6 +772,43 @@ export function useGameController(settings: GameSettings) {
     } catch (err) {
       if (!controller.signal.aborted && isCurrentOperation(operation)) {
         alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    } finally {
+      finishOperation(operation)
+    }
+  }
+
+  // Write every chronicle summary afresh from the turns it covers, keeping
+  // which turns each one covers.
+  async function rebuildChronicleNow() {
+    if (operations.busy) return
+    const entries = totalChronicleEntries(chronicle)
+    if (!entries) return
+    if (
+      !confirm(
+        `Rebuild the chronicle? Every summary is written afresh from the turns it covers, replacing its current text, including any edits you made. This runs ${entries} summariser model call${entries === 1 ? '' : 's'} now.`,
+      )
+    ) {
+      return
+    }
+    const operation = beginOperation(false, 'Rebuilding chronicle…')
+    if (!operation) return
+    const { controller } = operation
+    try {
+      const rebuilt = await rebuildChronicle(
+        turns,
+        chronicle,
+        summariserArgs(turns[0]?.id, memory),
+        controller.signal,
+        (done, total) => {
+          if (operationCanCommit(operation)) setStatusText(`Rebuilding chronicle… ${done} of ${total}`)
+        },
+      )
+      if (!operationCanCommit(operation)) return
+      commitChronicle(rebuilt)
+    } catch (err) {
+      if (!controller.signal.aborted && isCurrentOperation(operation)) {
+        alert(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     } finally {
       finishOperation(operation)
@@ -864,6 +901,7 @@ export function useGameController(settings: GameSettings) {
     undo,
     redo,
     compactNow,
+    rebuildChronicleNow,
     cancelOperation,
     newAdventure,
     editTurnInput,
