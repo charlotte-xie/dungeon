@@ -3,6 +3,7 @@ import { DEFAULT_CONTEXT } from './config'
 import {
   isSavedGameLike,
   isTurnLike,
+  loadStoredChronicle,
   loadStoredContext,
   loadStoredOocBaseline,
   loadStoredPlotBaseline,
@@ -209,6 +210,45 @@ describe('role settings', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('stored chronicle migration', () => {
+  const turns = ['turn-1', 'turn-2'].map((id) => ({
+    id,
+    kind: 'player' as const,
+    input: 'Enter.',
+    reply: { id: `${id}-reply`, model: 'test', text: 'The door opens.' },
+  }))
+
+  function storage(chronicle: unknown) {
+    const items: Record<string, string> = { 'dm.chronicle': JSON.stringify(chronicle), 'dm.compactCutoff': '2' }
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => items[key] ?? null,
+      setItem: (key: string, value: string) => {
+        items[key] = value
+      },
+      removeItem: (key: string) => {
+        delete items[key]
+      },
+    })
+    return items
+  }
+
+  it('writes a legacy chronicle back as an index over the turns', () => {
+    const items = storage([[{ id: 'c1', text: 'Earlier.', turnsCovered: 2, createdAt: 1 }]])
+    const indexed = [[{ id: 'c1', text: 'Earlier.', firstTurnId: 'turn-1', lastTurnId: 'turn-2', createdAt: 1 }]]
+    expect(loadStoredChronicle(turns, 2)).toEqual(indexed)
+    expect(JSON.parse(items['dm.chronicle'])).toEqual(indexed)
+    expect(items['dm.compactCutoff']).toBeUndefined()
+  })
+
+  it('leaves a legacy chronicle that does not fit the turns in storage', () => {
+    const legacy = [[{ id: 'c1', text: 'Earlier.', turnsCovered: 5, createdAt: 1 }]]
+    const items = storage(legacy)
+    expect(loadStoredChronicle(turns, 2)).toEqual([])
+    expect(JSON.parse(items['dm.chronicle'])).toEqual(legacy)
+    expect(items['dm.compactCutoff']).toBe('2')
+  })
 })
 
 describe('turn validation', () => {

@@ -1,7 +1,7 @@
 // All localStorage IO + save-file shape detection / migration. The React tree
 // sees only loadStored*/persist* functions and the SavedGame type.
 
-import { indexChronicle, type LegacyChronicleEntry, type StoredChronicle } from './chronicle'
+import { indexChronicle, totalChronicleEntries, type LegacyChronicleEntry, type StoredChronicle } from './chronicle'
 import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
 import type { ReasoningEffort } from './model/types'
 import type {
@@ -616,7 +616,9 @@ export function summaryToChronicle(summary: string, cutoff: number): StoredChron
 
 // The stored chronicle laid over the stored turns. `legacyCutoff` is the
 // cutoff that versions before the index stored beside a chronicle whose
-// entries only counted their turns; a migrated chronicle is written back.
+// entries only counted their turns. A migrated chronicle is written back; a
+// legacy one that can't be laid over the turns is left in storage, and the
+// turns are live until the next compaction replaces it.
 export function loadStoredChronicle(turns: Turn[], legacyCutoff: number): Chronicle {
   let stored: StoredChronicle | null = null
   try {
@@ -631,7 +633,8 @@ export function loadStoredChronicle(turns: Turn[], legacyCutoff: number): Chroni
     const v2 = stored ? null : localStorage.getItem(LS_SUMMARY_V2)
     if (!stored && !v2) return []
     const chronicle = indexChronicle(stored ?? summaryToChronicle(v2 ?? '', legacyCutoff), turns, legacyCutoff)
-    if (v2 || stored?.some((level) => level.some((entry) => 'turnsCovered' in entry))) {
+    const legacy = !!v2 || !!stored?.some((level) => level.some((entry) => 'turnsCovered' in entry))
+    if (legacy && totalChronicleEntries(chronicle) > 0) {
       persistChronicle(chronicle)
       localStorage.removeItem(LS_SUMMARY_V2)
     }
