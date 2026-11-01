@@ -16,8 +16,10 @@ import {
   canForceCompaction,
   chronicleCutoff,
   chronicleNeedsCompaction,
+  chronicleRanges,
   compactCascade,
   rebuildChronicle,
+  sameChronicle,
   stripTracesBefore,
   totalChronicleEntries,
   type ChronicleAgentArgs,
@@ -151,6 +153,18 @@ export function useGameController(settings: GameSettings) {
   const streamedRef = useRef<StreamedTurn>({})
   const streamedFlush = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [compactionError, setCompactionError] = useState<string | null>(null)
+  // Compaction runs in the background after a turn, so no turn waits on the
+  // summariser. The chronicle it started from is known by its version, which
+  // moves whenever the chronicle's contents change; its result goes in only
+  // between operations, and only if the version hasn't moved and the turns it
+  // points at are still in the log. Otherwise it is dropped, and the next
+  // turn starts a fresh one.
+  const chronicleNow = useRef<Chronicle>(chronicle)
+  const chronicleVersion = useRef(0)
+  const latestTurns = useRef<Turn[]>(turns)
+  const backgroundCompaction = useRef<AbortController | null>(null)
+  const queuedCompaction = useRef<{ version: number; from: Chronicle; chronicle: Chronicle } | null>(null)
+  const [compacting, setCompacting] = useState(false)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
     recoveryForLog(loadStoredRecovery(log), log),
   )
@@ -163,14 +177,16 @@ export function useGameController(settings: GameSettings) {
   const unanswered = !thinking && !!lastTurn && replyStatus(lastTurn) !== 'answered'
   const [operations] = useState(() => new OperationCoordinator())
 
-  const canCompact = chronicleNeedsCompaction(turns, chronicle, {
+  const compactionSettings = {
     compactionThreshold: context.compactionThreshold,
     compactionFloor: context.compactionFloor,
     compactionBatch: context.compactionBatch,
-  })
+  }
+  const canCompact = chronicleNeedsCompaction(turns, chronicle, compactionSettings)
   const canForceCompact = canForceCompaction(turns, chronicle)
 
   useEffect(() => {
+    latestTurns.current = turns
     try {
       localStorage.setItem(LS_TURNS, JSON.stringify(turns))
     } catch {
@@ -185,6 +201,7 @@ export function useGameController(settings: GameSettings) {
   useEffect(
     () => () => {
       operations.supersede()
+      backgroundCompaction.current?.abort()
     },
     [operations],
   )
@@ -230,6 +247,7 @@ export function useGameController(settings: GameSettings) {
 
   function finishOperation(operation: ActiveOperation) {
     if (operations.finish(operation)) setThinking(false)
+    if (!operations.busy) applyQueuedCompaction()
   }
 
   function supersedeCurrentOperation() {
@@ -288,8 +306,74 @@ export function useGameController(settings: GameSettings) {
   }
 
   function commitChronicle(next: Chronicle) {
+    if (!sameChronicle(chronicleNow.current, next)) chronicleVersion.current += 1
+    chronicleNow.current = next
     setChronicle(next)
     persistChronicle(next)
+  }
+
+  // Starts compacting in the background when the chronicle is due, unless a
+  // compaction is already running or waiting to go in. The latest turn stays
+  // live, so Undo and Retry never take back a turn the result points at.
+  function startBackgroundCompaction(log: Turn[]) {
+    if (backgroundCompaction.current || queuedCompaction.current) return
+    const from = chronicleNow.current
+    const settings = compactionSettings
+    const folding = log.slice(0, -1)
+    if (!chronicleNeedsCompaction(folding, from, settings)) return
+    const controller = new AbortController()
+    const version = chronicleVersion.current
+    backgroundCompaction.current = controller
+    setCompacting(true)
+    compactCascade(folding, from, settings, summariserArgs(log[0]?.id), controller.signal)
+      .then((compacted) => {
+        if (controller.signal.aborted) return
+        setCompactionError(null)
+        queuedCompaction.current = { version, from, chronicle: compacted }
+        if (!operations.busy) applyQueuedCompaction()
+      })
+      .catch((err) => {
+        // A failed compaction loses nothing: the turns stay live, and the
+        // next turn tries again.
+        if (!controller.signal.aborted) setCompactionError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (backgroundCompaction.current !== controller) return
+        backgroundCompaction.current = null
+        setCompacting(false)
+      })
+  }
+
+  function applyQueuedCompaction() {
+    const queued = queuedCompaction.current
+    queuedCompaction.current = null
+    if (!queued || queued.version !== chronicleVersion.current) return
+    const log = latestTurns.current
+    if (!chronicleRanges(queued.chronicle, log)) return
+    commitChronicle(queued.chronicle)
+    setTurns((ts) => stripTracesBefore(ts, chronicleCutoff(queued.chronicle, ts)))
+    dispatchRecovery({
+      type: 'rebase',
+      from: queued.from,
+      chronicle: queued.chronicle,
+      beforeFits: !!chronicleRanges(queued.chronicle, log.slice(0, -1)),
+    })
+  }
+
+  // Something else is about to change the chronicle: a compaction in the
+  // background would only be dropped, so stop paying for it.
+  function cancelBackgroundCompaction() {
+    backgroundCompaction.current?.abort()
+    backgroundCompaction.current = null
+    queuedCompaction.current = null
+    setCompacting(false)
+  }
+
+  // The player's own edit to the chronicle, or clearing it.
+  function editChronicle(next: Chronicle) {
+    if (sameChronicle(chronicleNow.current, next)) return
+    cancelBackgroundCompaction()
+    commitChronicle(next)
   }
 
 
@@ -440,10 +524,7 @@ export function useGameController(settings: GameSettings) {
     // The adventure's first turn names its prompt caches: each role's requests
     // go to their own provider cache, under a key derived from this one.
     const cacheKey = baseTurns[0]?.id ?? pendingTurn.id
-    // Reassigned if compaction commits at the start of the turn, so Undo,
-    // Retry and Stop restore the compacted world: the fold is never reverted
-    // or paid for twice.
-    let before = { turnId: pendingTurn.id, world, slots: turnSlots }
+    const before = { turnId: pendingTurn.id, world, slots: turnSlots }
     setTurns([...baseTurns, pendingTurn])
     dispatchRecovery({ type: 'start', before })
     // A cancelled turn puts back the world it started from, exactly, and the
@@ -530,55 +611,13 @@ export function useGameController(settings: GameSettings) {
       }
     }
     try {
-      const settings = {
-        compactionThreshold: context.compactionThreshold,
-        compactionFloor: context.compactionFloor,
-        compactionBatch: context.compactionBatch,
-      }
       const allTurns = [...baseTurns, pendingTurn]
-      let workingChronicle = baseChronicle
-      // Compact BEFORE the in-flight turn (we don't want to summarise a turn
-      // that doesn't have a reply yet). We measure against `baseTurns`.
-      if (chronicleNeedsCompaction(baseTurns, workingChronicle, settings)) {
-        let compacted: Chronicle | null = null
-        try {
-          compacted = await compactCascade(
-            baseTurns,
-            workingChronicle,
-            settings,
-            summariserArgs(cacheKey),
-            controller.signal,
-            (label) => {
-              if (operationCanCommit(operation)) setStatusText(label)
-            },
-          )
-        } catch (err) {
-          // A failed compaction doesn't sink the turn: the chronicle stays as
-          // it was, the turn goes ahead, and the next turn tries again.
-          if (controller.signal.aborted || !isCurrentOperation(operation)) throw err
-          setCompactionError(err instanceof Error ? err.message : String(err))
-        }
-        if (!operationCanCommit(operation)) return stopIfCancelled()
-        if (compacted) {
-          setCompactionError(null)
-          workingChronicle = compacted
-          commitChronicle(workingChronicle)
-          const folded = chronicleCutoff(workingChronicle, baseTurns)
-          setTurns((ts) => stripTracesBefore(ts, folded))
-          // Compaction is story-invariant and already paid for: the turn now
-          // starts from the compacted world.
-          before = { ...before, world: { ...before.world, chronicle: workingChronicle } }
-          dispatchRecovery({ type: 'rebase', turnId: pendingTurn.id, chronicle: workingChronicle })
-        }
-        setStatusText(firstStatus)
-      }
-
       const result = await runNarrator(
         narratorContext({
           cacheKey,
           slots: turnSlots,
-          chronicle: workingChronicle,
-          history: allTurns.slice(chronicleCutoff(workingChronicle, baseTurns)),
+          chronicle: baseChronicle,
+          history: allTurns.slice(chronicleCutoff(baseChronicle, baseTurns)),
           data: baseData,
         }),
         controller.signal,
@@ -612,6 +651,7 @@ export function useGameController(settings: GameSettings) {
       commitEnginePlot(result.data.plot)
       commitMemory(result.data.memory)
       commitEngineOoc(result.data.ooc)
+      startBackgroundCompaction([...baseTurns, { ...pendingTurn, ...reply }])
     } catch (err) {
       if (controller.signal.aborted || !isCurrentOperation(operation)) {
         stopIfCancelled()
@@ -729,11 +769,7 @@ export function useGameController(settings: GameSettings) {
   // whether or not compaction is due, to test what follows it.
   async function compactNow(force = false) {
     if (operations.busy) return
-    const settings = {
-      compactionThreshold: context.compactionThreshold,
-      compactionFloor: context.compactionFloor,
-      compactionBatch: context.compactionBatch,
-    }
+    const settings = compactionSettings
     if (force ? !canForceCompaction(turns, chronicle) : !chronicleNeedsCompaction(turns, chronicle, settings)) {
       alert('Nothing to compact: chronicle is up to date.')
       return
@@ -748,6 +784,7 @@ export function useGameController(settings: GameSettings) {
     ) {
       return
     }
+    cancelBackgroundCompaction()
     const operation = beginOperation(false, 'Compacting chronicle…')
     if (!operation) return
     const { controller } = operation
@@ -789,6 +826,7 @@ export function useGameController(settings: GameSettings) {
     ) {
       return
     }
+    cancelBackgroundCompaction()
     const operation = beginOperation(false, 'Rebuilding chronicle…')
     if (!operation) return
     const { controller } = operation
@@ -817,6 +855,7 @@ export function useGameController(settings: GameSettings) {
     const nextSlots: AdventureSlots = { ...slots, ...slotsOverride }
     nextSlots.scenario = nextSlots.scenario.trim()
     if (!nextSlots.scenario) return
+    cancelBackgroundCompaction()
     commitSlots(nextSlots)
     setInput('')
     const freshState = structuredClone(DEFAULT_STATE)
@@ -856,6 +895,7 @@ export function useGameController(settings: GameSettings) {
   // Replace the current adventure with a saved one, cancelling any in-flight turn.
   function restoreGame(save: SavedGame) {
     supersedeCurrentOperation()
+    cancelBackgroundCompaction()
     dispatchRecovery({ type: 'reset' })
     setCompactionError(null)
     commitSlots({ ...defaultSlots(), ...save.slots })
@@ -891,6 +931,8 @@ export function useGameController(settings: GameSettings) {
     canCompact,
     canForceCompact,
     compactionError,
+    // Whether older turns are being folded into the chronicle in the background.
+    compacting,
     dismissCompactionError: () => setCompactionError(null),
     // actions
     send,
@@ -910,7 +952,7 @@ export function useGameController(settings: GameSettings) {
     commitOoc,
     commitMemory,
     commitSlots,
-    commitChronicle,
+    editChronicle,
     // saves
     captureGame,
     restoreGame,

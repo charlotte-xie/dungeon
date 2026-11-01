@@ -397,8 +397,9 @@ function App() {
         <div className="app-notice" role="status">
           <div className="app-notice-body">
             <p>
-              Compaction failed: {describeModelError(game.compactionError).replace(/\.+$/, '')}. Your turn
-              went ahead; it will try again next turn. Check the summariser model in Settings.
+              Compaction failed: {describeModelError(game.compactionError).replace(/\.+$/, '')}. Nothing is
+              lost: the story carries on with those turns in full, and it will try again after your next turn.
+              Check the summariser model in Settings.
             </p>
             <ErrorDetails error={game.compactionError} />
           </div>
@@ -471,6 +472,7 @@ function App() {
           ooc={game.ooc}
           chronicle={game.chronicle}
           entryTurns={entryTurnNumbers(game.chronicle, game.turns)}
+          compacting={game.compacting}
           context={context}
           busy={thinking}
           canCompact={game.canCompact}
@@ -485,11 +487,11 @@ function App() {
           onSavePlot={game.commitPlot}
           onSaveMemory={game.commitMemory}
           onSaveOoc={game.commitOoc}
-          onSaveChronicle={game.commitChronicle}
+          onSaveChronicle={game.editChronicle}
           onClearPlot={() => game.commitPlot([])}
           onClearMemory={() => game.commitMemory({})}
           onClearOoc={() => game.commitOoc([])}
-          onClearChronicle={() => game.commitChronicle([])}
+          onClearChronicle={() => game.editChronicle([])}
         />
       )}
       {inspect === 'context' && (

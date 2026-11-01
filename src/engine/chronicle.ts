@@ -116,6 +116,12 @@ export function entryTurnNumbers(chronicle: Chronicle, turns: Turn[]): Map<strin
   return new Map((chronicleRanges(chronicle, turns) ?? []).map((r) => [r.entry.id, { first: r.start + 1, last: r.end }]))
 }
 
+// Whether two chronicles hold the same entries: the same object, or one
+// loaded from storage with the same contents.
+export function sameChronicle(a: Chronicle, b: Chronicle): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b)
+}
+
 // The chronicle without the given entries, still covering the same turns:
 // each dropped entry's turns join the entry before it in story order, or the
 // one after when it was the first.

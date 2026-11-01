@@ -18,6 +18,8 @@ interface StateViewerProps {
   chronicle: Chronicle
   // Each chronicle entry's first and last turn, numbered as in the log.
   entryTurns: Map<string, { first: number; last: number }>
+  // Whether older turns are being folded in the background.
+  compacting: boolean
   context: ContextConfig
   busy: boolean
   canCompact: boolean
@@ -71,6 +73,7 @@ export function StateViewer({
   ooc,
   chronicle,
   entryTurns,
+  compacting,
   context,
   busy,
   canCompact,
@@ -500,16 +503,22 @@ export function StateViewer({
       {tab === 'chronicle' && (
         <>
           <p className="hint">
-            Auto-generated levels of compaction. When the live tail reaches{' '}
-            {context.compactionThreshold} turns, the oldest {context.compactionBatch} are
-            folded into one chronicle entry of roughly 1/{context.compactionBatch} the
-            combined input length. When a level reaches {context.compactionThreshold}{' '}
-            entries, the oldest {context.compactionBatch} are promoted into one entry at
-            the next level up, recursively. Entries shown oldest-first; newest at the
-            bottom. Entries are editable — clear an entry&apos;s text to delete it on save.
+            Summaries of older turns, written in the background after a reply. When{' '}
+            {context.compactionThreshold} turns are live, the oldest are folded in batches of{' '}
+            {context.compactionBatch} until {context.compactionFloor} remain, each into an entry of
+            at most one turn&apos;s length, written with the entries before it in view. When a level
+            reaches {context.compactionThreshold} entries, its oldest {context.compactionBatch} are
+            combined into one entry at the next level up, written afresh from their turns. Entries
+            shown oldest first; newest at the bottom. Entries are editable — clear an entry&apos;s
+            text to delete it on save, and its turns join a neighbouring entry.
             {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
             {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
           </p>
+          {compacting && (
+            <p className="hint">
+              <em>Folding older turns into the chronicle in the background…</em>
+            </p>
+          )}
           {totalEntries === 0 ? (
             <p className="hint"><em>(empty — no compaction has happened yet)</em></p>
           ) : (

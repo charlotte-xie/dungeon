@@ -6,6 +6,7 @@ import {
   entryTurnNumbers,
   indexChronicle,
   rebuildChronicle,
+  sameChronicle,
   withoutEntries,
   type LegacyChronicleEntry,
 } from './chronicle'
@@ -71,6 +72,12 @@ describe('the chronicle as an index over the turns', () => {
     ])
     expect(chronicleCutoff(chronicle, TEN)).toBe(7)
     expect(entryTurnNumbers(chronicle, TEN).get('b')).toEqual({ first: 5, last: 6 })
+  })
+
+  it('knows a chronicle by its entries, not by which object holds them', () => {
+    expect(sameChronicle(chronicle, chronicle)).toBe(true)
+    expect(sameChronicle(chronicle, JSON.parse(JSON.stringify(chronicle)))).toBe(true)
+    expect(sameChronicle(chronicle, withoutEntries(chronicle, new Set(['c'])))).toBe(false)
   })
 
   it('treats an empty chronicle as covering nothing', () => {

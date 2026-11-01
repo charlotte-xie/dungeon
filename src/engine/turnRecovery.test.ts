@@ -56,13 +56,22 @@ describe('turnRecoveryReducer', () => {
     expect(afterRedo).toEqual({ before: before('t2'), undone: null })
   })
 
-  it('compaction at the start of a turn changes only the chronicle it restores', () => {
+  it('a compaction changes only the chronicle Undo, Retry and Redo restore', () => {
     const chronicle = [[{ id: 'c1', text: 'Earlier.', firstTurnId: 't1', lastTurnId: 't2', createdAt: 1 }]]
-    const recovery: TurnRecovery = { before: before('t3'), undone: null }
-    const rebased = turnRecoveryReducer(recovery, { type: 'rebase', turnId: 't3', chronicle })
+    // A snapshot loaded from storage holds an equal chronicle, not the same object.
+    const recovery: TurnRecovery = { before: before('t3'), undone: { ...undone('t4', 't3'), world: { ...world(), chronicle: [] } } }
+    const rebased = turnRecoveryReducer(recovery, { type: 'rebase', from: [], chronicle, beforeFits: true })
     expect(rebased.before?.world).toEqual({ ...world(['before']), chronicle })
     expect(rebased.before?.turnId).toBe('t3')
-    expect(turnRecoveryReducer(recovery, { type: 'rebase', turnId: 'other', chronicle })).toBe(recovery)
+    expect(rebased.undone?.world.chronicle).toBe(chronicle)
+  })
+
+  it('a compaction leaves a snapshot it does not fit, or one with another chronicle', () => {
+    const chronicle = [[{ id: 'c1', text: 'Earlier.', firstTurnId: 't1', lastTurnId: 't3', createdAt: 1 }]]
+    const recovery: TurnRecovery = { before: before('t3'), undone: null }
+    expect(turnRecoveryReducer(recovery, { type: 'rebase', from: [], chronicle, beforeFits: false })).toBe(recovery)
+    const other = [[{ id: 'c0', text: 'Other.', firstTurnId: 't1', lastTurnId: 't1', createdAt: 1 }]]
+    expect(turnRecoveryReducer(recovery, { type: 'rebase', from: other, chronicle, beforeFits: true })).toBe(recovery)
   })
 
   it('clears everything on reset', () => {

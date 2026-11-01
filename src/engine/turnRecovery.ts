@@ -1,8 +1,11 @@
-import type { Chronicle, Turn, TurnRecovery } from './types'
+import { sameChronicle } from './chronicle'
+import type { Chronicle, Turn, TurnRecovery, WorldSnapshot } from './types'
 
 export type TurnRecoveryEvent =
   | { type: 'start'; before: NonNullable<TurnRecovery['before']> }
-  | { type: 'rebase'; turnId: string; chronicle: Chronicle }
+  // A compaction replaced the chronicle `from` with `chronicle`. `beforeFits`
+  // says whether it still fits the log Undo and Retry go back to.
+  | { type: 'rebase'; from: Chronicle; chronicle: Chronicle; beforeFits: boolean }
   | { type: 'abort'; turnId: string }
   | { type: 'undo'; undone: NonNullable<TurnRecovery['undone']> }
   | { type: 'redo'; before: NonNullable<TurnRecovery['before']> }
@@ -66,18 +69,18 @@ export function turnRecoveryReducer(
     // A new turn can be undone or retried, and nothing undone can come back.
     case 'start':
       return { before: event.before, undone: null }
-    // Compaction at the start of a turn is already paid for: undoing the turn
-    // keeps the folded chronicle.
-    case 'rebase':
-      return recovery.before?.turnId === event.turnId
-        ? {
-            ...recovery,
-            before: {
-              ...recovery.before,
-              world: { ...recovery.before.world, chronicle: event.chronicle },
-            },
-          }
-        : recovery
+    // Compaction tells the same story and is already paid for: Undo, Retry
+    // and Redo keep the folded chronicle wherever they would have restored
+    // the one it replaced and it still fits.
+    case 'rebase': {
+      const rebased = <T extends { world: WorldSnapshot }>(snapshot: T | null, fits: boolean): T | null =>
+        snapshot && fits && sameChronicle(snapshot.world.chronicle, event.from)
+          ? { ...snapshot, world: { ...snapshot.world, chronicle: event.chronicle } }
+          : snapshot
+      const before = rebased(recovery.before, event.beforeFits)
+      const undone = rebased(recovery.undone, true)
+      return before === recovery.before && undone === recovery.undone ? recovery : { before, undone }
+    }
     // A cancelled turn leaves nothing to undo or retry: its input is back in
     // the action box, and the reply now shown wasn't made from this world. A
     // late abort from a turn that was replaced changes nothing.
