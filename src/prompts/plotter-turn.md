@@ -20,13 +20,16 @@ Update the records where something lasting has changed.
 Work out what happens next: the development that does most for the story now, moving a thread of the plan on where it fits.
 
 ## develop-continue
-The player pressed Continue: carry the story on from where the last reply ended to its next development, through what the world and its people do. Their character carries on only with what the player last had them doing, and makes no significant move of their own.
+The player pressed Continue: carry the story on from where the last reply ended to its next development, through what the world and its people do.
 
 ## recall
 Recall with `{{recall}}` the people, places, things and threads the reply involves.
 
 ## steer
 Steer the reply with `{{steer}}`: what the world and its people do next, something the story hasn't had yet.
+
+## steer-continue
+Steer the reply with `{{steer}}`: what the world and its people do next, something the story hasn't had yet. The player's character carries on only with what the player last had them doing, and makes no significant move of their own.
 
 ## order
 Reply with tool calls alone: {{order}}.

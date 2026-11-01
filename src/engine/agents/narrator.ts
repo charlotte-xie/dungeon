@@ -185,7 +185,9 @@ export function buildPlotterInstruction(
         'record',
         kind === 'continue' ? 'develop-continue' : 'develop',
         ...(recalls ? ['recall' as const] : []),
-        ...(steers ? ['steer' as const] : []),
+        // On a Continue the steer is where the player's character was
+        // given moves of their own, so it has a step of its own.
+        ...(steers ? [kind === 'continue' ? ('steer-continue' as const) : ('steer' as const)] : []),
       ]
   const guidance = buildPlotterGuidance(data, stateCleanupThreshold, flags)
   return (

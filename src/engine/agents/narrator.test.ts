@@ -609,6 +609,8 @@ describe('buildPlotterInstruction', () => {
     const opening = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'bootstrap')
     const continuing = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000, 'continue')
     expect(new Set([reply, opening, continuing]).size).toBe(3)
+    const steerStep = (text: string) => text.split('\n').find((line) => line.includes('`steer`:'))
+    expect(steerStep(continuing)).not.toBe(steerStep(reply))
     // The opening has no reply yet to record from, and pointing a Continue
     // at the player's last action had steers retell it.
     expect(opening).not.toMatch(/last reply|last action/)
