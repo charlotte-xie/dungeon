@@ -131,6 +131,8 @@ function isStoryUpdateLike(value: unknown): value is StoryUpdate {
   return (
     (value.recalled === undefined || isMemoryLike(value.recalled)) &&
     (value.changed === undefined || isMemoryLike(value.changed)) &&
+    (value.arcs === undefined ||
+      (Array.isArray(value.arcs) && value.arcs.every((entry) => typeof entry === 'string'))) &&
     (value.ooc === undefined ||
       (Array.isArray(value.ooc) && value.ooc.every((entry) => typeof entry === 'string')))
   )

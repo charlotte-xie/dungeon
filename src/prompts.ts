@@ -43,7 +43,7 @@ function sectionReader<Name extends string>(file: string, template: string) {
 export type PlotterTurnSection =
   | 'intro'
   | 'opening-setup'
-  | 'opening-plan'
+  | 'opening-arcs'
   | 'opening-recall'
   | 'opening-steer'
   | 'record'

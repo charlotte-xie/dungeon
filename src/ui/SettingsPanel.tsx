@@ -544,14 +544,14 @@ export function SettingsPanel({
           </label>
           <label
             className="flag-field"
-            title={`When off, the plot_plan and steer tools are not offered — the narrator writes without a plan or a steer. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
+            title={`When off, the update_arcs and steer tools are not offered — the narrator writes without arcs or a steer. Default ${DEFAULT_CONTEXT.includePlotOutline ? 'on' : 'off'}.`}
           >
             <input
               type="checkbox"
               checked={draftContext.includePlotOutline}
               onChange={(e) => setContextField('includePlotOutline', e.target.checked)}
             />
-            <strong>Include future plot plan</strong>
+            <strong>Include story arcs</strong>
           </label>
           <label
             className="flag-field"

@@ -46,26 +46,26 @@ export const UPDATE_STATE_TOOL: ModelToolDefinition = {
       required: ['keep', 'set'],
     },
 }
-export const PLOT_PLAN_TOOL: ModelToolDefinition = {
-    name: 'plot_plan',
+export const UPDATE_ARCS_TOOL: ModelToolDefinition = {
+    name: 'update_arcs',
     description: PLOT_RULES,
     parameters: {
       type: 'object',
       properties: {
         op: {
           type: 'string',
-          enum: ['insert', 'remove'],
+          enum: ['insert', 'update', 'remove'],
           description: 'Operation to perform.',
         },
         position: {
           type: 'integer',
           minimum: 1,
           description:
-            '1-indexed slot. For insert, where the entry goes (leave it out to add the entry at the end). Required for remove.',
+            '1-indexed slot. For insert, where the arc goes (leave it out to add the arc at the end). Required for update and remove.',
         },
         text: {
           type: 'string',
-          description: `One thread: what someone will do and why, what will land on whom, or which secret will come out. Required for insert; at most ${MAX_PLOT_ITEM_CHARS} characters.`,
+          description: `One arc: what the world is building towards, and who it will land on. Required for insert and update; at most ${MAX_PLOT_ITEM_CHARS} characters.`,
         },
       },
       required: ['op'],
@@ -108,7 +108,7 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
 
 // Context read tools. Each Plotter request seeds one "fake" assistant call to
 // the enabled read tools right before its instruction, delivering the current
-// memory / plot plan / state as tool results (see ../request.ts). The framing
+// memory / arcs / state as tool results (see ../request.ts). The framing
 // is the DM checking its own private notes after the player acts — "check",
 // not "get", so the data reads as notes consulted for consistency rather than
 // retrieved material. The tools are also advertised live, so the model can
@@ -129,10 +129,10 @@ export const CHECK_MEMORY_TOOL: ModelToolDefinition = {
     parameters: { type: 'object', properties: {} },
 }
 
-export const CHECK_PLOT_PLAN_TOOL: ModelToolDefinition = {
-    name: 'check_plot_plan',
+export const CHECK_ARCS_TOOL: ModelToolDefinition = {
+    name: 'check_arcs',
     description:
-      'Check your private planning notes: the current plot plan.',
+      'Check the story’s arcs: where the story is heading.',
     parameters: { type: 'object', properties: {} },
 }
 
@@ -169,10 +169,11 @@ export const CHECK_OOC_TOOL: ModelToolDefinition = {
     parameters: { type: 'object', properties: {} },
 }
 
-// Plotter tools that brief the narrator. The narrator holds no memory or plan
+// Plotter tools that brief the narrator. The narrator holds no memory or arcs
 // of its own: before each reply it gets a story update, which stays in its
-// history, with the memories the Plotter recalls, and notes for the reply
-// alone, with the steer and the scene as it stands.
+// history, with the memories the Plotter recalls and the arcs when they
+// change, and notes for the reply alone, with the steer and the scene as it
+// stands.
 
 export const RECALL_MEMORY_TOOL: ModelToolDefinition = {
     name: 'recall_memory',
@@ -208,19 +209,25 @@ export const STEER_TOOL: ModelToolDefinition = {
 }
 
 // The tools whose calls make up the briefing the narrator's story update and
-// notes are built from. The records' updates, the plan, the OOC list edits,
+// notes are built from. The records' updates, the arcs, the OOC list edits,
 // and the read tools stay the Plotter's own.
 export const BRIEFING_TOOLS: ReadonlySet<string> = new Set([RECALL_MEMORY_TOOL.name, STEER_TOOL.name])
 
 // The narrator's own calls, each named for what it brings. A turn's story
 // update is kept with the turn and replayed in the narrator's history as the
-// memory and OOC calls; the steer is for the reply being written alone.
+// memory, arcs and OOC calls; the steer is for the reply being written alone.
 // Their schemas are sent only to a provider that won't take a replayed call
 // without them, with calls forbidden.
 export const RECALL_MEMORIES_TOOL: ModelToolDefinition = {
     name: 'recall_memories',
     description:
       'What you remember about the people, places, things and threads in play: in full when first recalled, then only what has changed, with null for what no longer holds.',
+    parameters: { type: 'object', properties: {} },
+}
+
+export const GET_STORY_ARCS_TOOL: ModelToolDefinition = {
+    name: 'get_story_arcs',
+    description: 'Where the story is heading over the long run: the whole list each time it changes.',
     parameters: { type: 'object', properties: {} },
 }
 
@@ -245,7 +252,7 @@ type ListOp = 'append' | 'insert' | 'update' | 'delete' | 'remove'
 
 interface ListEditSpec {
   toolName: string
-  // Lower-case noun used in result messages ('plan', 'OOC list').
+  // Lower-case noun used in result messages ('arc list', 'OOC list').
   noun: string
   // Guidance appended when the list is at max capacity.
   capAdvice: string
@@ -255,8 +262,7 @@ interface ListEditSpec {
   ops: readonly ListOp[]
 }
 
-// Shared editor for the numbered-list subsystems (future plot plan, OOC
-// instructions): one op per call, 1-indexed positions. Returns the edited
+// Shared editor for the numbered-list subsystems (arcs, OOC instructions): one op per call, 1-indexed positions. Returns the edited
 // list, or null when the edit was rejected (explanation in `result`).
 function executeListEdit(
   rawArgs: string,
@@ -596,14 +602,14 @@ export function executeTool(
       return unchanged(`error: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
-  if (name === 'plot_plan') {
+  if (name === UPDATE_ARCS_TOOL.name) {
     const edit = executeListEdit(rawArgs, plot, {
-      toolName: 'plot_plan',
-      noun: 'plan',
-      capAdvice: 'Remove an entry the story has reached or left behind first.',
+      toolName: UPDATE_ARCS_TOOL.name,
+      noun: 'arc list',
+      capAdvice: 'Remove an arc that has landed or that the player has turned away from first.',
       maxItems: MAX_PLOT_ITEMS,
       maxItemChars: MAX_PLOT_ITEM_CHARS,
-      ops: ['insert', 'remove'],
+      ops: ['insert', 'update', 'remove'],
     })
     return edit.list
       ? { data: { state, plot: edit.list, memory, ooc }, result: edit.result }

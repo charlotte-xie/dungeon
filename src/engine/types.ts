@@ -46,11 +46,12 @@ export interface BriefingCall {
 // kept with the turn and replayed in history as the narrator's own calls between
 // its input and reply: memory entries newly recalled, in full; for entries it
 // already holds, only what has changed, with null for what no longer holds;
-// and the player's standing OOC instructions, when they changed or have
-// dropped out of view.
+// and the arcs and the player's standing OOC instructions, when they changed
+// or have dropped out of view.
 export interface StoryUpdate {
   recalled?: Memory
   changed?: Memory
+  arcs?: string[]
   ooc?: string[]
 }
 
@@ -64,7 +65,7 @@ export interface Turn {
   narrator?: ModelCall
   reply: ModelCall
   // The Plotter phase's activity (tool calls planning the turn and recording
-  // state/memory/plan updates before the narration). No text — kept separate
+  // state/memory/arc updates before the narration). No text — kept separate
   // so the trace pane can show the plot and narrate phases as distinct
   // sections.
   plotter?: ModelCall
@@ -101,15 +102,15 @@ export type WorldState = { [key: string]: JsonValue }
 export type Memory = { [slug: string]: JsonValue }
 
 // The working data a turn threads through the narrator, plotter, and tool
-// executor as one unit: current-scene state, future plot plan, and the
-// long-term memory fact file. Persisted shapes (SavedGame, WorldSnapshot)
+// executor as one unit: current-scene state, the arcs (kept as `plot`), and
+// the long-term memory fact file. Persisted shapes (SavedGame, WorldSnapshot)
 // keep these as separate fields; StoryData is the in-engine carrier.
 export interface StoryData {
   state: WorldState
   plot: string[]
   memory: Memory
   // Standing out-of-character player directives, as a numbered list like the
-  // plot plan. Entries persist until withdrawn, superseded, or completed.
+  // arcs. Entries persist until withdrawn, superseded, or completed.
   ooc: string[]
 }
 

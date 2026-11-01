@@ -1,7 +1,5 @@
-Change your private plot plan, one operation per call: where the story is heading, one thread per entry. The plan stays out of the story itself, and the next step goes in your steer: each steer takes a thread a step further, or follows the player somewhere better.
+Change the story's arcs, one operation per call: where the story is heading over the long run. Keep a few, each something the world is building towards and who it will land on, such as: "The constable's search of Mill Lane will reach the bakery, and what Hesta hides there will come out." The narrator sees the arcs too, and writes towards them.
 
-Each entry is something specific the world will bring about, with the people involved: what someone will do and why, what will land on whom, which secret will come out. Such as: "The constable searches the bakery on market day, and Hesta has to get Tam out before he finds him."
+An arc stays for many replies: each steer brings one a little closer, through a sign, a setback or someone's move, and it lands when the story has earned it. Set the arcs up from the premise at the opening. `insert` an arc when the story opens a new direction, `update` one when the story turns, and `remove` it once it has landed or the player has turned away from it. The player leads: their redirection changes the arcs straight away, and a Continue keeps the story on its course. The player may edit the arcs directly: what they write is their direction for the story; keep to it.
 
-Set the plan up from the premise at the opening. `insert` a thread when the story opens one, and `remove` it once it has landed or the player has turned away from it. The player leads: their redirection changes the plan straight away, and a Continue keeps the story on its course.
-
-Positions are 1-indexed. The plan holds at most {{maxPlotItems}} entries of {{maxPlotItemChars}} characters.
+Positions are 1-indexed. There are at most {{maxPlotItems}} arcs of {{maxPlotItemChars}} characters each.

@@ -9,10 +9,10 @@
 //   2. Narrate — the narrator, with no tools, writes the reply from the story
 //      and two calls the DM appears to have made, built from the Plotter's
 //      briefing: the turn's story update, which stays in history (memories
-//      recalled or changed, the OOC list when it changed),
+//      recalled or changed, and the arcs and the OOC list when they changed),
 //      and its notes for this reply alone (the scene and the steer). The
-//      records' updates, the plan, the OOC edits, and the Plotter's reads
-//      stay the Plotter's.
+//      records' updates, the OOC edits, and the Plotter's reads stay the
+//      Plotter's.
 //
 // Each request extends the same role's request from the previous turn, and
 // within a turn a nudge or a plotter iteration only appends, so each role
@@ -36,6 +36,7 @@ import {
   BRIEFING_TOOLS,
   GET_OOC_INSTRUCTIONS_TOOL,
   GET_STEER_TOOL,
+  GET_STORY_ARCS_TOOL,
   RECALL_MEMORIES_TOOL,
   RECALL_MEMORY_TOOL,
   STEER_TOOL,
@@ -150,13 +151,12 @@ export function buildPlotterInstruction(
   data: StoryData,
   stateCleanupThreshold: number,
   // The opening has no reply to record from: the Plotter sets the records
-  // and the plan up from the scenario instead.
+  // and the arcs up from the scenario instead.
   kind: TurnKind = 'player',
 ): string {
   const opening = kind === 'bootstrap'
   const enabled = CONTEXT_SUBSYSTEMS.filter((s) => s.enabled(flags))
-  // With the plot plan on, the Plotter directs every reply through a steer;
-  // the plan itself stays private.
+  // With the arcs on, the Plotter directs every reply through a steer.
   const steers = flags.includePlotOutline
   const recalls = flags.includeMemory
   // The record tools are alternatives, called only for a record that
@@ -177,7 +177,7 @@ export function buildPlotterInstruction(
   const steps: PlotterTurnSection[] = opening
     ? [
         'opening-setup',
-        ...(steers ? ['opening-plan' as const] : []),
+        ...(steers ? ['opening-arcs' as const] : []),
         ...(recalls ? ['opening-recall' as const] : []),
         ...(steers ? ['opening-steer' as const] : []),
       ]
@@ -303,7 +303,7 @@ function narratorRequest(
     reasoningEffort: ctx.reasoningEffort,
     messages,
     ...(options.withSchemas
-      ? { tools: [RECALL_MEMORIES_TOOL, GET_OOC_INSTRUCTIONS_TOOL, GET_STEER_TOOL], toolChoice: 'none' as const }
+      ? { tools: [RECALL_MEMORIES_TOOL, GET_STORY_ARCS_TOOL, GET_OOC_INSTRUCTIONS_TOOL, GET_STEER_TOOL], toolChoice: 'none' as const }
       : {}),
     temperature: ctx.sampling.temperature,
     label: options.label,
@@ -480,7 +480,7 @@ export async function runNarrator(
       return { sawError, sawRead }
     }
     let error: string | undefined
-    // With the plot plan on, every reply is steered. A Plotter that stops
+    // With the arcs on, every reply is steered. A Plotter that stops
     // without a steer — after a batch of updates, or by writing prose in
     // the narrator's place — is reminded once, and the request after the
     // reminder has it make a call.

@@ -307,8 +307,8 @@ describe('buildPlotterMessages layout', () => {
       expect(tools.some((t) => t.description.includes(rules))).toBe(true)
     }
     // A record switched off takes its rules with its tools.
-    const withoutPlan = buildPlotterTools({ ...ALL_FLAGS, includePlotOutline: false })
-    expect(withoutPlan.some((t) => t.description.includes(PLOT_RULES))).toBe(false)
+    const withoutArcs = buildPlotterTools({ ...ALL_FLAGS, includePlotOutline: false })
+    expect(withoutArcs.some((t) => t.description.includes(PLOT_RULES))).toBe(false)
   })
 
   it('gets the scenario but leaves the style guide to the narrator', () => {
@@ -330,7 +330,7 @@ describe('buildPlotterMessages layout', () => {
     expect(call.role).toBe('assistant')
     expect(call.toolCalls?.map((c) => c.name)).toEqual([
       'check_memory',
-      'check_plot_plan',
+      'check_arcs',
       'check_state',
       'check_ooc',
     ])
@@ -419,7 +419,7 @@ describe('buildReplyNotes', () => {
 describe('buildStoryUpdate', () => {
   const data = {
     state: {},
-    plot: ['The miller returns at dusk'],
+    plot: [] as string[],
     memory: { player: { is: 'A drifter with a debt.' }, Hesta: { is: 'The baker.' } },
     ooc: ['Keep replies short.'],
   }
@@ -445,7 +445,7 @@ describe('buildStoryUpdate', () => {
     expect(calls.map((c) => c.name)).toEqual(['recall_memories', 'get_ooc_instructions'])
     expect(calls[0].result).toMatch(/^# Remembered\n\n```json\n[\s\S]*The baker\.[\s\S]*```$/)
     expect(calls[1].result).toBe('1. Keep replies short.')
-    for (const c of calls) expect(c.result).not.toMatch(/stale|Nobody|A drifter|The miller|Hesta looks up/)
+    for (const c of calls) expect(c.result).not.toMatch(/stale|Nobody|A drifter|Hesta looks up/)
   })
 
   it('adds only what is new to the narrator’s view or changed', () => {
@@ -541,12 +541,32 @@ describe('buildStoryUpdate', () => {
     expect(told([t2])).toEqual(['1. Keep replies short.\n2. Slow the pace.'])
   })
 
+  it('gives the narrator the arcs whole whenever they change, whoever changed them', () => {
+    const arcs = { ...data, ooc: [], plot: ['The miller returns at dusk.', 'The flood takes the bridge.'] }
+    expect(buildStoryUpdate([], [], arcs, ALL_FLAGS)).toEqual({ arcs: arcs.plot })
+    const t1 = done('t1', { arcs: arcs.plot })
+    expect(buildStoryUpdate([t1], [], arcs, ALL_FLAGS)).toBeUndefined()
+    // An arc the player rewrote between turns goes out like the Plotter's.
+    const edited = { ...arcs, plot: ['The miller returns at dusk.', 'The flood spares the bridge, not the mill.'] }
+    expect(buildStoryUpdate([t1], [], edited, ALL_FLAGS)).toEqual({ arcs: edited.plot })
+    expect(buildStoryUpdate([t1], [], { ...arcs, plot: [] }, ALL_FLAGS)).toEqual({ arcs: [] })
+    const calls = storyUpdateCalls({ arcs: arcs.plot }, undefined)
+    expect(calls).toEqual([
+      {
+        name: 'get_story_arcs',
+        result: '# Where the story is heading\n\n1. The miller returns at dusk.\n2. The flood takes the bridge.',
+      },
+    ])
+    const replayed = narrator([playerTurn('t1', 'I wait.', 'Time passes.', { arcs: arcs.plot })])
+    expect(replayed.some((m) => m.toolCallId?.endsWith('-get-story-arcs'))).toBe(true)
+  })
+
   it('leaves out what is switched off', () => {
     const update = buildStoryUpdate(
       [],
       [recall(['Hesta']), { name: 'steer', arguments: '{"text":"x"}', result: 'ok' }],
-      data,
-      { ...ALL_FLAGS, includeMemory: false, includeOoc: false },
+      { ...data, plot: ['The miller returns at dusk.'] },
+      { ...ALL_FLAGS, includeMemory: false, includePlotOutline: false, includeOoc: false },
     )
     expect(update).toBeUndefined()
   })
@@ -566,7 +586,7 @@ describe('buildContextInjectionMessages', () => {
     expect(a).toEqual(b)
     expect(a[0].toolCalls?.map((c) => c.id)).toEqual([
       'ctx-check-memory',
-      'ctx-check-plot-plan',
+      'ctx-check-arcs',
       'ctx-check-state',
       'ctx-check-ooc',
     ])

@@ -138,11 +138,11 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     ])
   })
 
-  it('keeps the plan, OOC edits, reads, updates, and rejected calls out of the briefing', async () => {
+  it('keeps the arcs, OOC edits, reads, updates, and rejected calls out of the briefing', async () => {
     mockedModel.mockResolvedValueOnce(
       completion({
         toolCalls: [
-          { id: 'p1', name: 'plot_plan', arguments: '{"op":"insert","text":"The miller returns."}' },
+          { id: 'p1', name: 'update_arcs', arguments: '{"op":"insert","text":"The miller returns."}' },
           { id: 'o1', name: 'update_ooc', arguments: '{"op":"append","text":"Keep replies short."}' },
           { id: 'r1', name: 'check_state', arguments: '{}' },
           { id: 'bad', name: 'update_memory', arguments: '{"set":{}}' },
@@ -157,13 +157,13 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.data.plot).toEqual(['The miller returns.'])
     expect(result.data.ooc).toEqual(['Keep replies short.'])
     expect(result.plotting?.briefing.map((c) => c.name)).toEqual(['steer'])
-    // The OOC list the Plotter changed reaches the narrator in the turn's
-    // story update; the plan never does.
-    expect(result.plotting?.storyUpdate).toEqual({ ooc: ['Keep replies short.'] })
+    // The arcs and the OOC list the Plotter changed reach the narrator in the
+    // turn's story update.
+    expect(result.plotting?.storyUpdate).toEqual({ arcs: ['The miller returns.'], ooc: ['Keep replies short.'] })
     const narratorReq = requests()[2]
     const shown = narratorReq.messages.flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
-    expect(shown).toEqual(['get_ooc_instructions', 'get_steer'])
-    expect(narratorReq.messages.some((m) => m.content.includes('The miller returns.'))).toBe(false)
+    expect(shown).toEqual(['get_story_arcs', 'get_ooc_instructions', 'get_steer'])
+    expect(narratorReq.messages.some((m) => m.content.includes('1. The miller returns.'))).toBe(true)
     expect(narratorReq.messages.some((m) => m.content.includes('1. Keep replies short.'))).toBe(true)
   })
 
@@ -495,7 +495,12 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.text).toBe('Quiet.')
     const narratorReqs = requests().filter((r) => !isPlotter(r))
     expect(narratorReqs[0].tools).toBeUndefined()
-    expect(narratorReqs[1].tools?.map((t) => t.name)).toEqual(['recall_memories', 'get_ooc_instructions', 'get_steer'])
+    expect(narratorReqs[1].tools?.map((t) => t.name)).toEqual([
+      'recall_memories',
+      'get_story_arcs',
+      'get_ooc_instructions',
+      'get_steer',
+    ])
     expect(narratorReqs[1].toolChoice).toBe('none')
     // Remembered for the session: the next turn sends them straight away.
     expect(narratorReqs[2].toolChoice).toBe('none')
@@ -573,7 +578,7 @@ describe('nextTurnRequests', () => {
 })
 
 describe('buildPlotterInstruction', () => {
-  const noPlan = { ...CTX.flags, includePlotOutline: false }
+  const noArcs = { ...CTX.flags, includePlotOutline: false }
 
   it('names only the enabled records and their tools, updates before recalls before the steer', () => {
     const memoryOnly = buildPlotterInstruction(
@@ -588,19 +593,19 @@ describe('buildPlotterInstruction', () => {
     )
     expect(memoryOnly).toContain('`update_memory`')
     expect(memoryOnly).toContain('`recall_memory`')
-    for (const name of ['`steer`', 'check_state', 'plot_plan', 'update_ooc']) {
+    for (const name of ['`steer`', 'check_state', 'update_arcs', 'update_ooc']) {
       expect(memoryOnly).not.toContain(name)
     }
 
     const all = buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)
-    for (const name of ['`update_memory`', '`plot_plan`', '`update_state`', '`update_ooc`', '`recall_memory`', '`steer`']) {
+    for (const name of ['`update_memory`', '`update_arcs`', '`update_state`', '`update_ooc`', '`recall_memory`', '`steer`']) {
       expect(all).toContain(name)
     }
     expect(all).toContain('then `recall_memory`, then `steer`')
   })
 
   it('lets the Plotter make no calls only when there is no steer to give', () => {
-    expect(buildPlotterInstruction(noPlan, CTX.initialData, 4000)).toContain('DONE')
+    expect(buildPlotterInstruction(noArcs, CTX.initialData, 4000)).toContain('DONE')
     expect(buildPlotterInstruction(CTX.flags, CTX.initialData, 4000)).not.toContain('DONE')
   })
 
@@ -616,7 +621,7 @@ describe('buildPlotterInstruction', () => {
     expect(opening).not.toMatch(/last reply|last action/)
     expect(continuing).not.toContain('last action')
     // A switched-off record is never mentioned.
-    expect(buildPlotterInstruction(noPlan, CTX.initialData, 4000, 'bootstrap')).not.toMatch(/plan|steer/i)
+    expect(buildPlotterInstruction(noArcs, CTX.initialData, 4000, 'bootstrap')).not.toMatch(/arcs?\b|steer/i)
   })
 
   it('keeps out wording that pulled the models the wrong way', () => {

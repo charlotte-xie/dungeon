@@ -248,35 +248,41 @@ describe('tool execution boundaries', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
   })
 
-  it('changes the plot plan by insert and remove only', () => {
+  it('changes the arcs by insert, update and remove', () => {
     const data = { state: {}, plot: ['The flood rises.'], memory: {}, ooc: [] }
-    // Without a position, the entry goes at the end.
+    // Without a position, the arc goes at the end.
     const added = executeTool(
-      'plot_plan',
+      'update_arcs',
       JSON.stringify({ op: 'insert', text: 'The order returns.' }),
       data,
     )
     expect(added.data.plot).toEqual(['The flood rises.', 'The order returns.'])
-    expect(added.result).toBe('ok — inserted at position 2. Plan now has 2 entries.')
+    expect(added.result).toBe('ok — inserted at position 2. Arc list now has 2 entries.')
     const first = executeTool(
-      'plot_plan',
+      'update_arcs',
       JSON.stringify({ op: 'insert', position: 1, text: 'A rival arrives.' }),
       added.data,
     )
     expect(first.data.plot[0]).toBe('A rival arrives.')
-    const removed = executeTool('plot_plan', JSON.stringify({ op: 'remove', position: 2 }), first.data)
+    // An arc is revised in place when the story turns. On the old plan,
+    // rewriting in place turned directions into notes on the current scene.
+    const revised = executeTool(
+      'update_arcs',
+      JSON.stringify({ op: 'update', position: 2, text: 'The flood rises past the mill.' }),
+      first.data,
+    )
+    expect(revised.data.plot[1]).toBe('The flood rises past the mill.')
+    const removed = executeTool('update_arcs', JSON.stringify({ op: 'remove', position: 2 }), revised.data)
     expect(removed.data.plot).toEqual(['A rival arrives.', 'The order returns.'])
     expect(removed.result).toContain('removed entry 2')
-    // The tool says when: a good idea in, a completed or abandoned entry out.
-    // Rewriting in place turned directions into notes on the current scene.
-    for (const op of ['update', 'append', 'delete']) {
+    for (const op of ['append', 'delete']) {
       const refused = executeTool(
-        'plot_plan',
+        'update_arcs',
         JSON.stringify({ op, position: 1, text: 'The knight attacks.' }),
         data,
       )
       expect(refused.data).toBe(data)
-      expect(refused.result).toContain('requires `op` to be one of "insert","remove"')
+      expect(refused.result).toContain('requires `op` to be one of "insert","update","remove"')
     }
   })
 

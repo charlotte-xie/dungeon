@@ -46,16 +46,17 @@ import {
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import {
+  CHECK_ARCS_TOOL,
   CHECK_MEMORY_TOOL,
   CHECK_OOC_TOOL,
-  CHECK_PLOT_PLAN_TOOL,
   CHECK_STATE_TOOL,
   GET_OOC_INSTRUCTIONS_TOOL,
   GET_STEER_TOOL,
-  PLOT_PLAN_TOOL,
+  GET_STORY_ARCS_TOOL,
   RECALL_MEMORIES_TOOL,
   RECALL_MEMORY_TOOL,
   STEER_TOOL,
+  UPDATE_ARCS_TOOL,
   UPDATE_MEMORY_TOOL,
   UPDATE_OOC_TOOL,
   UPDATE_STATE_TOOL,
@@ -94,7 +95,7 @@ export function buildMemoryPayload(currentMemory: Memory): string {
 export function buildPlotPayload(currentPlot: string[]): string {
   return currentPlot.length
     ? currentPlot.map((p, i) => `${i + 1}. ${p}`).join('\n')
-    : '(no future plot plan yet)'
+    : '(no arcs)'
 }
 
 export function buildOocPayload(currentOoc: string[]): string {
@@ -146,7 +147,7 @@ export interface ContextSubsystem {
   checkTool: ModelToolDefinition
   updateTool: ModelToolDefinition
   // Further Plotter tools that brief the narrator: recall for memory, steer
-  // for the plot plan.
+  // for the arcs.
   briefTools: readonly ModelToolDefinition[]
   // Heads this subsystem's status line in the Plotter's instruction.
   label: string
@@ -173,10 +174,10 @@ export const CONTEXT_SUBSYSTEMS: readonly ContextSubsystem[] = [
   },
   {
     enabled: (flags) => flags.includePlotOutline,
-    checkTool: CHECK_PLOT_PLAN_TOOL,
-    updateTool: PLOT_PLAN_TOOL,
+    checkTool: CHECK_ARCS_TOOL,
+    updateTool: UPDATE_ARCS_TOOL,
     briefTools: [STEER_TOOL],
-    label: 'Plot plan',
+    label: 'Arcs',
     buildPayload: (data) => buildPlotPayload(data.plot),
     isEmpty: (data) => data.plot.length === 0,
     buildGuidance: () => '',
@@ -376,6 +377,7 @@ export function buildStoryUpdate(
     }
   }
   const oocBefore = oocInView(earlier)
+  const arcsBefore = arcsInView(earlier)
   const update: StoryUpdate = {}
   if (flags.includeMemory) {
     // Newly recalled entries, then those the narrator already holds: once
@@ -399,6 +401,14 @@ export function buildStoryUpdate(
     if (recalled.length) update.recalled = Object.fromEntries(recalled)
     if (changed.length) update.changed = Object.fromEntries(changed)
   }
+  // The arcs go whole whenever they differ from those last given, whether
+  // the Plotter or the player changed them.
+  if (flags.includePlotOutline) {
+    const arcsChanged = arcsBefore
+      ? JSON.stringify(arcsBefore) !== JSON.stringify(data.plot)
+      : data.plot.length > 0
+    if (arcsChanged) update.arcs = [...data.plot]
+  }
   if (flags.includeOoc) {
     const oocChanged = oocBefore
       ? JSON.stringify(oocBefore) !== JSON.stringify(data.ooc)
@@ -414,6 +424,15 @@ export function oocInView(turns: Turn[]): string[] | undefined {
   let list: string[] | undefined
   for (const t of turns) {
     if (!t.reply.error && t.storyUpdate?.ooc) list = t.storyUpdate.ooc
+  }
+  return list
+}
+
+// Likewise the arcs the narrator was last given.
+function arcsInView(turns: Turn[]): string[] | undefined {
+  let list: string[] | undefined
+  for (const t of turns) {
+    if (!t.reply.error && t.storyUpdate?.arcs) list = t.storyUpdate.arcs
   }
   return list
 }
@@ -434,8 +453,8 @@ function renderOocUpdate(list: string[], before: string[] | undefined): string {
 }
 
 // A story update as the narrator's own calls, each named for what it brings:
-// what it remembers, then the player's standing OOC instructions. `oocBefore`
-// is the OOC list in view before this update.
+// what it remembers, where the story is heading, then the player's standing
+// OOC instructions. `oocBefore` is the OOC list in view before this update.
 export function storyUpdateCalls(
   update: StoryUpdate,
   oocBefore: string[] | undefined,
@@ -446,6 +465,9 @@ export function storyUpdateCalls(
   const ooc = update.ooc ? renderOocUpdate(update.ooc, oocBefore) : ''
   return [
     ...(memories.length ? [{ name: RECALL_MEMORIES_TOOL.name, result: memories.join('\n\n') }] : []),
+    ...(update.arcs
+      ? [{ name: GET_STORY_ARCS_TOOL.name, result: `# Where the story is heading\n\n${buildPlotPayload(update.arcs)}` }]
+      : []),
     ...(ooc ? [{ name: GET_OOC_INSTRUCTIONS_TOOL.name, result: ooc }] : []),
   ]
 }

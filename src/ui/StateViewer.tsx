@@ -172,12 +172,12 @@ export function StateViewer({
   function validatePlot(): string[] | null {
     const parsed = parsePlotDraft(plotDraft)
     if (parsed.length > MAX_PLOT_ITEMS) {
-      setPlotError(`Too many bullets (${parsed.length}, max ${MAX_PLOT_ITEMS}).`)
+      setPlotError(`Too many arcs (${parsed.length}, max ${MAX_PLOT_ITEMS}).`)
       return null
     }
     const tooLong = parsed.find((s) => s.length > MAX_PLOT_ITEM_CHARS)
     if (tooLong) {
-      setPlotError(`A bullet is too long (${tooLong.length} chars, max ${MAX_PLOT_ITEM_CHARS}).`)
+      setPlotError(`An arc is too long (${tooLong.length} chars, max ${MAX_PLOT_ITEM_CHARS}).`)
       return null
     }
     setPlotError(null)
@@ -267,7 +267,7 @@ export function StateViewer({
       ? [{ id: 'state' as Tab, label: 'Live state', dirty: stateDirty }]
       : []),
     ...(context.includePlotOutline
-      ? [{ id: 'plot' as Tab, label: `Plot (${plot.length})`, dirty: plotDirty }]
+      ? [{ id: 'plot' as Tab, label: `Arcs (${plot.length})`, dirty: plotDirty }]
       : []),
     ...(context.includeOoc
       ? [{ id: 'ooc' as Tab, label: `OOC (${ooc.length})`, dirty: oocDirty }]
@@ -315,11 +315,11 @@ export function StateViewer({
             <button
               className="ghost"
               onClick={() => {
-                if (plot.length && confirm('Clear the future plot plan?')) onClearPlot()
+                if (plot.length && confirm('Clear the arcs?')) onClearPlot()
               }}
               disabled={busy || plot.length === 0}
             >
-              Clear plan
+              Clear arcs
             </button>
           )}
           {tab === 'ooc' && (
@@ -413,13 +413,14 @@ export function StateViewer({
       {tab === 'plot' && context.includePlotOutline && (
         <>
           <p className="hint">
-            The plotter's private plan: long-term ideas for where the story is
-            heading. The plotter inserts a good idea for the story, and removes an
-            entry once it is completed or abandoned. One entry per line;
-            leading <code>-</code>, <code>*</code>, or{' '}
-            <code>1.</code> numbering is stripped on save. Max {MAX_PLOT_ITEMS} entries,
-            each up to {MAX_PLOT_ITEM_CHARS} chars. Current: {plot.length} entr
-            {plot.length === 1 ? 'y' : 'ies'}.
+            The story's arcs: where it is heading over the long run. The plotter
+            sets them up, brings one a little closer with each steer, and revises
+            or removes them as the story turns. The narrator sees them whenever
+            they change. Edit them to take the story your way: the plotter keeps
+            to what you write. One arc per line; leading <code>-</code>,{' '}
+            <code>*</code>, or <code>1.</code> numbering is stripped on save. Max{' '}
+            {MAX_PLOT_ITEMS} arcs, each up to {MAX_PLOT_ITEM_CHARS} chars. Current:{' '}
+            {plot.length} arc{plot.length === 1 ? '' : 's'}.
           </p>
           <textarea
             className="state-json state-json-editor tab-editor"
@@ -427,7 +428,7 @@ export function StateViewer({
             value={plotDraft}
             onChange={(e) => setPlotDraft(e.target.value)}
             readOnly={busy}
-            placeholder="(no future plot plan yet — one entry per line)"
+            placeholder="(no arcs yet — one arc per line)"
           />
           {plotError && <p className="error-text">{plotError}</p>}
         </>

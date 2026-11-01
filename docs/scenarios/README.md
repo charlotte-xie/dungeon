@@ -6,7 +6,7 @@ Each scenario file gives the premise to paste in, a script of inputs, what that 
 
 | Scenario | Exercises |
 |---|---|
-| [Relic hunter](relic-hunter.md) | Fantasy crypt with a rival: fights, NPC ultimatums, plan drift, Continue |
+| [Relic hunter](relic-hunter.md) | Fantasy crypt with a rival: fights, NPC ultimatums, arc drift, Continue |
 | [Office romance](office-romance.md) | Modern and dialogue-led: subtext, slow pacing, the player's inner life, life-sim drift |
 | [Derelict beacon](derelict-beacon.md) | Hard science fiction: atmosphere, description and mood from the brief and style guide alone |
 | [Interrogation](interrogation.md) | Period murder mystery as one interview: a suspect who keeps fighting, the player's questions moving the case, consistent secrets |
@@ -15,13 +15,13 @@ Each scenario file gives the premise to paste in, a script of inputs, what that 
 
 - Run the dev server with `pnpm dev` and open http://localhost:3003.
 - The maintainer enters the API key in **Settings**. Agents never type, read, print or log a key. To check one is set, test only that it is non-empty, for example `!!localStorage.getItem('dm.xaiKey')` for the xAI preset.
-- The baseline runs use the **xAI** preset: Responses API, grok-4.3, narrator reasoning off, Plotter reasoning low, with memory, the plot plan and OOC instructions on and live state off. Note any settings that differ in your report.
+- The baseline runs use the **xAI** preset: Responses API, grok-4.3, narrator reasoning off, Plotter reasoning low, with memory, the story arcs and OOC instructions on and live state off. Note any settings that differ in your report.
 - Play spends tokens on the maintainer's account. Keep a run to an opening and four to six turns.
 - Play transcripts are private writing: never commit them. Quote only the lines a finding needs.
 
 ## Driving the app
 
-**By hand.** Open **Adventure › New adventure**, paste the scenario's brief and style guide, and begin. Type each input and press **Act**; press **Continue** for a Continue turn. The trace under each reply shows the Plotter's calls, the steer, timings and cached tokens, and **Inspect** shows the plan and memory.
+**By hand.** Open **Adventure › New adventure**, paste the scenario's brief and style guide, and begin. Type each input and press **Act**; press **Continue** for a Continue turn. The trace under each reply shows the Plotter's calls, the steer, timings and cached tokens, and **Inspect** shows the arcs and memory.
 
 **By script.** With a browser tool, paste the helper below into the page. It records each model request and response body (never the headers, so the key is never touched) and drives the app's own buttons. It assumes the Responses API and is lost when the page reloads.
 
@@ -51,7 +51,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const HAND_BACK = /\?|\b(your|the) (call|move|turn)\b|\bchoices?\b|\b(is|are) yours\b|\byours to\b|up to you|unless you|\bwait(s|ing)?\b|\bawaits?\b|invites? (a )?repl|for (your|an) answer|hold(s)? (its|their|her|his) breath|\bdeci(d|sion)|what (will|do) you/i
 // Dialogue that may offer the player an X-or-Y, anywhere in the reply.
 const OFFER = /[“"][^”"]*(\bchoices?\b|\bor\b)[^”"]*[”"]/i
-// One line per request: the Plotter's calls, plan changes and steer, or the narrator's text.
+// One line per request: the Plotter's calls, arc changes and steer, or the narrator's text.
 window.__report = (list) => list.map((e) => {
   const out = e.response?.output || []
   const calls = out.filter((o) => o.type === 'function_call')
@@ -62,7 +62,7 @@ window.__report = (list) => list.map((e) => {
     role: 'plotter', ms: e.ms, cache,
     calls: calls.map((c) => c.name).join(','),
     proseInstead: !calls.length && text ? text.slice(0, 120) : undefined,
-    plan: calls.filter((c) => c.name === 'plot_plan').map((c) => { const a = args(c); return `${a.op}${a.position ? ' ' + a.position : ''}${a.text ? ': ' + a.text : ''}` }),
+    arcs: calls.filter((c) => c.name === 'update_arcs').map((c) => { const a = args(c); return `${a.op}${a.position ? ' ' + a.position : ''}${a.text ? ': ' + a.text : ''}` }),
     steer: calls.filter((c) => c.name === 'steer').map((c) => args(c).text).join(' | '),
   }
   const ending = (text.match(/[^.!?…]+[.!?…]+["”’]?/g) || [text]).slice(-2).join(' ').trim()
@@ -106,10 +106,8 @@ window.__act = async (text) => {
   const done = await window.__waitIdle()
   return { done, report: window.__report(window.__run.slice(start)) }
 }
-// The plan as the Plotter last saw it.
-window.__planNow = () => window.__run.filter((e) => e.body.tools).at(-1)?.body.input
-  .filter((m) => m.type === 'function_call_output').map((m) => String(m.output))
-  .find((o) => /^1\. /.test(o))
+// The arcs as they stand now.
+window.__arcsNow = () => JSON.parse(localStorage.getItem('dm.plot') || '[]')
 ```
 
 Run one turn per call: `await __begin(brief, style)`, then `await __act('…')` or `await __act(null)`. Each call waits up to about 40 seconds; if `done` comes back false, call `await __waitIdle()` and read the turn with `__report(__run.slice(-2))`. The scripts are a shape to follow, not lines to paste blindly: adapt each input to what the story just did, keeping the kind of move the script asks for.
@@ -118,11 +116,11 @@ Run one turn per call: `await __begin(brief, style)`, then `await __act('…')` 
 
 For every reply:
 
-- **Plotter:** its calls, the plan changes, and the steer. Note whether it wrote prose or typed its calls as text instead of making them, and whether the steer reminder fired.
+- **Plotter:** its calls, the arc changes, and the steer. Note whether it wrote prose or typed its calls as text instead of making them, and whether the steer reminder fired.
 - **Narrator:** words and paragraphs, every NPC line, and how the reply ends.
 - **Timing and cache:** each role's time and cached tokens.
 
-At the end, the plan as it stands and anything memory got wrong.
+At the end, the arcs as they stand and anything memory got wrong.
 
 ## What to look for
 
@@ -153,8 +151,9 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 
 - Steers should describe what happens in the world. Flag steers that frame the player's decision ("must choose", "forcing a choice"), give writing instructions ("Keep the dialogue terse", "End ready for their next action") or move the player.
 - Flag steers that script every NPC line, which the narrator then copies word for word, and steers that add the same ambient line every time.
-- The opening should set up memory and the plan on the first try, without the steer reminder.
-- The plan should hold a few medium- and long-term directions. Flag entries that are just the current scene, completed or abandoned entries left in place, and good threads the story revealed that never entered the plan.
+- The opening should set up memory and the arcs on the first try, without the steer reminder.
+- The arcs should hold a few long-term directions, each kept and revised over many replies. Flag arcs that are just the current scene, arcs rewritten each turn into the next scene, landed or abandoned arcs left in place, and good threads the story revealed that never became arcs.
+- An arc the player edits should be kept as they wrote it, and the narrator should reach an arc only when the steer brings it there.
 - Memory entries should start with `is`, and NPC goals should be recorded as `wants`.
 
 **Mechanics**
@@ -165,8 +164,8 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 ## Reporting
 
 1. A table with one row per reply: the input, NPC lines, how the reply ends, and any flags.
-2. The plan as it built up, turn by turn.
-3. The mechanism behind each failure, traced to the prompt text, plan or steer that caused it, before proposing any fix. The maintainer chooses the fix.
+2. The arcs as they built up, turn by turn.
+3. The mechanism behind each failure, traced to the prompt text, arcs or steer that caused it, before proposing any fix. The maintainer chooses the fix.
 4. What the run didn't exercise.
 
 Add a line to the scenario's results so the next run has a baseline.
