@@ -20,7 +20,7 @@ Update the records where something lasting has changed.
 Work out what happens next: the development that does most for the story now, moving a thread of the plan on where it fits.
 
 ## develop-continue
-The player pressed Continue: carry the story on from where the last reply ended to its next development. Their character carries on as before.
+The player pressed Continue: carry the story on from where the last reply ended to its next development, through what the world and its people do. Their character carries on only with what the player last had them doing, and makes no significant move of their own.
 
 ## recall
 Recall with `{{recall}}` the people, places, things and threads the reply involves.
