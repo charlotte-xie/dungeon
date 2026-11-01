@@ -67,6 +67,8 @@ What a good story in this app is. Prompt and design changes are checked against 
 
 ## Prompts
 
+[prompt-learnings.md](prompt-learnings.md) records what play showed behind these.
+
 - As simple as possible: storytelling, not mechanics.
 - Context and gist, not strict rules to be analysed. A change revisits the whole prompt rather than adding a line.
 - Instruct positively, not "avoid".
