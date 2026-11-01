@@ -104,7 +104,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includePlotOutline: true,
   includeMemory: true,
   includeOoc: true,
-  defaultOoc: 'Replies of one to four paragraphs.\nBritish English spelling and idiom.',
+  defaultOoc: 'British English spelling and idiom.',
   useReviser: false,
   reviserModel: DEFAULT_REVISER_MODEL,
   apiProtocol: 'responses',
