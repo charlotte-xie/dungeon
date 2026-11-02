@@ -5,7 +5,7 @@ Open the story where the scenario starts, with the player's character in the sce
 Play out what follows, including the next meaningful story development. Play it in the moment: what happens, and what people do and say. Keep it fresh: new words, new moments.
 
 ## player
-Open with what the player did, briefly, and what they said, in their exact words. Play out what follows, including the next meaningful story development. Play it in the moment: what happens, and what people do and say. Keep it fresh: new words, new moments.
+Narrate the player's actions based on their input. Give quoted speech verbatim. Play out what follows, including the next meaningful story development. Play it in the moment: what happens, and what people do and say. Keep it fresh: new words, new moments.
 
 ## ooc
 Carry on from where the last reply ended, following the player's direction. Play it in the moment: what happens, and what people do and say. Keep it fresh: new words, new moments.
