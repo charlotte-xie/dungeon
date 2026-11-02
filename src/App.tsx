@@ -54,7 +54,17 @@ function App() {
   const [rewriting, setRewriting] = useState(false)
   const [rewriteText, setRewriteText] = useState('')
   const [rewriteError, setRewriteError] = useState<string | null>(null)
+  // The message open for editing, as `<turn id>:input` or `<turn id>:reply`.
+  const [editingMessage, setEditingMessage] = useState<string | null>(null)
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(() => new Set())
+
+  function editing(key: string) {
+    return {
+      editing: editingMessage === key,
+      onEditingChange: (open: boolean) =>
+        setEditingMessage((cur) => (open ? key : cur === key ? null : cur)),
+    }
+  }
 
   function toggleTrace(id: string) {
     setExpandedTraces((s) => {
@@ -109,6 +119,11 @@ function App() {
   function undo() {
     setRewriting(false)
     game.undo()
+  }
+
+  function editReply(turnId: string) {
+    setRewriting(false)
+    setEditingMessage(`${turnId}:reply`)
   }
 
   function openRewrite() {
@@ -233,6 +248,7 @@ function App() {
                       <div className="msg-body">
                         <EditableMessage
                           text={t.input ?? ''}
+                          {...editing(`${t.id}:input`)}
                           onSave={(next) => game.editTurnInput(t.id, next)}
                         />
                       </div>
@@ -244,6 +260,7 @@ function App() {
                       <div className="msg-body">
                         <EditableMessage
                           text={t.reply.text ?? ''}
+                          {...editing(`${t.id}:reply`)}
                           onSave={(next) => game.editTurnReply(t.id, next)}
                         />
                         {pending && (
@@ -290,6 +307,15 @@ function App() {
                                     title="Discard this reply and write it again following your instruction"
                                   >
                                     Rewrite
+                                  </button>
+                                )}
+                                {editingMessage !== `${t.id}:reply` && (
+                                  <button
+                                    className="link"
+                                    onClick={() => editReply(t.id)}
+                                    title="Correct the text of this reply yourself"
+                                  >
+                                    Edit
                                   </button>
                                 )}
                                 {game.canUndo && (
