@@ -70,9 +70,47 @@ describe('tool execution boundaries', () => {
       expect(events).toHaveLength(MAX_ENTRY_EVENTS)
     })
 
-    it('replaces the list on a set, as a set replaces anything, and still trims it', () => {
-      const result = update({ watch: { events: ['old'] } }, { set: { 'watch.events': ['1', '2', '3', '4', '5', '6'] } })
-      expect(result.data.memory.watch).toEqual({ events: ['2', '3', '4', '5', '6'] })
+    it('adds to the list however the write is shaped', () => {
+      const held = { watch: { events: ['old'] } }
+      const shapes: object[] = [
+        { set: { 'watch.events': ['new'] } },
+        { set: { 'watch.events': 'new' } },
+        { set: { 'watch.events.2': 'new' } },
+        { merge: { 'watch.events': ['new'] } },
+        { merge: { 'watch.events': { 0: 'new' } } },
+        { merge: { 'watch.events.merge': ['new'] } },
+        { merge: { watch: { events: { 3: 'new' } } } },
+      ]
+      for (const shape of shapes) {
+        const result = update(held, shape)
+        expect(result.result).toMatch(/^ok/)
+        expect(result.data.memory.watch).toEqual({ events: ['old', 'new'] })
+      }
+    })
+
+    it('does not double what is sent back with the new one, and still trims', () => {
+      const sentBack = update({ watch: { events: ['a', 'b'] } }, { set: { 'watch.events': ['a', 'b', 'c'] } })
+      expect(sentBack.data.memory.watch).toEqual({ events: ['a', 'b', 'c'] })
+      const long = update({ watch: { events: ['old'] } }, { set: { 'watch.events': ['1', '2', '3', '4', '5'] } })
+      expect(long.data.memory.watch).toEqual({ events: ['1', '2', '3', '4', '5'] })
+    })
+
+    it('keeps an entry’s events when the whole entry is rewritten', () => {
+      const without = update({ watch: { is: 'old', events: ['a'] } }, { set: { watch: { is: 'new' } } })
+      expect(without.data.memory.watch).toEqual({ is: 'new', events: ['a'] })
+      const withNew = update({ watch: { is: 'old', events: ['a'] } }, { set: { watch: { is: 'new', events: ['b'] } } })
+      expect(withNew.data.memory.watch).toEqual({ is: 'new', events: ['a', 'b'] })
+    })
+
+    it('turns events already held as a map into a list on the next write', () => {
+      const result = update({ watch: { events: { 0: 'a', 1: 'b' } } }, { merge: { watch: { events: ['c'] } } })
+      expect(result.data.memory.watch).toEqual({ events: ['a', 'b', 'c'] })
+    })
+
+    it('still lets the whole list be deleted', () => {
+      expect(update({ watch: { is: 'x', events: ['a'] } }, { delete: ['watch.events'] }).data.memory.watch).toEqual({
+        is: 'x',
+      })
     })
 
     it('rejects a list anywhere else, and applies the rest of the call', () => {

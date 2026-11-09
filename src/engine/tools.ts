@@ -18,17 +18,34 @@ export const MAX_OOC_ITEM_CHARS = 300
 export const EVENTS_FACET = 'events'
 export const MAX_ENTRY_EVENTS = 5
 
-function isEventsPath(path: string): boolean {
+// The entry's events list that a path writes to or under, if any.
+function eventsPathOf(path: string): string | undefined {
   const segments = path.split('.').filter(Boolean)
-  return segments.length === 2 && segments[1] === EVENTS_FACET
+  return segments.length >= 2 && segments[1] === EVENTS_FACET ? `${segments[0]}.${EVENTS_FACET}` : undefined
+}
+
+// The sentences in a value written to `events`, whatever shape the Plotter
+// gave them: one sentence, a list, or a map of them. Undefined if it holds
+// anything else.
+function eventItems(value: JsonValue | undefined): string[] | undefined {
+  if (typeof value === 'string') return [value]
+  if (typeof value !== 'object' || value === null) return undefined
+  const items: string[] = []
+  for (const inner of Object.values(value)) {
+    const found = eventItems(inner)
+    if (!found) return undefined
+    items.push(...found)
+  }
+  return items
 }
 
 // The path of the first list this write would put anywhere but an entry's
-// `events`, or that puts anything but sentences there.
+// `events`, or the first thing it would put there that isn't a sentence.
 function strayListPath(path: string, value: JsonValue | undefined): string | undefined {
-  if (Array.isArray(value)) {
-    return isEventsPath(path) && value.every((item) => typeof item === 'string') ? undefined : path
+  if (eventsPathOf(path)) {
+    return value === null || value === undefined || eventItems(value) ? undefined : path
   }
+  if (Array.isArray(value)) return path
   if (typeof value !== 'object' || value === null) return undefined
   for (const [key, inner] of Object.entries(value)) {
     const stray = strayListPath(`${path}.${key}`, inner)
@@ -102,7 +119,7 @@ export const UPDATE_ARCS_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. \`${EVENTS_FACET}\` directly under an entry is the only list: \`merge\` adds to it, and the last ${MAX_ENTRY_EVENTS} are kept. Put every change in one call. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Entry keys are slugs, and periods separate path parts.`,
+      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. \`${EVENTS_FACET}\` directly under an entry is the only list: what you write to it is added, and the last ${MAX_ENTRY_EVENTS} are kept. Put every change in one call. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Entry keys are slugs, and periods separate path parts.`,
     parameters: {
       type: 'object',
       properties: {
@@ -520,7 +537,7 @@ export function executeTool(
         path,
         leaves: isPlainObject(value)
           ? leafPaths(path, value)
-          : isEventsPath(path) && (Array.isArray(value) || typeof value === 'string')
+          : eventsPathOf(path) && (Array.isArray(value) || typeof value === 'string')
             ? ([[path, value]] as [string, JsonValue][])
             : undefined,
       }))
@@ -608,11 +625,11 @@ export function executeTool(
         return true
       }
 
-      // A merge adds to `events`, skipping what is already there.
+      // Any write to `events` adds to it, skipping what is already there, so
+      // the rolling list survives however the Plotter words the write.
       const addEvents = (path: string, value: JsonValue): void => {
-        const existing = getByPath(next, path)
-        const held = Array.isArray(existing) ? existing : []
-        const added = (Array.isArray(value) ? value : [value]).filter((item) => !held.includes(item))
+        const held = eventItems(getByPath(next, path)) ?? []
+        const added = (eventItems(value) ?? []).filter((item) => !held.includes(item))
         next = setByPath(next, path, [...held, ...added])
       }
 
@@ -625,7 +642,19 @@ export function executeTool(
           continue
         }
         const deleting = value === null || value === undefined
+        const eventsPath = eventsPathOf(path)
+        if (eventsPath && !deleting) {
+          addEvents(eventsPath, value)
+          notes.push(`added to ${eventsPath}`)
+          continue
+        }
+        // Rewriting a whole entry keeps the events it already had.
+        const heldEvents = path.includes('.') ? undefined : getByPath(next, `${path}.${EVENTS_FACET}`)
         const changed = write(path, value)
+        if (heldEvents !== undefined && isPlainObject(value)) {
+          next = setByPath(next, `${path}.${EVENTS_FACET}`, heldEvents)
+          if (value[EVENTS_FACET] !== undefined) addEvents(`${path}.${EVENTS_FACET}`, value[EVENTS_FACET])
+        }
         notes.push(deleting ? `deleted ${path} via null${changed ? '' : ' (no-op; not present)'}` : `set ${path}`)
       }
 
@@ -644,7 +673,8 @@ export function executeTool(
           continue
         }
         for (const [leaf, value] of leaves) {
-          if (isEventsPath(leaf) && value !== null) addEvents(leaf, value)
+          const eventsPath = eventsPathOf(leaf)
+          if (eventsPath && value !== null) addEvents(eventsPath, value)
           else write(leaf, value)
         }
         notes.push(`merged ${path}${leaves.length ? `: ${leaves.map(([leaf]) => leaf.slice(path.length + 1) || EVENTS_FACET).join(', ')}` : ' (no-op; empty)'}`)
@@ -655,8 +685,8 @@ export function executeTool(
       for (const [entry, value] of Object.entries(next)) {
         if (!isPlainObject(value)) continue
         const events = value[EVENTS_FACET]
-        const list = typeof events === 'string' ? [events] : events
-        if (Array.isArray(list) && (list !== events || list.length > MAX_ENTRY_EVENTS)) {
+        const list = eventItems(events)
+        if (list && (!Array.isArray(events) || list.length > MAX_ENTRY_EVENTS)) {
           next = setByPath(next, `${entry}.${EVENTS_FACET}`, list.slice(-MAX_ENTRY_EVENTS))
         }
       }
