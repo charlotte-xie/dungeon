@@ -68,6 +68,8 @@ export interface ChronicleAgentArgs {
   protocol: ApiProtocol
   // The adventure's prompt-cache key; see ModelConnection.
   cacheKey?: string
+  // The adventure's scenario brief.
+  scenario: string
 }
 
 // The texts of the chronicle's entries in story order: the highest level
@@ -239,6 +241,7 @@ async function foldTurns(
         baseUrl: agent.baseUrl,
         protocol: agent.protocol,
         cacheKey: agent.cacheKey,
+        scenario: agent.scenario,
         previousSummary: storyTexts(next).join('\n\n'),
         turns: inputs,
         maxChars: summaryLimit(turns, last, settings.summaryMaxChars),

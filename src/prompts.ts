@@ -109,23 +109,25 @@ export function buildOocRules(maxOocItems: number, maxOocItemChars: number): str
 
 export const SUMMARIZER_SYSTEM_PROMPT = summarizerTemplate.trim()
 
-const summarizerInputsText = sectionReader<'story' | 'story-start' | 'turns' | 'turn' | 'length' | 'instruction'>(
+const summarizerInputsText = sectionReader<'scenario' | 'story' | 'story-start' | 'turns' | 'turn' | 'length' | 'instruction'>(
   'summarizer-inputs.md',
   summarizerInputsTemplate,
 )
 
-// The summariser's input: the summary so far (or word that the story starts
-// with these turns), the run of turns that follow it, each headed by its
-// number in the log, the most it may write, then what to write. The length
-// rides here rather than in the system prompt, which stays the same for every
-// call.
+// The summariser's input: the scenario, the summary so far (or word that the
+// story starts with these turns), the run of turns that follow it, each headed
+// by its number in the log, the most it may write, then what to write. The
+// length rides here rather than in the system prompt, which stays the same for
+// every call.
 export function buildSummarizerInputs(
+  scenario: string,
   previousSummary: string,
   turns: { number: number; text: string }[],
   maxChars: number,
 ): string {
   const body = turns.map((t) => summarizerInputsText('turn', { number: t.number, text: t.text })).join('\n\n')
   return [
+    ...(scenario.trim() ? [summarizerInputsText('scenario', { scenario: scenario.trim() })] : []),
     previousSummary
       ? summarizerInputsText('story', { story: previousSummary })
       : summarizerInputsText('story-start'),

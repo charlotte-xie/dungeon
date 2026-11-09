@@ -1,3 +1,10 @@
+## scenario
+--- THE SCENARIO ---
+
+{{scenario}}
+
+--- END OF THE SCENARIO ---
+
 ## story
 --- THE STORY SO FAR ---
 
@@ -26,4 +33,4 @@ The story begins with these turns.
 Keep it within {{chars}} characters.
 
 ## instruction
-Write a new synopsis of the whole story as it now stands.
+Write a new synopsis of the whole story as it now stands, so that someone who knew nothing about the story would understand what it is about.

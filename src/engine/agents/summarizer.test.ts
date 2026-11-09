@@ -20,6 +20,7 @@ const INPUT: SummarizerInput = {
   apiKey: 'k',
   baseUrl: 'http://x',
   protocol: 'chat-completions',
+  scenario: '',
   previousSummary: '',
   turns: [{ number: 1, text: 'DM: Rain falls.' }],
   maxChars: 400,
@@ -31,14 +32,22 @@ describe('summariser input', () => {
     mockedModel.mockResolvedValue(completion)
   })
 
-  it('sends the summary so far before the turns', async () => {
+  it('sends the scenario, then the summary so far, before the turns', async () => {
     const result = await runSummarizer(
-      { ...INPUT, previousSummary: 'You reached the village, and Father Aldo took you in.' },
+      {
+        ...INPUT,
+        scenario: 'You are a travelling cooper in a flooded country.',
+        previousSummary: 'You reached the village, and Father Aldo took you in.',
+      },
       new AbortController().signal,
     )
     expect(result.summary).toBe(completion.text)
     const content = mockedModel.mock.calls[0][0].messages[1].content
-    const order = ['You reached the village, and Father Aldo took you in.', 'DM: Rain falls.'].map((part) =>
+    const order = [
+      'You are a travelling cooper in a flooded country.',
+      'You reached the village, and Father Aldo took you in.',
+      'DM: Rain falls.',
+    ].map((part) =>
       content.indexOf(part),
     )
     expect(order.every((at) => at >= 0)).toBe(true)

@@ -425,6 +425,7 @@ export function useGameController(settings: GameSettings) {
       baseUrl,
       protocol: context.apiProtocol,
       cacheKey,
+      scenario: slots.scenario,
     }
   }
 

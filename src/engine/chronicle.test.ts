@@ -30,6 +30,7 @@ const AGENT = {
   apiKey: 'k',
   baseUrl: 'http://x',
   protocol: 'chat-completions' as const,
+  scenario: 'A wagon, a winter, a secret.',
 }
 
 const DEFAULTS: ChronicleSettings = { compactionThreshold: 32, compactionFloor: 16, summaryMaxChars: 3000 }
@@ -235,7 +236,7 @@ describe('compaction', () => {
       new AbortController().signal,
     )
     for (const [input] of mockedSummarizer.mock.calls) {
-      expect(input).toMatchObject({ model: 'grok-4.3', reasoningEffort: 'none' })
+      expect(input).toMatchObject({ model: 'grok-4.3', reasoningEffort: 'none', scenario: AGENT.scenario })
     }
   })
 

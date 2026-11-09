@@ -20,6 +20,9 @@ export interface SummarizerInput {
   // The adventure's prompt-cache key; the summariser uses its own key derived
   // from it (see roleCacheKey).
   cacheKey?: string
+  // The adventure's scenario brief: what the turns alone may never say, such
+  // as who the player's character is and what kind of story this is.
+  scenario: string
   // The summary of everything before these turns; empty at the start.
   previousSummary: string
   // The turns the new summary reaches the end of.
@@ -43,7 +46,7 @@ export async function runSummarizer(
   input: SummarizerInput,
   signal: AbortSignal,
 ): Promise<SummarizerResult> {
-  const userContent = buildSummarizerInputs(input.previousSummary, input.turns, input.maxChars)
+  const userContent = buildSummarizerInputs(input.scenario, input.previousSummary, input.turns, input.maxChars)
 
   const messages: ModelMessage[] = [
     { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },
