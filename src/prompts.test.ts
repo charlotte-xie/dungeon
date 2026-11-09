@@ -100,7 +100,7 @@ describe('prompts', () => {
   })
 
   it('keeps the summariser system prompt byte-stable — the length rides with the inputs', () => {
-    expect(buildSummarizerInputs([], [{ number: 1, text: 'DM: Rain falls.' }], 1500)).toContain('1,500')
+    expect(buildSummarizerInputs('', [{ number: 1, text: 'DM: Rain falls.' }], 1500)).toContain('1,500')
     expect(SUMMARIZER_SYSTEM_PROMPT).not.toContain('1,500')
   })
 })

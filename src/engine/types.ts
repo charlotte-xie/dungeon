@@ -140,20 +140,16 @@ export interface ContextConfig {
   summarizerReasoning: ReasoningEffort
   // N (high watermark) — when the live tail (turns past the cutoff) reaches
   // this many turns, a compaction event runs and drains the tail down to
-  // compactionFloor. N also remains the per-level promotion threshold: when
-  // chronicle[k].length >= N, the first M entries promote to chronicle[k+1].
+  // compactionFloor.
   compactionThreshold: number
   // Low watermark — the drain target of a compaction event. Events recur
   // every (N - floor) turns; between events the chronicle and cutoff are
   // frozen, so the request prefix stays byte-stable for provider caching.
-  // Effective value is clamped to at most N - M.
+  // A floor at or above N counts as half of N.
   compactionFloor: number
-  // M — how many turns or entries to fold per chronicle entry (the sub-batch
-  // size within a drain event, not the event cadence). Each summary targets
-  // 1/M of the combined input length, so compression ratio is constant and
-  // entries end up roughly "one turn-worth" regardless of how long individual
-  // turns happen to be.
-  compactionBatch: number
+  // The longest the running summary is asked to be, in average turns' length.
+  // It runs to a quarter of the story it covers until it reaches this.
+  summaryMaxTurns: number
   stateCleanupChars: number
   includePriorPlayerTurns: boolean
   reminderAsSystem: boolean
@@ -189,12 +185,11 @@ export interface ChronicleEntry {
   createdAt: number
 }
 
-// Outer index = level. chronicle[0] is the newest, least compressed level;
-// chronicle[chronicle.length - 1] is the topmost (oldest, most compressed).
-// When a level reaches N entries, the first M are promoted into one entry at
-// the next level up, and the structure can grow taller. Read in story order,
-// the topmost level first, the entries cover the folded turns from the first
-// onward with no gaps or overlaps; the turns after the last entry are live.
+// Compaction leaves one entry, the running summary, at level 0. Saves from
+// before that can hold several entries across levels, the highest level
+// oldest. Read in story order, the topmost level first, the entries cover the
+// folded turns from the first onward with no gaps or overlaps; the turns after
+// the last entry are live.
 export type Chronicle = ChronicleEntry[][]
 
 export interface SamplingParams {

@@ -1,8 +1,9 @@
-// Chronicle: structured, recursive compaction of older turns.
+// Chronicle: one running summary of the older turns.
 //
-// The chronicle is `Chronicle = ChronicleEntry[][]`. chronicle[0] holds the
-// newest, least-compressed summaries; higher indices hold older, more
-// heavily compressed material. Each entry is roughly one turn long.
+// The chronicle is stored as `Chronicle = ChronicleEntry[][]`. Compaction
+// leaves a single entry covering every folded turn from the first onward. A
+// chronicle saved with several entries reads in story order, the highest level
+// first, until its next compaction folds it into that one summary.
 //
 // The chronicle is an index over the complete history. Each entry points at
 // the run of turns it summarises; read in story order, the entries cover the
@@ -11,27 +12,17 @@
 // view can be rebuilt at any time from the turns and the chronicle, and the
 // cutoff between folded and live turns follows from the index.
 //
-// Algorithm (N = compactionThreshold, floor = compactionFloor, M =
-// compactionBatch), tuned so compaction events are rare: every chronicle
-// change rewrites the chronicle system message and advances the cutoff,
-// invalidating the provider's cached prefix for the whole history, so all
-// rewriting is clustered into one drain event every (N - floor) turns.
+// Compaction (N = compactionThreshold, floor = compactionFloor) is tuned so
+// events are rare: every chronicle change rewrites the chronicle system
+// message and advances the cutoff, invalidating the provider's cached prefix
+// for the whole history, so all rewriting is clustered into one event every
+// (N - floor) turns. Between events the chronicle and cutoff are frozen.
 //
-// 1. When (turns.length - cutoff) >= N, drain the live tail down to `floor`
-//    turns in one event: fold sub-batches of M turns into one chronicle[0]
-//    entry each, in story order. Between events the chronicle and cutoff are
-//    frozen.
-// 2. After folding, if chronicle[k].length >= N for some k, take the first
-//    M entries at level k, summarise the turns they cover into one entry,
-//    and append it to chronicle[k+1]. Recurse. Levels only
-//    grow during folds, so promotions can only fire inside a drain event.
-// 3. If level k is the topmost and gets compacted, chronicle gains a new
-//    level k+1.
-//
-// All summarisation goes through runSummarizer (one model call per fold or
-// promotion). Each summary is written with the story so far in view: the
-// entries before its turns, as they stand when it is written. So the calls
-// run one after another, each fold seeing the ones made before it.
+// When (turns.length - cutoff) >= N, an event drains the live tail down to
+// `floor` turns: the summary is rewritten from its last version and the real
+// turns being folded in. A longer backlog, after the chronicle is cleared or
+// rebuilt, is taken in stretches of (N - floor) turns, one model call each,
+// every rewrite reading the summary left by the one before.
 
 import { runSummarizer, type SummaryTurn } from './agents/summarizer'
 import type { ApiProtocol, ModelMessage, ReasoningEffort } from './model/types'
@@ -39,19 +30,34 @@ import type { Chronicle, ChronicleEntry, Turn } from './types'
 
 export interface ChronicleSettings {
   compactionThreshold: number  // N — high watermark; also per-level promotion threshold
-  compactionFloor: number      // drain target; clamped to at most N - M
-  compactionBatch: number      // M — turns/entries folded per chronicle entry
+  compactionFloor: number      // drain target; see drainFloor
+  summaryMaxTurns: number      // the summary's longest, in average turns
 }
 
-// Every entry, at any level, is summarised from the turns it covers and may
-// run to the average length of one of them: entries stay within "one
-// turn-worth" of text however many turns they cover. A floor prevents
-// pathologically tiny limits when turns are short.
+// The drain target. An event has to fold something, so a floor at or above N,
+// from a stored threshold set below the default floor, counts as half of N.
+function drainFloor(settings: ChronicleSettings, N: number): number {
+  const floor = Math.max(0, settings.compactionFloor)
+  return floor < N ? floor : Math.floor(N / 2)
+}
+
+// How many turns one rewrite of the summary reads: the turns of one event.
+function stretchLength(settings: ChronicleSettings): number {
+  const N = Math.max(2, settings.compactionThreshold)
+  return N - drainFloor(settings, N)
+}
+
+// The summary runs to a quarter of the story it covers, until it reaches
+// `summaryMaxTurns` average turns. It is a hint to the model, not a cap on what
+// it writes. A floor prevents pathologically tiny limits when turns are short.
+const SUMMARY_SHARE_OF_STORY = 0.25
 const MIN_SUMMARY_CHARS = 180
 
-function maxCharsFor(inputs: SummaryTurn[]): number {
-  const total = inputs.reduce((n, t) => n + t.text.length, 0)
-  return Math.max(MIN_SUMMARY_CHARS, Math.round(total / Math.max(1, inputs.length)))
+function summaryLimit(turns: Turn[], end: number, maxTurns: number): number {
+  const narrated = turnsForSummary(turns, 0, end)
+  const total = narrated.reduce((n, t) => n + t.text.length, 0)
+  const average = total / Math.max(1, narrated.length)
+  return Math.max(MIN_SUMMARY_CHARS, Math.round(Math.min(total * SUMMARY_SHARE_OF_STORY, average * Math.max(1, maxTurns))))
 }
 
 export interface ChronicleAgentArgs {
@@ -68,14 +74,6 @@ export interface ChronicleAgentArgs {
 // first, level 0 last.
 function storyTexts(chronicle: Chronicle): string[] {
   return [...chronicle].reverse().flatMap((level) => level.map((entry) => entry.text))
-}
-
-// The chronicle with `entry` appended at `level`, adding the level if need be.
-function withEntry(chronicle: Chronicle, level: number, entry: ChronicleEntry): Chronicle {
-  const next = chronicle.slice()
-  while (next.length <= level) next.push([])
-  next[level] = [...next[level], entry]
-  return next
 }
 
 // An entry with the turns it covers, as indices into the history (end
@@ -207,42 +205,53 @@ function extendLastEntry(chronicle: Chronicle, lastTurnId: string): Chronicle | 
   return null
 }
 
-// Folds turns [start, end) into level-0 entries of up to `batch` turns each,
-// one after another so each is written with the ones before it in view. A
-// batch of nothing but failed turns has no story to summarise: its turns join
-// the previous entry, or the next new one when there is none before, so the
-// entries still cover the folded turns without gaps.
+// Rewrites the summary to reach the end of turns [start, end), in stretches
+// of `stretch` turns, one after another so each reads the summary the last one
+// left. A stretch of nothing but failed turns has no story to tell: its turns
+// join the summary, or the first one written when there is none yet, so the
+// summary still covers the folded turns without gaps.
 async function foldTurns(
   turns: Turn[],
   chronicle: Chronicle,
   start: number,
   end: number,
-  batch: number,
+  settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
-  onProgress?: (label: string) => void,
+  onStep?: (step: number, total: number) => void,
 ): Promise<Chronicle> {
   let next = chronicle
-  let pendingFirst: string | undefined
-  const count = Math.ceil((end - start) / batch)
-  for (let c = start, i = 1; c < end; c += batch, i++) {
-    onProgress?.(`Folding turns into chronicle… ${i} of ${count}`)
-    const last = Math.min(c + batch, end)
+  const stretch = stretchLength(settings)
+  const count = Math.ceil((end - start) / stretch)
+  for (let c = start, i = 1; c < end; c += stretch, i++) {
+    onStep?.(i, count)
+    const last = Math.min(c + stretch, end)
     const inputs = turnsForSummary(turns, c, last)
     if (!inputs.length) {
-      const extended = extendLastEntry(next, turns[last - 1].id)
-      if (extended) next = extended
-      else pendingFirst ??= turns[c].id
+      next = extendLastEntry(next, turns[last - 1].id) ?? next
       continue
     }
-    next = withEntry(next, 0, {
+    const result = await runSummarizer(
+      {
+        model: agent.model,
+        reasoningEffort: agent.reasoningEffort,
+        apiKey: agent.apiKey,
+        baseUrl: agent.baseUrl,
+        protocol: agent.protocol,
+        cacheKey: agent.cacheKey,
+        previousSummary: storyTexts(next).join('\n\n'),
+        turns: inputs,
+        maxChars: summaryLimit(turns, last, settings.summaryMaxTurns),
+      },
+      signal,
+    )
+    next = [[{
       id: crypto.randomUUID(),
-      text: await summarise(storyTexts(next), inputs, agent, signal),
-      firstTurnId: pendingFirst ?? turns[c].id,
+      text: result.summary,
+      firstTurnId: turns[0].id,
       lastTurnId: turns[last - 1].id,
       createdAt: Date.now(),
-    })
-    pendingFirst = undefined
+    }]]
   }
   return next
 }
@@ -267,34 +276,10 @@ function turnsForSummary(turns: Turn[], start: number, end: number): SummaryTurn
   return inputs
 }
 
-async function summarise(
-  storySoFar: string[],
-  inputs: SummaryTurn[],
-  agent: ChronicleAgentArgs,
-  signal: AbortSignal,
-): Promise<string> {
-  const result = await runSummarizer(
-    {
-      model: agent.model,
-      reasoningEffort: agent.reasoningEffort,
-      apiKey: agent.apiKey,
-      baseUrl: agent.baseUrl,
-      protocol: agent.protocol,
-      cacheKey: agent.cacheKey,
-      storySoFar,
-      turns: inputs,
-      maxChars: maxCharsFor(inputs),
-    },
-    signal,
-  )
-  return result.summary
-}
-
-// One pass through the cascade: fold raw turns into chronicle[0] if eligible,
-// then promote upward as long as any level is over threshold, one level per
-// iteration. Loop until no further compaction is triggered. A forced pass, for testing what follows compaction, folds every
-// live turn but the latest whether or not the threshold is reached.
-export async function compactCascade(
+// Folds the live tail into the summary if an event is due. A forced pass, for
+// testing what follows compaction, folds every live turn but the latest
+// whether or not the threshold is reached.
+export async function compactChronicle(
   turns: Turn[],
   chronicle: Chronicle,
   settings: ChronicleSettings,
@@ -304,96 +289,34 @@ export async function compactCascade(
   force = false,
 ): Promise<Chronicle> {
   const N = Math.max(2, settings.compactionThreshold)
-  const M = Math.max(1, Math.min(settings.compactionBatch, N - 1))
-  // Drain target. Clamping to N - M guarantees an event folds at least one
-  // full sub-batch (and reproduces legacy fold-one-batch behaviour for stored
-  // configs whose threshold predates the floor setting).
-  const low = Math.max(0, Math.min(settings.compactionFloor, N - M))
-  const index = new Map(turns.map((t, i) => [t.id, i]))
-  let next = chronicle
-
-  // Outer loop: keep compacting until nothing is over threshold.
-  // Bounded by total possible operations (turns / M) plus levels.
-  const HARD_CAP = 64
-  for (let safety = 0; safety < HARD_CAP; safety++) {
-    // Step 1: drain raw turns if over the high watermark — fold sub-batches
-    // of M down to the floor in one event.
-    const cutoff = chronicleCutoff(next, turns)
-    const live = turns.length - cutoff
-    const forcing = force && live > 1
-    if (live >= N || forcing) {
-      const targetCutoff = turns.length - (forcing ? 1 : low)
-      const folded = await foldTurns(turns, next, cutoff, targetCutoff, M, agent, signal, onProgress)
-      // Failed turns with no entry to join stay live: nothing more to fold.
-      if (chronicleCutoff(folded, turns) === cutoff) break
-      next = folded
-      continue
-    }
-
-    // Step 2: promote any level that's over threshold. Process bottom-up so
-    // each pass touches at most one level (cleaner reasoning). The promoted
-    // entry is summarised afresh from the turns its entries cover, not from
-    // their summaries, so what a lower summary left out isn't lost for good;
-    // the levels above, which hold the story before them, are its story so
-    // far.
-    let promoted = false
-    for (let level = 0; level < next.length; level++) {
-      if (next[level].length < N) continue
-      onProgress?.(`Compacting chronicle level ${level}…`)
-      const batch = next[level].slice(0, M)
-      const firstTurnId = batch[0].firstTurnId
-      const lastTurnId = batch[batch.length - 1].lastTurnId
-      const start = index.get(firstTurnId) ?? 0
-      const end = (index.get(lastTurnId) ?? start) + 1
-      const newEntry: ChronicleEntry = {
-        id: crypto.randomUUID(),
-        text: await summarise(storyTexts(next.slice(level + 1)), turnsForSummary(turns, start, end), agent, signal),
-        firstTurnId,
-        lastTurnId,
-        createdAt: Date.now(),
-      }
-      const remaining = next.map((lvl, i) => (i === level ? lvl.slice(M) : lvl))
-      next = withEntry(remaining, level + 1, newEntry)
-      promoted = true
-      break // restart from the bottom; promotions can cascade
-    }
-    if (promoted) continue
-
-    // Nothing over threshold and no raw fold pending → done.
-    break
-  }
-  return next
+  const cutoff = chronicleCutoff(chronicle, turns)
+  const live = turns.length - cutoff
+  const forcing = force && live > 1
+  if (live < N && !forcing) return chronicle
+  const targetCutoff = turns.length - (forcing ? 1 : drainFloor(settings, N))
+  return foldTurns(turns, chronicle, cutoff, targetCutoff, settings, agent, signal, (step, total) =>
+    onProgress?.(`Folding turns into chronicle… ${step} of ${total}`),
+  )
 }
 
-// The chronicle with every entry written afresh from the turns it covers,
-// each keeping its place and its turns: for after the summariser or its
-// prompt has changed. The entries are written in story order, each with the
-// ones rewritten before it as its story so far. An entry with no narrated
-// turns to read keeps its text.
+// The summary written afresh from the turns it covers, replaying compaction
+// from the first turn: for after the summariser or its prompt has changed.
+// With no narrated turns to read, the chronicle is left as it is.
 export async function rebuildChronicle(
   turns: Turn[],
   chronicle: Chronicle,
+  settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
   onProgress?: (writing: number, total: number) => void,
 ): Promise<Chronicle> {
-  const ranges = chronicleRanges(chronicle, turns) ?? []
-  const texts = new Map<string, string>()
-  const storySoFar: string[] = []
-  for (const [i, { entry, start, end }] of ranges.entries()) {
-    onProgress?.(i + 1, ranges.length)
-    const inputs = turnsForSummary(turns, start, end)
-    const text = inputs.length ? await summarise(storySoFar.slice(), inputs, agent, signal) : entry.text
-    if (inputs.length) texts.set(entry.id, text)
-    storySoFar.push(text)
-  }
-  const createdAt = Date.now()
-  return chronicle.map((level) =>
-    level.map((entry) => {
-      const text = texts.get(entry.id)
-      return text === undefined ? entry : { ...entry, text, createdAt }
-    }),
-  )
+  const rebuilt = await foldTurns(turns, [], 0, chronicleCutoff(chronicle, turns), settings, agent, signal, onProgress)
+  return rebuilt.length ? rebuilt : chronicle
+}
+
+// How many model calls a rebuild makes, at most.
+export function rebuildCallCount(turns: Turn[], chronicle: Chronicle, settings: ChronicleSettings): number {
+  return Math.ceil(chronicleCutoff(chronicle, turns) / stretchLength(settings))
 }
 
 // A forced compaction has something to fold once there is a live turn
@@ -407,12 +330,7 @@ export function chronicleNeedsCompaction(
   chronicle: Chronicle,
   settings: ChronicleSettings,
 ): boolean {
-  const N = Math.max(2, settings.compactionThreshold)
-  if (turns.length - chronicleCutoff(chronicle, turns) >= N) return true
-  for (const level of chronicle) {
-    if (level.length >= N) return true
-  }
-  return false
+  return turns.length - chronicleCutoff(chronicle, turns) >= Math.max(2, settings.compactionThreshold)
 }
 
 export function totalChronicleEntries(chronicle: Chronicle): number {
@@ -426,32 +344,11 @@ export function totalChronicleChars(chronicle: Chronicle): number {
   )
 }
 
-// Render the chronicle as a single system message with level-headed sections,
-// oldest level first, newest level last. Returns null when there's nothing
-// to render so callers can skip injecting an empty message.
+// The chronicle as a single system message, or null when there's nothing to
+// render so callers can skip injecting an empty message.
 export function buildChronicleSystemMessage(chronicle: Chronicle): ModelMessage | null {
-  if (chronicle.length === 0 || totalChronicleEntries(chronicle) === 0) {
-    return null
-  }
-  const sections: string[] = []
-  // Iterate from highest level (oldest) down to 0 (newest).
-  for (let level = chronicle.length - 1; level >= 0; level--) {
-    const entries = chronicle[level]
-    if (entries.length === 0) continue
-    const isTop = level === chronicle.length - 1
-    const header = isTop ? '## Earliest (most compressed)' : '## More recent'
-    const body = entries.map((e) => e.text).join('\n\n')
-    sections.push(`${header}\n\n${body}`)
-  }
-  const intro =
-    `# Story so far\n\n` +
-    `Earlier turns, condensed: the first section is the distant past in brief, and ` +
-    `each later section is more recent and more detailed. All of it is canon, read as ` +
-    `story whatever its wording.`
-  return {
-    role: 'system',
-    content: `${intro}\n\n${sections.join('\n\n')}`,
-  }
+  const story = storyTexts(chronicle).join('\n\n')
+  return story ? { role: 'system', content: `# Story so far\n\n${story}` } : null
 }
 
 // Strip per-call traces from any reply that's behind the cutoff. Same role as

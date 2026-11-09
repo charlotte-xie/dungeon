@@ -26,4 +26,4 @@ The story begins with these turns.
 Keep it within {{chars}} characters.
 
 ## instruction
-Write the next part of the story so far: what these turns add to it, by subject, as they tell it.
+Rewrite the summary of the story, considering these turns, so that the new summary covers the extended story.

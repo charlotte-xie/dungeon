@@ -17,7 +17,8 @@ import {
   chronicleCutoff,
   chronicleNeedsCompaction,
   chronicleRanges,
-  compactCascade,
+  compactChronicle,
+  rebuildCallCount,
   rebuildChronicle,
   sameChronicle,
   stripTracesBefore,
@@ -180,7 +181,7 @@ export function useGameController(settings: GameSettings) {
   const compactionSettings = {
     compactionThreshold: context.compactionThreshold,
     compactionFloor: context.compactionFloor,
-    compactionBatch: context.compactionBatch,
+    summaryMaxTurns: context.summaryMaxTurns,
   }
   const canCompact = chronicleNeedsCompaction(turns, chronicle, compactionSettings)
   const canForceCompact = canForceCompaction(turns, chronicle)
@@ -325,7 +326,7 @@ export function useGameController(settings: GameSettings) {
     const version = chronicleVersion.current
     backgroundCompaction.current = controller
     setCompacting(true)
-    compactCascade(folding, from, settings, summariserArgs(log[0]?.id), controller.signal)
+    compactChronicle(folding, from, settings, summariserArgs(log[0]?.id), controller.signal)
       .then((compacted) => {
         if (controller.signal.aborted) return
         setCompactionError(null)
@@ -775,11 +776,11 @@ export function useGameController(settings: GameSettings) {
       return
     }
     const what = force
-      ? 'Force a compaction now? Every live turn except the latest is condensed into summary entries, whether or not compaction is due'
-      : 'Compact the chronicle now? The oldest live turns are condensed into summary entries'
+      ? 'Force a compaction now? Every live turn except the latest is folded into the summary, whether or not compaction is due'
+      : 'Compact the chronicle now? The oldest live turns are folded into the summary'
     if (
       !confirm(
-        `${what} — the full text stays visible in your log, but the model will only see the summaries from then on. This is lossy, cannot be undone, and runs summariser model calls immediately.`,
+        `${what} — the full text stays visible in your log, but the model will only see the summary from then on. This is lossy, cannot be undone, and runs summariser model calls immediately.`,
       )
     ) {
       return
@@ -789,7 +790,7 @@ export function useGameController(settings: GameSettings) {
     if (!operation) return
     const { controller } = operation
     try {
-      const compacted = await compactCascade(
+      const compacted = await compactChronicle(
         turns,
         chronicle,
         settings,
@@ -813,15 +814,15 @@ export function useGameController(settings: GameSettings) {
     }
   }
 
-  // Write every chronicle summary afresh from the turns it covers, keeping
-  // which turns each one covers.
+  // Write the summary afresh from the turns it covers.
   async function rebuildChronicleNow() {
     if (operations.busy) return
-    const entries = totalChronicleEntries(chronicle)
-    if (!entries) return
+    if (!totalChronicleEntries(chronicle)) return
+    const settings = compactionSettings
+    const calls = rebuildCallCount(turns, chronicle, settings)
     if (
       !confirm(
-        `Rebuild the chronicle? Every summary is written afresh from the turns it covers, replacing its current text, including any edits you made. This runs ${entries} summariser model call${entries === 1 ? '' : 's'} now.`,
+        `Rebuild the chronicle? The summary is written afresh from the turns it covers, replacing its current text, including any edits you made. This runs up to ${calls} summariser model call${calls === 1 ? '' : 's'} now.`,
       )
     ) {
       return
@@ -834,6 +835,7 @@ export function useGameController(settings: GameSettings) {
       const rebuilt = await rebuildChronicle(
         turns,
         chronicle,
+        settings,
         summariserArgs(turns[0]?.id),
         controller.signal,
         (writing, total) => {

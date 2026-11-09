@@ -1,11 +1,10 @@
-// Summariser agent. Single-purpose: given the story so far and the run of
-// consecutive turns that follows it, each turn rendered as PLAYER:/DM: lines
-// and numbered as in the log, write the next part of the story so far within
-// the requested length.
+// Summariser agent. Single-purpose: given the summary of the story so far and
+// the run of consecutive turns that follows it, each turn rendered as
+// PLAYER:/DM: lines and numbered as in the log, rewrite the summary to cover
+// the extended story within the requested length.
 //
-// The chronicle module decides what to summarise, what comes before it and
-// at what target length; the agent just renders the inputs and calls the
-// model.
+// The chronicle module decides which turns to fold in and at what target
+// length; the agent just renders the inputs and calls the model.
 
 import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerInputs } from '../../prompts'
 import { roleCacheKey } from '../model/cacheKey'
@@ -21,12 +20,9 @@ export interface SummarizerInput {
   // The adventure's prompt-cache key; the summariser uses its own key derived
   // from it (see roleCacheKey).
   cacheKey?: string
-  // The summaries of everything before these turns, oldest first. They give
-  // the story's threads and the names it uses, as they stood at the time;
-  // they come first in the input, so the calls of one compaction, each
-  // seeing one more, share a cached prefix.
-  storySoFar: string[]
-  // The turns to record in one summary, at any level of the chronicle.
+  // The summary of everything before these turns; empty at the start.
+  previousSummary: string
+  // The turns the new summary reaches the end of.
   turns: SummaryTurn[]
   // The most the summary may run to, in chars.
   maxChars: number
@@ -47,7 +43,7 @@ export async function runSummarizer(
   input: SummarizerInput,
   signal: AbortSignal,
 ): Promise<SummarizerResult> {
-  const userContent = buildSummarizerInputs(input.storySoFar, input.turns, input.maxChars)
+  const userContent = buildSummarizerInputs(input.previousSummary, input.turns, input.maxChars)
 
   const messages: ModelMessage[] = [
     { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },

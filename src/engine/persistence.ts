@@ -549,10 +549,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.compactionFloor === 'number'
           ? parsed.compactionFloor
           : DEFAULT_CONTEXT.compactionFloor,
-      compactionBatch:
-        typeof parsed.compactionBatch === 'number'
-          ? parsed.compactionBatch
-          : DEFAULT_CONTEXT.compactionBatch,
+      summaryMaxTurns:
+        typeof parsed.summaryMaxTurns === 'number'
+          ? parsed.summaryMaxTurns
+          : DEFAULT_CONTEXT.summaryMaxTurns,
       stateCleanupChars:
         typeof parsed.stateCleanupChars === 'number'
           ? parsed.stateCleanupChars

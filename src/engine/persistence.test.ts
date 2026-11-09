@@ -177,6 +177,8 @@ describe('legacy data tolerance', () => {
     expect(ctx.compactionFloor).toBe(DEFAULT_CONTEXT.compactionFloor)
     // …and removed fields are dropped rather than carried along.
     expect('includeToolCallHistory' in ctx).toBe(false)
+    expect('compactionBatch' in ctx).toBe(false)
+    expect(ctx.summaryMaxTurns).toBe(DEFAULT_CONTEXT.summaryMaxTurns)
   })
 })
 

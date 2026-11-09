@@ -245,7 +245,7 @@ export function StateViewer({
               className="ghost"
               onClick={onRebuildChronicle}
               disabled={busy || anyDirty}
-              title={anyDirty ? 'Save or discard your edits first' : 'Write every summary afresh from the turns it covers'}
+              title={anyDirty ? 'Save or discard your edits first' : 'Write the summary afresh from the turns it covers'}
             >
               Rebuild
             </button>
@@ -320,16 +320,12 @@ export function StateViewer({
       {tab === 'chronicle' && (
         <>
           <p className="hint">
-            Summaries of older turns, written in the background after a reply. When{' '}
-            {context.compactionThreshold} turns are live, the oldest are folded in batches of{' '}
-            {context.compactionBatch} until {context.compactionFloor} remain, each into an entry of
-            at most one turn&apos;s length, written with the entries before it in view. When a level
-            reaches {context.compactionThreshold} entries, its oldest {context.compactionBatch} are
-            combined into one entry at the next level up, written afresh from their turns. Entries
-            shown oldest first; newest at the bottom. Entries are editable — clear an entry&apos;s
-            text to delete it on save, and its turns join a neighbouring entry.
-            {' '}Current: {totalEntries} entr{totalEntries === 1 ? 'y' : 'ies'} across{' '}
-            {chronicle.length} level{chronicle.length === 1 ? '' : 's'} ({totalChars.toLocaleString()} chars).
+            A running summary of the older turns, rewritten in the background after a reply. When{' '}
+            {context.compactionThreshold} turns are live, the oldest are folded into it until{' '}
+            {context.compactionFloor} remain. It is editable — clear the text to remove it on save.
+            A save from before the running summary may show several entries, oldest first, until
+            its next compaction folds them into one.
+            {' '}Current: {totalChars.toLocaleString()} chars.
           </p>
           {compacting && (
             <p className="hint">
@@ -339,44 +335,25 @@ export function StateViewer({
           {totalEntries === 0 ? (
             <p className="hint"><em>(empty — no compaction has happened yet)</em></p>
           ) : (
-            <div className="chronicle-levels">
-              {[...chronicle]
-                .map((entries, level) => ({ entries, level }))
-                .reverse()
-                .map(({ entries, level }) => {
-                  if (entries.length === 0) return null
-                  const isTop = level === chronicle.length - 1
-                  return (
-                    <div key={level} className="chronicle-level">
-                      <h3 className="chronicle-level-head">
-                        {isTop ? 'Top level' : 'More recent'}
-                        <span className="chronicle-level-meta">
-                          {' '}
-                          — level {level}, {entries.length} entr
-                          {entries.length === 1 ? 'y' : 'ies'}
-                        </span>
-                      </h3>
-                      {entries.map((e) => (
-                        <div key={e.id} className="chronicle-entry">
-                          <div className="chronicle-entry-meta">
-                            {turnsLabel(entryTurns.get(e.id))} ·{' '}
-                            {entryText(e.id, e.text).length.toLocaleString()} chars
-                            {entryText(e.id, e.text) !== e.text && ' · edited'}
-                          </div>
-                          <textarea
-                            className="state-json state-json-editor chronicle-entry-edit"
-                            spellCheck={false}
-                            value={entryText(e.id, e.text)}
-                            onChange={(ev) =>
-                              setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
-                            }
-                            readOnly={busy}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })}
+            <div className="chronicle-entries">
+              {[...chronicle].reverse().flat().map((e) => (
+                <div key={e.id} className="chronicle-entry">
+                  <div className="chronicle-entry-meta">
+                    {turnsLabel(entryTurns.get(e.id))} ·{' '}
+                    {entryText(e.id, e.text).length.toLocaleString()} chars
+                    {entryText(e.id, e.text) !== e.text && ' · edited'}
+                  </div>
+                  <textarea
+                    className="state-json state-json-editor chronicle-entry-edit"
+                    spellCheck={false}
+                    value={entryText(e.id, e.text)}
+                    onChange={(ev) =>
+                      setChronicleDraft((d) => ({ ...d, [e.id]: ev.target.value }))
+                    }
+                    readOnly={busy}
+                  />
+                </div>
+              ))}
             </div>
           )}
         </>

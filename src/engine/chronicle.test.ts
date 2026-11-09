@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildChronicleSystemMessage,
   chronicleCutoff,
+  chronicleNeedsCompaction,
   chronicleRanges,
-  compactCascade,
+  compactChronicle,
   entryTurnNumbers,
   indexChronicle,
+  rebuildCallCount,
   rebuildChronicle,
   sameChronicle,
   withoutEntries,
+  type ChronicleSettings,
   type LegacyChronicleEntry,
 } from './chronicle'
 import { runSummarizer, type SummaryTurn } from './agents/summarizer'
@@ -28,6 +32,9 @@ const AGENT = {
   protocol: 'chat-completions' as const,
 }
 
+const DEFAULTS: ChronicleSettings = { compactionThreshold: 32, compactionFloor: 16, summaryMaxTurns: 10 }
+const SMALL: ChronicleSettings = { compactionThreshold: 8, compactionFloor: 4, summaryMaxTurns: 10 }
+
 function completedTurn(i: number): Turn {
   return {
     id: `t${i}`,
@@ -35,6 +42,10 @@ function completedTurn(i: number): Turn {
     input: `p${i}`,
     reply: { id: `t${i}-reply`, model: 'test', text: `d${i}` },
   }
+}
+
+function completedTurns(count: number): Turn[] {
+  return Array.from({ length: count }, (_, i) => completedTurn(i))
 }
 
 function entry(id: string, first: string, last: string): ChronicleEntry {
@@ -50,11 +61,24 @@ function spans(chronicle: Chronicle, turns: Turn[]) {
   return chronicleRanges(chronicle, turns)?.map((r): [string, number, number] => [r.entry.id, r.start, r.end])
 }
 
-const TEN = Array.from({ length: 10 }, (_, i) => completedTurn(i))
+function turnRanges(chronicle: Chronicle, turns: Turn[]) {
+  return spans(chronicle, turns)?.map(([, start, end]) => [start, end])
+}
 
-// What each summariser call was given as the story so far, in call order.
-function storiesSeen() {
-  return mockedSummarizer.mock.calls.map(([input]) => input.storySoFar)
+function compact(turns: Turn[], chronicle: Chronicle, settings = DEFAULTS) {
+  return compactChronicle(turns, chronicle, settings, AGENT, new AbortController().signal)
+}
+
+const TEN = completedTurns(10)
+
+// What each summariser call was given as the summary so far, in call order.
+function summariesSeen() {
+  return mockedSummarizer.mock.calls.map(([input]) => input.previousSummary)
+}
+
+// The log numbers of the turns a summariser call read.
+function turnNumbersRead(call: number) {
+  return mockedSummarizer.mock.calls[call][0].turns.map((t) => t.number)
 }
 
 describe('the chronicle as an index over the turns', () => {
@@ -145,132 +169,109 @@ describe('loading a stored chronicle', () => {
   })
 })
 
-describe('compactCascade drain events', () => {
+describe('compaction', () => {
   beforeEach(() => {
     mockedSummarizer.mockClear()
   })
 
-  it('drains the live tail from the threshold down to the floor in one event', async () => {
-    const turns = Array.from({ length: 32 }, (_, i) => completedTurn(i))
-    const chronicle = await compactCascade(
-      turns,
-      [],
-      { compactionThreshold: 32, compactionFloor: 16, compactionBatch: 4 },
-      AGENT,
-      new AbortController().signal,
-    )
-    // 16 turns folded as 4 sub-batches of 4; 16 remain live.
+  it('drains the live tail down to the floor in one rewrite of a single summary', async () => {
+    const turns = completedTurns(32)
+    const chronicle = await compact(turns, [])
     expect(chronicleCutoff(chronicle, turns)).toBe(16)
-    expect(chronicle).toHaveLength(1)
-    expect(mockedSummarizer).toHaveBeenCalledTimes(4)
-    // Entries preserve story order and each points at its own sub-batch.
-    expect(spans(chronicle, turns)?.map(([, start, end]) => [start, end])).toEqual([
-      [0, 4],
-      [4, 8],
-      [8, 12],
-      [12, 16],
-    ])
-    expect(chronicle[0][0].text).toContain('1:PLAYER: p0')
-    expect(chronicle[0][3].text).toContain('13:PLAYER: p12')
-    // Each fold is written with the ones before it as its story so far.
-    const texts = chronicle[0].map((e) => e.text)
-    expect(storiesSeen()).toEqual([[], texts.slice(0, 1), texts.slice(0, 2), texts.slice(0, 3)])
+    expect(chronicle.flat()).toHaveLength(1)
+    expect(mockedSummarizer).toHaveBeenCalledTimes(1)
+    expect(summariesSeen()).toEqual([''])
+    expect(turnNumbersRead(0)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1))
   })
 
-  it('gives a fold the whole chronicle, and a promotion the levels above it, as the story so far', async () => {
-    // Threshold 4, batch 2, floor 2: four live turns fold down to two, which
-    // fills level 0 and promotes its first two entries.
-    const turns = Array.from({ length: 14 }, (_, i) => completedTurn(i))
+  it('rewrites the summary from its last version and the turns being folded in', async () => {
+    const turns = completedTurns(48)
+    const chronicle = await compact(turns, [[entry('old', 't0', 't15')]])
+    expect(summariesSeen()).toEqual(['old'])
+    expect(turnNumbersRead(0)).toEqual(Array.from({ length: 16 }, (_, i) => i + 17))
+    expect(chronicle.flat()).toHaveLength(1)
+    expect(chronicle[0][0].text).not.toBe('old')
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 32]])
+  })
+
+  it('folds a chronicle saved with several entries into one summary, reading them in story order', async () => {
+    const turns = completedTurns(16)
     const chronicle: Chronicle = [
-      [entry('a', 't4', 't5'), entry('b', 't6', 't7'), entry('c', 't8', 't9')],
-      [entry('x', 't0', 't3')],
+      [entry('b', 't4', 't5'), entry('c', 't6', 't7')],
+      [entry('a', 't0', 't3')],
     ]
-    const compacted = await compactCascade(
-      turns,
-      chronicle,
-      { compactionThreshold: 4, compactionFloor: 2, compactionBatch: 2 },
-      AGENT,
-      new AbortController().signal,
-    )
-    expect(storiesSeen()).toEqual([['x', 'a', 'b', 'c'], ['x']])
-    expect(mockedSummarizer.mock.calls[1][0].turns.map((t) => t.number)).toEqual([5, 6, 7, 8])
-    expect(spans(compacted, turns)?.map(([id, start, end]) => [id.length === 1 ? id : 'new', start, end])).toEqual([
-      ['x', 0, 4],
-      ['new', 4, 8],
-      ['c', 8, 10],
-      ['new', 10, 12],
-    ])
+    const compacted = await compact(turns, chronicle, SMALL)
+    expect(summariesSeen()).toEqual(['a\n\nb\n\nc'])
+    expect(compacted.flat()).toHaveLength(1)
+    expect(turnRanges(compacted, turns)).toEqual([[0, 12]])
+  })
+
+  it('takes a long backlog in stretches, each reading the summary the last one left', async () => {
+    const turns = completedTurns(48)
+    const chronicle = await compact(turns, [])
+    expect(mockedSummarizer).toHaveBeenCalledTimes(2)
+    expect(turnNumbersRead(1)[0]).toBe(17)
+    const first = await mockedSummarizer.mock.results[0].value
+    expect(summariesSeen()).toEqual(['', first.summary])
+    expect(chronicle.flat()).toHaveLength(1)
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 32]])
   })
 
   it('does nothing below the high watermark', async () => {
-    const turns = Array.from({ length: 31 }, (_, i) => completedTurn(i))
-    const chronicle = await compactCascade(
-      turns,
-      [],
-      { compactionThreshold: 32, compactionFloor: 16, compactionBatch: 4 },
-      AGENT,
-      new AbortController().signal,
-    )
-    expect(chronicle).toEqual([])
+    const turns = completedTurns(31)
+    const empty: Chronicle = []
+    expect(await compact(turns, empty)).toBe(empty)
     expect(mockedSummarizer).not.toHaveBeenCalled()
+    expect(chronicleNeedsCompaction(turns, empty, DEFAULTS)).toBe(false)
+    expect(chronicleNeedsCompaction(completedTurns(32), empty, DEFAULTS)).toBe(true)
   })
 
-  it('summarises a promoted entry from the turns it covers, not from the summaries', async () => {
-    const turns = Array.from({ length: 8 }, (_, i) => completedTurn(i))
-    const chronicle = await compactCascade(
-      turns,
+  it('writes with the agent it was given', async () => {
+    await compactChronicle(
+      completedTurns(8),
       [],
-      { compactionThreshold: 4, compactionFloor: 0, compactionBatch: 2 },
+      SMALL,
       { ...AGENT, model: 'grok-4.3', reasoningEffort: 'none' },
       new AbortController().signal,
     )
-    // Four folds of two turns, then the first two entries promoted to one.
-    expect(chronicle).toHaveLength(2)
-    expect(mockedSummarizer).toHaveBeenCalledTimes(5)
-    expect(spans(chronicle, turns)?.map(([, start, end]) => [start, end])).toEqual([
-      [0, 4],
-      [4, 6],
-      [6, 8],
-    ])
-    const promotion = mockedSummarizer.mock.calls[4][0]
-    expect(promotion.turns.map((t) => t.number)).toEqual([1, 2, 3, 4])
-    expect(promotion.turns.every((t) => !t.text.includes('SUMMARY'))).toBe(true)
     for (const [input] of mockedSummarizer.mock.calls) {
       expect(input).toMatchObject({ model: 'grok-4.3', reasoningEffort: 'none' })
     }
   })
 
   it('folds every live turn but the latest when forced, below the threshold', async () => {
-    const settings = { compactionThreshold: 32, compactionFloor: 16, compactionBatch: 4 }
-    const turns = Array.from({ length: 6 }, (_, i) => completedTurn(i))
-    const chronicle = await compactCascade(turns, [], settings, AGENT, new AbortController().signal, undefined, true)
-    // Five turns folded as sub-batches of 4 and 1; the latest stays live.
-    expect(spans(chronicle, turns)?.map(([, start, end]) => [start, end])).toEqual([
-      [0, 4],
-      [4, 5],
-    ])
-    expect(mockedSummarizer).toHaveBeenCalledTimes(2)
+    const turns = completedTurns(6)
+    const forced = (chronicle: Chronicle) =>
+      compactChronicle(turns, chronicle, DEFAULTS, AGENT, new AbortController().signal, undefined, true)
+    const chronicle = await forced([])
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 5]])
+    expect(mockedSummarizer).toHaveBeenCalledTimes(1)
     // With only the latest turn live there is nothing to force.
     mockedSummarizer.mockClear()
-    const again = await compactCascade(turns, chronicle, settings, AGENT, new AbortController().signal, undefined, true)
-    expect(again).toBe(chronicle)
+    expect(await forced(chronicle)).toBe(chronicle)
     expect(mockedSummarizer).not.toHaveBeenCalled()
   })
 
-  it('clamps the floor for legacy configs whose threshold predates it', async () => {
-    // Stored threshold 8 with the new default floor 16: floor clamps to
-    // N - M = 4, reproducing the old fold-one-batch behaviour.
-    const turns = Array.from({ length: 8 }, (_, i) => completedTurn(i))
-    const chronicle = await compactCascade(
-      turns,
-      [],
-      { compactionThreshold: 8, compactionFloor: 16, compactionBatch: 4 },
-      AGENT,
-      new AbortController().signal,
-    )
+  it('still folds when a stored threshold sits below the floor', async () => {
+    // Stored threshold 8 with the default floor 16: an event folds half.
+    const turns = completedTurns(8)
+    const chronicle = await compact(turns, [], { ...DEFAULTS, compactionThreshold: 8 })
     expect(chronicleCutoff(chronicle, turns)).toBe(4)
-    expect(chronicle[0]).toHaveLength(1)
     expect(mockedSummarizer).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks for a quarter of the story until the summary reaches its longest', async () => {
+    // Each turn renders as exactly 1,000 characters.
+    const turns = completedTurns(32).map((t) => ({
+      ...t,
+      input: '',
+      reply: { ...t.reply, text: 'x'.repeat(996) },
+    }))
+    await compact(turns, [])
+    expect(mockedSummarizer.mock.calls[0][0].maxChars).toBe(4000)
+    mockedSummarizer.mockClear()
+    await compact(turns, [], { ...DEFAULTS, summaryMaxTurns: 2 })
+    expect(mockedSummarizer.mock.calls[0][0].maxChars).toBe(2000)
   })
 })
 
@@ -279,22 +280,40 @@ describe('rebuildChronicle', () => {
     mockedSummarizer.mockClear()
   })
 
-  it('writes every entry afresh from its own turns, keeping its place and turns', async () => {
-    const chronicle: Chronicle = [
-      [entry('b', 't4', 't5'), entry('c', 't6', 't6')],
-      [entry('a', 't0', 't3')],
-    ]
+  it('replays compaction from the first turn, covering the same turns', async () => {
+    const chronicle: Chronicle = [[entry('b', 't4', 't7')], [entry('a', 't0', 't3')]]
     const progress: number[] = []
-    const rebuilt = await rebuildChronicle(TEN, chronicle, AGENT, new AbortController().signal, (done) =>
+    const rebuilt = await rebuildChronicle(TEN, chronicle, SMALL, AGENT, new AbortController().signal, (done) =>
       progress.push(done),
     )
-    expect(spans(rebuilt, TEN)).toEqual(spans(chronicle, TEN))
-    expect(rebuilt[1][0].text).toBe('SUMMARY[1:PLAYER: p0\n\nDM: d0|2:PLAYER: p1\n\nDM: d1|3:PLAYER: p2\n\nDM: d2|4:PLAYER: p3\n\nDM: d3]')
-    expect(rebuilt[0][1].text).toBe('SUMMARY[7:PLAYER: p6\n\nDM: d6]')
-    expect(mockedSummarizer).toHaveBeenCalledTimes(3)
-    expect(progress).toEqual([1, 2, 3])
-    // In story order, each with the entries rewritten before it.
-    expect(storiesSeen()).toEqual([[], [rebuilt[1][0].text], [rebuilt[1][0].text, rebuilt[0][0].text]])
+    expect(rebuilt.flat()).toHaveLength(1)
+    expect(turnRanges(rebuilt, TEN)).toEqual([[0, 8]])
+    expect(turnNumbersRead(0)).toEqual([1, 2, 3, 4])
+    expect(turnNumbersRead(1)).toEqual([5, 6, 7, 8])
+    expect(progress).toEqual([1, 2])
+    expect(rebuildCallCount(TEN, chronicle, SMALL)).toBe(2)
+    // The old text plays no part: the first rewrite starts from nothing.
+    const first = await mockedSummarizer.mock.results[0].value
+    expect(summariesSeen()).toEqual(['', first.summary])
+  })
+})
+
+describe('the chronicle in the request', () => {
+  const part = (id: string, text: string, first: string, last: string) => ({ ...entry(id, first, last), text })
+
+  it('sends nothing when there is no summary', () => {
+    expect(buildChronicleSystemMessage([])).toBeNull()
+  })
+
+  it('sends a saved chronicle of several entries in story order', () => {
+    const message = buildChronicleSystemMessage([
+      [part('b', 'The river rose.', 't4', 't7')],
+      [part('a', 'You reached the village.', 't0', 't3')],
+    ])
+    expect(message?.role).toBe('system')
+    const content = message?.content ?? ''
+    expect(content.indexOf('You reached the village.')).toBeGreaterThanOrEqual(0)
+    expect(content.indexOf('You reached the village.')).toBeLessThan(content.indexOf('The river rose.'))
   })
 })
 
@@ -310,58 +329,48 @@ describe('failed turns', () => {
       error: 'boom',
     },
   })
-  // Threshold 8, batch 4: the floor clamps to 4, so one event folds down to
-  // four live turns.
-  const SETTINGS = { compactionThreshold: 8, compactionFloor: 4, compactionBatch: 4 }
+  const failedTurns = (count: number, from = 0) => Array.from({ length: count }, (_, i) => failedTurn(from + i))
+  const completedFrom = (count: number, from: number) =>
+    Array.from({ length: count }, (_, i) => completedTurn(from + i))
 
   beforeEach(() => {
     mockedSummarizer.mockClear()
   })
 
   it('folds only the turns that produced narration', async () => {
-    const turns = [
-      completedTurn(0),
-      failedTurn(1),
-      completedTurn(2),
-      completedTurn(3),
-      ...Array.from({ length: 4 }, (_, i) => completedTurn(4 + i)),
-    ]
-    const chronicle = await compactCascade(turns, [], SETTINGS, AGENT, new AbortController().signal)
-    // The entry still covers the failed turn, but its text never reaches the
-    // summariser.
-    expect(spans(chronicle, turns)).toEqual([[chronicle[0][0].id, 0, 4]])
+    const turns = [completedTurn(0), failedTurn(1), completedTurn(2), completedTurn(3), ...completedFrom(4, 4)]
+    const chronicle = await compact(turns, [], SMALL)
+    // The summary still covers the failed turn, but its text never reaches
+    // the summariser.
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 4]])
     expect(chronicle[0][0].text).not.toContain('falters')
     expect(chronicle[0][0].text).toContain('3:PLAYER: p2')
   })
 
-  it('gives a batch of nothing but failures to the entry before it', async () => {
-    const turns = [
-      ...Array.from({ length: 4 }, (_, i) => completedTurn(i)),
-      ...Array.from({ length: 4 }, (_, i) => failedTurn(4 + i)),
-      ...Array.from({ length: 4 }, (_, i) => completedTurn(8 + i)),
-    ]
-    const chronicle = await compactCascade(turns, [], SETTINGS, AGENT, new AbortController().signal)
-    expect(spans(chronicle, turns)?.map(([, start, end]) => [start, end])).toEqual([[0, 8]])
+  it('gives a stretch of nothing but failures to the summary', async () => {
+    const turns = [...completedFrom(4, 0), ...failedTurns(4, 4), ...completedFrom(4, 8)]
+    const chronicle = await compact(turns, [], SMALL)
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 8]])
     expect(mockedSummarizer).toHaveBeenCalledTimes(1)
   })
 
-  it('gives failures at the start to the next new entry', async () => {
-    const turns = [
-      ...Array.from({ length: 4 }, (_, i) => failedTurn(i)),
-      ...Array.from({ length: 8 }, (_, i) => completedTurn(4 + i)),
-    ]
-    const chronicle = await compactCascade(turns, [], SETTINGS, AGENT, new AbortController().signal)
-    expect(spans(chronicle, turns)?.map(([, start, end]) => [start, end])).toEqual([[0, 8]])
+  it('gives failures at the start to the first summary written', async () => {
+    const turns = [...failedTurns(4), ...completedFrom(8, 4)]
+    const chronicle = await compact(turns, [], SMALL)
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 8]])
     expect(mockedSummarizer).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves failures live when there is no entry for them to join', async () => {
-    const turns = [
-      ...Array.from({ length: 4 }, (_, i) => failedTurn(i)),
-      ...Array.from({ length: 4 }, (_, i) => completedTurn(4 + i)),
-    ]
-    const chronicle = await compactCascade(turns, [], SETTINGS, AGENT, new AbortController().signal)
-    expect(chronicle).toEqual([])
+  it('leaves failures live when there is no summary for them to join', async () => {
+    const turns = [...failedTurns(4), ...completedFrom(4, 4)]
+    expect(await compact(turns, [], SMALL)).toEqual([])
+    expect(mockedSummarizer).not.toHaveBeenCalled()
+  })
+
+  it('leaves the chronicle as it is when a rebuild has nothing narrated to read', async () => {
+    const turns = failedTurns(4)
+    const chronicle: Chronicle = [[entry('a', 'f0', 'f3')]]
+    expect(await rebuildChronicle(turns, chronicle, SMALL, AGENT, new AbortController().signal)).toBe(chronicle)
     expect(mockedSummarizer).not.toHaveBeenCalled()
   })
 })

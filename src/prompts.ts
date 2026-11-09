@@ -114,21 +114,20 @@ const summarizerInputsText = sectionReader<'story' | 'story-start' | 'turns' | '
   summarizerInputsTemplate,
 )
 
-// The summariser's input: the story so far (or word that the story starts
-// with these turns), the run of turns to record, each headed by its number
-// in the log, the most it may write, then what to write. The story so far
-// comes first, so the calls of one compaction share a cached prefix; the
-// length rides here rather than in the system prompt, which stays the same
-// for every call.
+// The summariser's input: the summary so far (or word that the story starts
+// with these turns), the run of turns that follow it, each headed by its
+// number in the log, the most it may write, then what to write. The length
+// rides here rather than in the system prompt, which stays the same for every
+// call.
 export function buildSummarizerInputs(
-  storySoFar: string[],
+  previousSummary: string,
   turns: { number: number; text: string }[],
   maxChars: number,
 ): string {
   const body = turns.map((t) => summarizerInputsText('turn', { number: t.number, text: t.text })).join('\n\n')
   return [
-    storySoFar.length
-      ? summarizerInputsText('story', { story: storySoFar.join('\n\n') })
+    previousSummary
+      ? summarizerInputsText('story', { story: previousSummary })
       : summarizerInputsText('story-start'),
     summarizerInputsText('turns', { count: turns.length, turns: body }),
     summarizerInputsText('length', { chars: maxChars.toLocaleString('en-GB') }),

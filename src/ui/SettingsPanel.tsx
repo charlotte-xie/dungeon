@@ -475,7 +475,7 @@ export function SettingsPanel({
                   />
                 </label>
                 <label
-                  title={`High watermark: when the live tail (turns past the cutoff) reaches this many turns, one compaction event drains it down to the floor. Rarer events preserve the provider's context cache. Also the per-level promotion threshold. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
+                  title={`High watermark: when the live tail (turns past the cutoff) reaches this many turns, one compaction event drains it down to the floor. Rarer events preserve the provider's context cache. Default ${DEFAULT_CONTEXT.compactionThreshold}.`}
                 >
                   <span>Compaction threshold (N)</span>
                   <input
@@ -487,7 +487,7 @@ export function SettingsPanel({
                   />
                 </label>
                 <label
-                  title={`Low watermark: a compaction event folds turns until this many remain live, so events recur every (threshold − floor) turns and the chronicle stays frozen in between. Clamped to at most threshold − batch. Default ${DEFAULT_CONTEXT.compactionFloor}.`}
+                  title={`Low watermark: a compaction event folds turns until this many remain live, so events recur every (threshold − floor) turns and the chronicle stays frozen in between. A floor at or above the threshold counts as half the threshold. Default ${DEFAULT_CONTEXT.compactionFloor}.`}
                 >
                   <span>Compaction floor</span>
                   <input
@@ -499,15 +499,15 @@ export function SettingsPanel({
                   />
                 </label>
                 <label
-                  title={`How many turns or entries to fold per chronicle entry (sub-batch size within a drain event). One chronicle entry covers M raw turns; a level-1 entry covers M²; and so on. Default ${DEFAULT_CONTEXT.compactionBatch}.`}
+                  title={`The longest the running summary is asked to be, in average turns' length. It runs to a quarter of the story it covers until it reaches this. Default ${DEFAULT_CONTEXT.summaryMaxTurns}.`}
                 >
-                  <span>Compaction batch (M)</span>
+                  <span>Summary length (turns)</span>
                   <input
                     type="number"
                     min={1}
                     step={1}
-                    value={draftContext.compactionBatch}
-                    onChange={(e) => setContextField('compactionBatch', Number(e.target.value))}
+                    value={draftContext.summaryMaxTurns}
+                    onChange={(e) => setContextField('summaryMaxTurns', Number(e.target.value))}
                   />
                 </label>
                 <label
