@@ -31,7 +31,7 @@ import type { Chronicle, ChronicleEntry, Turn } from './types'
 export interface ChronicleSettings {
   compactionThreshold: number  // N — high watermark; also per-level promotion threshold
   compactionFloor: number      // drain target; see drainFloor
-  summaryMaxTurns: number      // the summary's longest, in average turns
+  summaryMaxChars: number      // the summary's longest, however long the story
 }
 
 // The drain target. An event has to fold something, so a floor at or above N,
@@ -47,17 +47,17 @@ function stretchLength(settings: ChronicleSettings): number {
   return N - drainFloor(settings, N)
 }
 
-// The summary runs to a quarter of the story it covers, until it reaches
-// `summaryMaxTurns` average turns. It is a hint to the model, not a cap on what
-// it writes. A floor prevents pathologically tiny limits when turns are short.
-const SUMMARY_SHARE_OF_STORY = 0.25
+// The summary is a synopsis, not a retelling: a tenth of the story it covers,
+// up to `summaryMaxChars` however long the story grows. It is a hint to the
+// model, not a cap on what it writes, but it has to be tight enough that the
+// last version can't simply be kept and added to. A floor prevents
+// pathologically tiny limits when turns are short.
+const SUMMARY_SHARE_OF_STORY = 0.1
 const MIN_SUMMARY_CHARS = 180
 
-function summaryLimit(turns: Turn[], end: number, maxTurns: number): number {
-  const narrated = turnsForSummary(turns, 0, end)
-  const total = narrated.reduce((n, t) => n + t.text.length, 0)
-  const average = total / Math.max(1, narrated.length)
-  return Math.max(MIN_SUMMARY_CHARS, Math.round(Math.min(total * SUMMARY_SHARE_OF_STORY, average * Math.max(1, maxTurns))))
+function summaryLimit(turns: Turn[], end: number, maxChars: number): number {
+  const total = turnsForSummary(turns, 0, end).reduce((n, t) => n + t.text.length, 0)
+  return Math.max(MIN_SUMMARY_CHARS, Math.round(Math.min(total * SUMMARY_SHARE_OF_STORY, maxChars)))
 }
 
 export interface ChronicleAgentArgs {
@@ -241,7 +241,7 @@ async function foldTurns(
         cacheKey: agent.cacheKey,
         previousSummary: storyTexts(next).join('\n\n'),
         turns: inputs,
-        maxChars: summaryLimit(turns, last, settings.summaryMaxTurns),
+        maxChars: summaryLimit(turns, last, settings.summaryMaxChars),
       },
       signal,
     )

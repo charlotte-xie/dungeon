@@ -499,15 +499,15 @@ export function SettingsPanel({
                   />
                 </label>
                 <label
-                  title={`The longest the running summary is asked to be, in average turns' length. It runs to a quarter of the story it covers until it reaches this. Default ${DEFAULT_CONTEXT.summaryMaxTurns}.`}
+                  title={`The longest the running summary is asked to be, in characters. It runs to a tenth of the story it covers until it reaches this. Default ${DEFAULT_CONTEXT.summaryMaxChars.toLocaleString()}.`}
                 >
-                  <span>Summary length (turns)</span>
+                  <span>Summary length (chars)</span>
                   <input
                     type="number"
-                    min={1}
-                    step={1}
-                    value={draftContext.summaryMaxTurns}
-                    onChange={(e) => setContextField('summaryMaxTurns', Number(e.target.value))}
+                    min={180}
+                    step={100}
+                    value={draftContext.summaryMaxChars}
+                    onChange={(e) => setContextField('summaryMaxChars', Number(e.target.value))}
                   />
                 </label>
                 <label

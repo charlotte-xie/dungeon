@@ -549,10 +549,10 @@ export function loadStoredContext(): ContextConfig {
         typeof parsed.compactionFloor === 'number'
           ? parsed.compactionFloor
           : DEFAULT_CONTEXT.compactionFloor,
-      summaryMaxTurns:
-        typeof parsed.summaryMaxTurns === 'number'
-          ? parsed.summaryMaxTurns
-          : DEFAULT_CONTEXT.summaryMaxTurns,
+      summaryMaxChars:
+        typeof parsed.summaryMaxChars === 'number'
+          ? parsed.summaryMaxChars
+          : DEFAULT_CONTEXT.summaryMaxChars,
       stateCleanupChars:
         typeof parsed.stateCleanupChars === 'number'
           ? parsed.stateCleanupChars

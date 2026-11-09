@@ -32,8 +32,8 @@ const AGENT = {
   protocol: 'chat-completions' as const,
 }
 
-const DEFAULTS: ChronicleSettings = { compactionThreshold: 32, compactionFloor: 16, summaryMaxTurns: 10 }
-const SMALL: ChronicleSettings = { compactionThreshold: 8, compactionFloor: 4, summaryMaxTurns: 10 }
+const DEFAULTS: ChronicleSettings = { compactionThreshold: 32, compactionFloor: 16, summaryMaxChars: 3000 }
+const SMALL: ChronicleSettings = { compactionThreshold: 8, compactionFloor: 4, summaryMaxChars: 3000 }
 
 function completedTurn(i: number): Turn {
   return {
@@ -260,7 +260,7 @@ describe('compaction', () => {
     expect(mockedSummarizer).toHaveBeenCalledTimes(1)
   })
 
-  it('asks for a quarter of the story until the summary reaches its longest', async () => {
+  it('asks for a tenth of the story until the summary reaches its longest', async () => {
     // Each turn renders as exactly 1,000 characters.
     const turns = completedTurns(32).map((t) => ({
       ...t,
@@ -268,10 +268,10 @@ describe('compaction', () => {
       reply: { ...t.reply, text: 'x'.repeat(996) },
     }))
     await compact(turns, [])
-    expect(mockedSummarizer.mock.calls[0][0].maxChars).toBe(4000)
+    expect(mockedSummarizer.mock.calls[0][0].maxChars).toBe(1600)
     mockedSummarizer.mockClear()
-    await compact(turns, [], { ...DEFAULTS, summaryMaxTurns: 2 })
-    expect(mockedSummarizer.mock.calls[0][0].maxChars).toBe(2000)
+    await compact(turns, [], { ...DEFAULTS, summaryMaxChars: 1000 })
+    expect(mockedSummarizer.mock.calls[0][0].maxChars).toBe(1000)
   })
 })
 
