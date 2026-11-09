@@ -137,19 +137,19 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
         set: {
           type: 'object',
           description:
-            'Map of dotted path → value that replaces the entire value at the path: {"pawnshop_robbery.status": "…"} for one facet, `hesta.wants.shop` for one item, `hesta` for a whole entry. null deletes the path.',
+            'Map of dotted path → value that replaces the entire value at the path: {"pawnshop_robbery.status": "The constable has arrested Tam for the Mill Lane pawnshop robbery."} for one facet, `hesta.wants.shop` for one item, `hesta` for a whole entry. null deletes the path.',
           additionalProperties: true,
         },
         merge: {
           type: 'object',
           description:
-            'Map of dotted path → object whose keys are added to the object at the path, at any depth, keeping everything it doesn’t name: {"hesta.wants": {"lodger": "…"}} adds one want and keeps the rest. null removes a key.',
+            'Map of dotted path → object whose keys are added to the object at the path, at any depth, keeping everything it doesn’t name: {"hesta.wants": {"lodger": "Hesta wants her lodger, Mr Pell, gone from the rooms above her bakery."}} adds one want and keeps the rest. null removes a key.',
           additionalProperties: { type: 'object' },
         },
         [EVENTS_FACET]: {
           type: 'object',
           description:
-            'Map of entry key → one sentence on what has just happened to it: {"hesta": "Hesta told the constable she had not seen Tam."}.',
+            'Map of entry key → one sentence on what has just happened to it, naming who and what: {"tams_watch": "Hesta found Tam\'s watch under the loose board in her kitchen and gave the watch to Amy."}.',
           additionalProperties: { type: 'string' },
         },
       },
