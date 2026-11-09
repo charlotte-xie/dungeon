@@ -83,7 +83,7 @@ window.__begin = async (scenario, styleGuide) => {
   const start = window.__run.length
   ;[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Adventure')).click()
   await sleep(600)
-  ;[...document.querySelectorAll('button, [role=menuitem]')].find((b) => b.textContent.trim() === 'New adventure').click()
+  ;[...document.querySelectorAll('button, [role=menuitem]')].find((b) => b.textContent.trim().startsWith('New adventure')).click()
   await sleep(600)
   const [scenarioBox, styleBox] = document.querySelectorAll('.modal textarea')
   if (scenario !== undefined) setText(scenarioBox, scenario)
