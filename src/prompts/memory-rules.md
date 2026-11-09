@@ -26,6 +26,13 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
       "lockup": "the constabulary lockup at the river end"
     }
   },
+  "tams_watch": { // a thing that comes back
+    "name": "Tam's watch",
+    "is": "a dented silver pocket watch, stopped at ten past four", // what it is and what sets it apart
+    "marks": { "lid": "\"For Tam, from his father\" engraved inside the lid" }, // the particulars that would be noticed
+    "from": "Taken from the pawnshop on the night of the robbery.", // how it came to be in the story
+    "where": "Under a loose board in Hesta's kitchen; only Tam knows." // where it is now
+  },
   "pawnshop_robbery": { // a thread that runs on through the story
     "is": "last week's botched robbery of the Mill Lane pawnshop",
     "status": "The constable is searching the street, and the pawnbroker has posted a reward.", // how it stands now
