@@ -499,15 +499,15 @@ export function SettingsPanel({
                   />
                 </label>
                 <label
-                  title={`The longest the running summary is asked to be, in characters. It runs to a tenth of the story it covers until it reaches this. Default ${DEFAULT_CONTEXT.summaryMaxChars.toLocaleString()}.`}
+                  title={`The length the running summary aims for, in characters, however long the story grows. A hint to the model, not a cap. Default ${DEFAULT_CONTEXT.summaryTargetChars.toLocaleString()}.`}
                 >
                   <span>Summary length (chars)</span>
                   <input
                     type="number"
-                    min={180}
+                    min={100}
                     step={100}
-                    value={draftContext.summaryMaxChars}
-                    onChange={(e) => setContextField('summaryMaxChars', Number(e.target.value))}
+                    value={draftContext.summaryTargetChars}
+                    onChange={(e) => setContextField('summaryTargetChars', Number(e.target.value))}
                   />
                 </label>
                 <label

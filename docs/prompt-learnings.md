@@ -94,6 +94,14 @@ Whatever a role reads, it treats as its business.
 - A plan entry holding a standing pressure (a deadline, fog thickening) is pushed by steers every reply, and escalates. Not solved.
 - Standing OOC direction relayed into every steer becomes a tic: asked to keep a character comic, the Plotter added the same joke to every steer, and it appeared in every reply for ten turns. Not solved.
 
+## The running synopsis
+
+Each of these comes from rebuilding one 26-turn story, so one run.
+
+- Asked to rewrite the summary "so that the new summary covers the extended story", the summariser kept the last version word for word and added to the end, and went past its length limit rather than shorten it. Asked for a new synopsis of the whole story as it now stands, it told the story afresh.
+- Without the scenario in its input it could not say who the player's character is or what kind of story this is.
+- In the past tense it narrated events in order, whatever else it was asked. In the present tense, "what this story is about", with the world, who the people are to one another and what is at stake, said who they are. "As the back of a novel would tell it" read well but brought in blurb lines that name the mood.
+
 ## Tools and record formats
 
 - The example's shape beats the described mechanics. With entry names holding spaces, the Plotter wrote nested objects under `set` and wiped facets, and never used `merge`. With slug keys, a `name` facet and a dotted path in the example, updates kept everything.

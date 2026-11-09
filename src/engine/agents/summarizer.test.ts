@@ -23,7 +23,7 @@ const INPUT: SummarizerInput = {
   scenario: '',
   previousSummary: '',
   turns: [{ number: 1, text: 'DM: Rain falls.' }],
-  maxChars: 400,
+  targetChars: 400,
 }
 
 describe('summariser input', () => {

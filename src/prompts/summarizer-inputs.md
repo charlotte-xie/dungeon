@@ -30,7 +30,7 @@ The story begins with these turns.
 {{text}}
 
 ## length
-Keep it within {{chars}} characters.
+Aim for about {{chars}} characters.
 
 ## instruction
-Write a new synopsis of the whole story as it now stands, so that someone who knew nothing about the story would understand what it is about.
+Say what this story is about as it now stands: the world it is set in, who the people in it are to one another, and what is at stake.

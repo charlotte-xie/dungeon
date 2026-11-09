@@ -181,7 +181,7 @@ export function useGameController(settings: GameSettings) {
   const compactionSettings = {
     compactionThreshold: context.compactionThreshold,
     compactionFloor: context.compactionFloor,
-    summaryMaxChars: context.summaryMaxChars,
+    summaryTargetChars: context.summaryTargetChars,
   }
   const canCompact = chronicleNeedsCompaction(turns, chronicle, compactionSettings)
   const canForceCompact = canForceCompaction(turns, chronicle)

@@ -31,7 +31,7 @@ import type { Chronicle, ChronicleEntry, Turn } from './types'
 export interface ChronicleSettings {
   compactionThreshold: number  // N — high watermark; also per-level promotion threshold
   compactionFloor: number      // drain target; see drainFloor
-  summaryMaxChars: number      // the summary's longest, however long the story
+  summaryTargetChars: number   // the length the summary aims for
 }
 
 // The drain target. An event has to fold something, so a floor at or above N,
@@ -45,19 +45,6 @@ function drainFloor(settings: ChronicleSettings, N: number): number {
 function stretchLength(settings: ChronicleSettings): number {
   const N = Math.max(2, settings.compactionThreshold)
   return N - drainFloor(settings, N)
-}
-
-// The summary is a synopsis, not a retelling: a tenth of the story it covers,
-// up to `summaryMaxChars` however long the story grows. It is a hint to the
-// model, not a cap on what it writes, but it has to be tight enough that the
-// last version can't simply be kept and added to. A floor prevents
-// pathologically tiny limits when turns are short.
-const SUMMARY_SHARE_OF_STORY = 0.1
-const MIN_SUMMARY_CHARS = 180
-
-function summaryLimit(turns: Turn[], end: number, maxChars: number): number {
-  const total = turnsForSummary(turns, 0, end).reduce((n, t) => n + t.text.length, 0)
-  return Math.max(MIN_SUMMARY_CHARS, Math.round(Math.min(total * SUMMARY_SHARE_OF_STORY, maxChars)))
 }
 
 export interface ChronicleAgentArgs {
@@ -244,7 +231,7 @@ async function foldTurns(
         scenario: agent.scenario,
         previousSummary: storyTexts(next).join('\n\n'),
         turns: inputs,
-        maxChars: summaryLimit(turns, last, settings.summaryMaxChars),
+        targetChars: settings.summaryTargetChars,
       },
       signal,
     )
