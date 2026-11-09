@@ -96,7 +96,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   summarizerReasoning: 'low',
   compactionThreshold: 32,
   compactionFloor: 16,
-  summaryMaxChars: 3_000,
+  summaryMaxChars: 1_500,
   stateCleanupChars: 10_000,
   includePriorPlayerTurns: true,
   reminderAsSystem: true,
