@@ -12,6 +12,33 @@ export const MAX_PLOT_ITEM_CHARS = 300
 export const MAX_OOC_ITEMS = 10
 export const MAX_OOC_ITEM_CHARS = 300
 
+// `events` is the one list memory may hold: what has lately happened to an
+// entry, oldest first, as a facet directly under it. The app keeps it short,
+// so the lists the Plotter can grow are only the ones the app trims.
+export const EVENTS_FACET = 'events'
+export const MAX_ENTRY_EVENTS = 5
+
+function isEventsPath(path: string): boolean {
+  const segments = path.split('.').filter(Boolean)
+  return segments.length === 2 && segments[1] === EVENTS_FACET
+}
+
+// The path of the first list this write would put anywhere but an entry's
+// `events`, or that puts anything but sentences there.
+function strayListPath(path: string, value: JsonValue | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return isEventsPath(path) && value.every((item) => typeof item === 'string') ? undefined : path
+  }
+  if (typeof value !== 'object' || value === null) return undefined
+  for (const [key, inner] of Object.entries(value)) {
+    const stray = strayListPath(`${path}.${key}`, inner)
+    if (stray) return stray
+  }
+  return undefined
+}
+
+const STRAY_LIST_ADVICE = `\`${EVENTS_FACET}\` directly under an entry is the only list memory holds; use a map with a key for each item.`
+
 // Each record's rules travel in the description of the tool that writes it,
 // so they are in view where the Plotter keeps the record, and a record that
 // is switched off takes its rules with its tools.
@@ -75,7 +102,7 @@ export const UPDATE_ARCS_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Entry keys are slugs, and periods separate path parts.`,
+      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. \`${EVENTS_FACET}\` directly under an entry is the only list: \`merge\` adds to it, and the last ${MAX_ENTRY_EVENTS} are kept. Put every change in one call. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Entry keys are slugs, and periods separate path parts.`,
     parameters: {
       type: 'object',
       properties: {
@@ -491,7 +518,11 @@ export function executeTool(
         )
       const merges = mergeEntries.map(([path, value]) => ({
         path,
-        leaves: isPlainObject(value) ? leafPaths(path, value) : undefined,
+        leaves: isPlainObject(value)
+          ? leafPaths(path, value)
+          : isEventsPath(path) && (Array.isArray(value) || typeof value === 'string')
+            ? ([[path, value]] as [string, JsonValue][])
+            : undefined,
       }))
       const unsafePaths = [
         ...moveEntries.flatMap(([from, to]) => (typeof to === 'string' ? [from, to] : [from])),
@@ -577,8 +608,22 @@ export function executeTool(
         return true
       }
 
+      // A merge adds to `events`, skipping what is already there.
+      const addEvents = (path: string, value: JsonValue): void => {
+        const existing = getByPath(next, path)
+        const held = Array.isArray(existing) ? existing : []
+        const added = (Array.isArray(value) ? value : [value]).filter((item) => !held.includes(item))
+        next = setByPath(next, path, [...held, ...added])
+      }
+
       // A set replaces the value at its path; paths it doesn't name survive.
       for (const [path, value] of setEntries) {
+        const stray = strayListPath(path, value)
+        if (stray) {
+          notes.push(`REJECTED set ${stray}: ${STRAY_LIST_ADVICE}`)
+          failed = true
+          continue
+        }
         const deleting = value === null || value === undefined
         const changed = write(path, value)
         notes.push(deleting ? `deleted ${path} via null${changed ? '' : ' (no-op; not present)'}` : `set ${path}`)
@@ -592,8 +637,28 @@ export function executeTool(
           failed = true
           continue
         }
-        for (const [leaf, value] of leaves) write(leaf, value)
-        notes.push(`merged ${path}${leaves.length ? `: ${leaves.map(([leaf]) => leaf.slice(path.length + 1)).join(', ')}` : ' (no-op; empty)'}`)
+        const stray = leaves.map(([leaf, value]) => strayListPath(leaf, value)).find(Boolean)
+        if (stray) {
+          notes.push(`REJECTED merge ${stray}: ${STRAY_LIST_ADVICE}`)
+          failed = true
+          continue
+        }
+        for (const [leaf, value] of leaves) {
+          if (isEventsPath(leaf) && value !== null) addEvents(leaf, value)
+          else write(leaf, value)
+        }
+        notes.push(`merged ${path}${leaves.length ? `: ${leaves.map(([leaf]) => leaf.slice(path.length + 1) || EVENTS_FACET).join(', ')}` : ' (no-op; empty)'}`)
+      }
+
+      // However they were written, each entry's events end up a list of the
+      // latest few.
+      for (const [entry, value] of Object.entries(next)) {
+        if (!isPlainObject(value)) continue
+        const events = value[EVENTS_FACET]
+        const list = typeof events === 'string' ? [events] : events
+        if (Array.isArray(list) && (list !== events || list.length > MAX_ENTRY_EVENTS)) {
+          next = setByPath(next, `${entry}.${EVENTS_FACET}`, list.slice(-MAX_ENTRY_EVENTS))
+        }
       }
 
       const result = `${failed ? 'partial' : 'ok'} — memory: ${notes.join('; ')}`

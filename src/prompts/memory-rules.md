@@ -16,7 +16,8 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
     "attitude": "Hesta is wary of Amy and helps only when it costs her nothing.", // how they feel towards others now
     "secrets": { // the plain truth of what they hide, settled now and kept until the story reveals it
       "tam": "Hesta is hiding her son Tam upstairs after the robbery went wrong; only she and Tam know."
-    }
+    },
+    "events": ["Hesta told the constable she had not seen Tam."] // what has lately happened to them; only the latest few are kept
   },
   "mill_lane": {
     "name": "Mill Lane",
@@ -31,7 +32,8 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
     "is": "a dented silver pocket watch, stopped at ten past four", // what it is and what sets it apart
     "marks": { "lid": "\"For Tam, from his father\" engraved inside the lid" }, // the particulars that would be noticed
     "from": "Taken from the pawnshop on the night of the robbery.", // how it came to be in the story
-    "where": "Under a loose board in Hesta's kitchen; only Tam knows." // where it is now
+    "where": "Under a loose board in Hesta's kitchen; only Tam knows.", // where it is now
+    "events": ["Amy noticed the loose board and said nothing."]
   },
   "pawnshop_robbery": { // a thread that runs on through the story
     "is": "last week's botched robbery of the Mill Lane pawnshop",
@@ -44,7 +46,8 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
     "is": "a drifter newly arrived in town",
     "wearing": { "coat": "patched army greatcoat", "boots": "stout leather walking boots" },
     "possessions": { "money": "30 pounds", "sabre": "chipped sabre" }, // what they carry that matters
-    "reputation": "Amy is known on Mill Lane as a stranger the constable is watching." // how others see them
+    "reputation": "Amy is known on Mill Lane as a stranger the constable is watching.", // how others see them
+    "events": ["Amy took a room above the chandler's on Mill Lane."]
   }
 }
 ```

@@ -459,6 +459,19 @@ describe('buildStoryUpdate', () => {
     })
   })
 
+  it('tells the narrator only the new events of an entry it holds', () => {
+    const earlier = [
+      done('t1', { recalled: { Hesta: { is: 'The baker.', events: ['a', 'b'] } } }),
+      done('t2', { changed: { Hesta: { events: ['c'] } } }),
+    ]
+    const now = (events: string[]) => ({ ...data, memory: { Hesta: { is: 'The baker.', events } }, ooc: [] })
+    expect(buildStoryUpdate(earlier, [], now(['a', 'b', 'c', 'd']), ALL_FLAGS)?.changed).toEqual({
+      Hesta: { events: ['d'] },
+    })
+    // The oldest falling off the end of the list is no news.
+    expect(buildStoryUpdate(earlier, [], now(['b', 'c']), ALL_FLAGS)?.changed).toBeUndefined()
+  })
+
   it('says only what changed in an entry the narrator holds, never the rest again', () => {
     // Saoirse's unchanged plans went out again with every new line of her
     // regard for the player, until "four days" filled the narrator's view.

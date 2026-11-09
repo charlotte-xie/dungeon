@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { executeTool, UPDATE_OOC_TOOL } from './tools'
+import { executeTool, MAX_ENTRY_EVENTS, UPDATE_OOC_TOOL } from './tools'
+import type { Memory } from './types'
 
 describe('tool execution boundaries', () => {
   it('rejects an unsafe update_state atomically', () => {
@@ -40,6 +41,60 @@ describe('tool execution boundaries', () => {
     // The list is the player's own direction; a length example on the tool
     // got the brief's own guidance recorded as a preference.
     expect(UPDATE_OOC_TOOL.description).not.toMatch(/paragraph|shorter/i)
+  })
+
+  describe('events in memory', () => {
+    const withMemory = (memory: Memory) => ({ state: {}, plot: [], memory, ooc: [] })
+    const update = (memory: Memory, args: object) =>
+      executeTool('update_memory', JSON.stringify(args), withMemory(memory))
+
+    it('adds to an entry’s events on a merge, alongside its other changes in one call', () => {
+      const result = update(
+        { watch: { is: 'a watch', where: 'under the board', events: ['found'] } },
+        { set: { 'watch.where': 'in a pocket' }, merge: { watch: { events: ['taken'] } } },
+      )
+      expect(result.result).toMatch(/^ok/)
+      expect(result.data.memory).toEqual({ watch: { is: 'a watch', where: 'in a pocket', events: ['found', 'taken'] } })
+    })
+
+    it('starts the list on the first event, and takes one by its own path', () => {
+      expect(update({ watch: { is: 'a watch' } }, { merge: { 'watch.events': ['found'] } }).data.memory).toEqual({
+        watch: { is: 'a watch', events: ['found'] },
+      })
+    })
+
+    it('keeps only the latest few, and never doubles one', () => {
+      const events = ['a', 'b', 'c', 'd', 'e']
+      const added = update({ watch: { events } }, { merge: { watch: { events: ['e', 'f'] } } })
+      expect(added.data.memory.watch).toEqual({ events: ['b', 'c', 'd', 'e', 'f'] })
+      expect(events).toHaveLength(MAX_ENTRY_EVENTS)
+    })
+
+    it('replaces the list on a set, as a set replaces anything, and still trims it', () => {
+      const result = update({ watch: { events: ['old'] } }, { set: { 'watch.events': ['1', '2', '3', '4', '5', '6'] } })
+      expect(result.data.memory.watch).toEqual({ events: ['2', '3', '4', '5', '6'] })
+    })
+
+    it('rejects a list anywhere else, and applies the rest of the call', () => {
+      const result = update(
+        { watch: { is: 'a watch' } },
+        {
+          set: { 'watch.where': 'in a pocket', 'watch.owners': ['Tam'] },
+          merge: { watch: { clues: { lid: ['engraved'] } } },
+        },
+      )
+      expect(result.result).toMatch(/^partial/)
+      expect(result.data.memory).toEqual({ watch: { is: 'a watch', where: 'in a pocket' } })
+    })
+
+    it('rejects a list inside a whole entry, or events that are not sentences', () => {
+      const nested = update({}, { set: { watch: { is: 'a watch', owners: ['Tam'] } } })
+      expect(nested.result).toMatch(/^partial/)
+      expect(nested.data.memory).toEqual({})
+      const deep = update({}, { set: { 'watch.clues.events': ['x'] } })
+      expect(deep.result).toMatch(/^partial/)
+      expect(update({}, { merge: { watch: { events: [1] } } }).result).toMatch(/^partial/)
+    })
   })
 
   it('edits memory facets surgically by dotted path', () => {

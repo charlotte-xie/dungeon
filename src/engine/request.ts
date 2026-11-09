@@ -50,6 +50,7 @@ import {
   CHECK_MEMORY_TOOL,
   CHECK_OOC_TOOL,
   CHECK_STATE_TOOL,
+  EVENTS_FACET,
   GET_OOC_INSTRUCTIONS_TOOL,
   GET_STEER_TOOL,
   GET_STORY_ARCS_TOOL,
@@ -331,13 +332,21 @@ function diffJson(before: JsonValue, after: JsonValue): JsonValue | undefined {
   if (!isPlainObject(before) || !isPlainObject(after)) return after
   const changes: [string, JsonValue][] = []
   for (const [key, value] of Object.entries(after)) {
-    const change = Object.hasOwn(before, key) ? diffJson(before[key], value) : value
+    const held = before[key]
+    let change: JsonValue | undefined
+    if (key === EVENTS_FACET && Array.isArray(held) && Array.isArray(value)) {
+      // Only what is new: the rest of a rolling list was said when it was new.
+      const added = value.filter((item) => !held.includes(item))
+      change = added.length ? added : undefined
+    } else {
+      change = Object.hasOwn(before, key) ? diffJson(held, value) : value
+    }
     if (change !== undefined) changes.push([key, change])
   }
   for (const key of Object.keys(before)) {
     if (!Object.hasOwn(after, key)) changes.push([key, null])
   }
-  return Object.fromEntries(changes)
+  return changes.length ? Object.fromEntries(changes) : undefined
 }
 
 // Applies a change made by diffJson.
@@ -345,8 +354,10 @@ function applyJsonChange(base: JsonValue, change: JsonValue): JsonValue {
   if (!isPlainObject(base) || !isPlainObject(change)) return change
   const merged = new Map(Object.entries(base))
   for (const [key, value] of Object.entries(change)) {
+    const held = base[key]
     if (value === null) merged.delete(key)
-    else merged.set(key, Object.hasOwn(base, key) ? applyJsonChange(base[key], value) : value)
+    else if (key === EVENTS_FACET && Array.isArray(held) && Array.isArray(value)) merged.set(key, [...held, ...value])
+    else merged.set(key, Object.hasOwn(base, key) ? applyJsonChange(held, value) : value)
   }
   return Object.fromEntries(merged)
 }
