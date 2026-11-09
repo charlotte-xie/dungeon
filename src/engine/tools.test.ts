@@ -70,6 +70,34 @@ describe('tool execution boundaries', () => {
       expect(events).toHaveLength(MAX_ENTRY_EVENTS)
     })
 
+    it('takes events beside the other changes in one call', () => {
+      const result = update(
+        { watch: { is: 'a watch', where: 'under the board', events: ['found'] }, hesta: { is: 'the baker' } },
+        { set: { 'watch.where': 'in a pocket' }, events: { watch: 'taken', hesta: 'lied to the constable' } },
+      )
+      expect(result.result).toMatch(/^ok/)
+      expect(result.data.memory).toEqual({
+        watch: { is: 'a watch', where: 'in a pocket', events: ['found', 'taken'] },
+        hesta: { is: 'the baker', events: ['lied to the constable'] },
+      })
+    })
+
+    it('is enough on its own, keeps only the latest few, and reads an events path as its entry', () => {
+      const events = { watch: { events: ['a', 'b', 'c', 'd', 'e'] } }
+      expect(update(events, { events: { watch: 'f' } }).data.memory.watch).toEqual({
+        events: ['b', 'c', 'd', 'e', 'f'],
+      })
+      expect(update(events, { events: { 'watch.events': 'f' } }).result).toMatch(/^ok/)
+    })
+
+    it('rejects events keyed by anything but an entry, or holding anything but sentences', () => {
+      const memory = { watch: { is: 'a watch' } }
+      expect(update(memory, { events: { 'watch.where': 'x' } }).result).toMatch(/^partial/)
+      expect(update(memory, { events: { watch: 3 } }).result).toMatch(/^partial/)
+      expect(update(memory, { events: { watch: 3 } }).data.memory).toEqual(memory)
+      expect(executeTool('update_memory', '{"events":{"__proto__":"x"}}', withMemory(memory)).result).toMatch(/^error/)
+    })
+
     it('adds to the list however the write is shaped', () => {
       const held = { watch: { events: ['old'] } }
       const shapes: object[] = [

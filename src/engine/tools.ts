@@ -119,7 +119,7 @@ export const UPDATE_ARCS_TOOL: ModelToolDefinition = {
 export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
     name: 'update_memory',
     description:
-      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. \`${EVENTS_FACET}\` directly under an entry is the only list: what you write to it is added, and the last ${MAX_ENTRY_EVENTS} are kept. Put every change in one call. Operations apply in order: \`move\`, \`delete\`, \`set\`, then \`merge\`. Entry keys are slugs, and periods separate path parts.`,
+      `${MEMORY_RULES}\n\nEdit memory by dotted path at any depth; paths you don't name stay as they are. \`set\` replaces the entire value at its path, so setting a whole entry replaces all of it; \`merge\` adds keys to the object at its path and keeps the rest. \`${EVENTS_FACET}\` adds what has just happened to an entry to its list, of which the last ${MAX_ENTRY_EVENTS} are kept; it is the only list in memory. Put every change in one call. Operations apply in order: \`move\`, \`delete\`, \`set\`, \`merge\`, then \`${EVENTS_FACET}\`. Entry keys are slugs, and periods separate path parts.`,
     parameters: {
       type: 'object',
       properties: {
@@ -145,6 +145,12 @@ export const UPDATE_MEMORY_TOOL: ModelToolDefinition = {
           description:
             'Map of dotted path → object whose keys are added to the object at the path, at any depth, keeping everything it doesn’t name: {"hesta.wants": {"lodger": "…"}} adds one want and keeps the rest. null removes a key.',
           additionalProperties: { type: 'object' },
+        },
+        [EVENTS_FACET]: {
+          type: 'object',
+          description:
+            'Map of entry key → one sentence on what has just happened to it: {"hesta": "Hesta told the constable she had not seen Tam."}.',
+          additionalProperties: { type: 'string' },
         },
       },
     },
@@ -507,6 +513,7 @@ export function executeTool(
         merge?: Record<string, JsonValue>
         delete?: unknown
         move?: Record<string, unknown>
+        events?: Record<string, JsonValue>
       }
       const isPlainObject = (v: unknown): v is Record<string, JsonValue> =>
         typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -522,9 +529,16 @@ export function executeTool(
           ? Object.entries(args.set)
           : []
       const mergeEntries = isPlainObject(args.merge) ? Object.entries(args.merge) : []
-      if (!moveEntries.length && !deletePaths.length && !setEntries.length && !mergeEntries.length) {
+      const eventEntries = isPlainObject(args.events) ? Object.entries(args.events) : []
+      if (
+        !moveEntries.length &&
+        !deletePaths.length &&
+        !setEntries.length &&
+        !mergeEntries.length &&
+        !eventEntries.length
+      ) {
         return unchanged(
-          'error: update_memory requires a non-empty `set`, `merge`, `delete`, or `move`.',
+          'error: update_memory requires a non-empty `set`, `merge`, `delete`, `move`, or `events`.',
         )
       }
       // A merge writes the leaves of its object one path at a time, so the
@@ -546,6 +560,7 @@ export function executeTool(
         ...deletePaths,
         ...setEntries.map(([path]) => path),
         ...merges.flatMap(({ path, leaves }) => [path, ...(leaves ?? []).map(([leaf]) => leaf)]),
+        ...eventEntries.map(([entry]) => entry),
       ].filter((path) => !isSafeStatePath(path))
       if (unsafePaths.length > 0) {
         return unchanged(
@@ -678,6 +693,18 @@ export function executeTool(
           else write(leaf, value)
         }
         notes.push(`merged ${path}${leaves.length ? `: ${leaves.map(([leaf]) => leaf.slice(path.length + 1) || EVENTS_FACET).join(', ')}` : ' (no-op; empty)'}`)
+      }
+
+      for (const [entry, value] of eventEntries) {
+        // Keyed by the entry, or by its events path if the Plotter wrote that.
+        const eventsPath = entry.includes('.') ? eventsPathOf(entry) : `${entry}.${EVENTS_FACET}`
+        if (!eventsPath || !eventItems(value)) {
+          notes.push(`REJECTED events ${entry}: needs an entry key and a sentence.`)
+          failed = true
+          continue
+        }
+        addEvents(eventsPath, value)
+        notes.push(`added to ${eventsPath}`)
       }
 
       // However they were written, each entry's events end up a list of the
