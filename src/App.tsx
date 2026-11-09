@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_SYSTEM_PROMPT } from './prompts'
-import { entryTurnNumbers, totalChronicleEntries } from './engine/chronicle'
+import { entryTurnNumbers, summaryText, totalChronicleEntries, withSummaryText } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
 import { replyStatus } from './engine/turnRecovery'
@@ -478,12 +478,14 @@ function App() {
           slots={game.slots}
           ooc={game.ooc}
           plot={game.plot}
+          synopsis={summaryText(game.chronicle)}
           context={context}
           devMode={devMode}
           busy={thinking}
           onSaveSlots={game.commitSlots}
           onSaveOoc={game.commitOoc}
           onSavePlot={game.commitPlot}
+          onSaveSynopsis={(next) => game.editChronicle(withSummaryText(game.chronicle, game.turns, next))}
           onNewAdventure={setNewAdventureSlots}
           onDirtyChange={setTabDirty}
         />

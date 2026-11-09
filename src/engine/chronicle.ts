@@ -59,10 +59,26 @@ export interface ChronicleAgentArgs {
   scenario: string
 }
 
-// The texts of the chronicle's entries in story order: the highest level
-// first, level 0 last.
-function storyTexts(chronicle: Chronicle): string[] {
-  return [...chronicle].reverse().flatMap((level) => level.map((entry) => entry.text))
+// The chronicle's text in story order: the highest level first, level 0 last.
+export function summaryText(chronicle: Chronicle): string {
+  return [...chronicle].reverse().flatMap((level) => level.map((entry) => entry.text)).join('\n\n')
+}
+
+// The chronicle as one summary with this text, covering the same turns. Blank
+// text removes it, and the model sees those turns in full again.
+export function withSummaryText(chronicle: Chronicle, turns: Turn[], text: string): Chronicle {
+  const trimmed = text.trim()
+  if (trimmed === summaryText(chronicle)) return chronicle
+  if (!trimmed) return []
+  const ranges = chronicleRanges(chronicle, turns)
+  if (!ranges?.length) return chronicle
+  return [[{
+    id: crypto.randomUUID(),
+    text: trimmed,
+    firstTurnId: ranges[0].entry.firstTurnId,
+    lastTurnId: ranges[ranges.length - 1].entry.lastTurnId,
+    createdAt: Date.now(),
+  }]]
 }
 
 // An entry with the turns it covers, as indices into the history (end
@@ -229,7 +245,7 @@ async function foldTurns(
         protocol: agent.protocol,
         cacheKey: agent.cacheKey,
         scenario: agent.scenario,
-        previousSummary: storyTexts(next).join('\n\n'),
+        previousSummary: summaryText(next),
         turns: inputs,
         targetChars: settings.summaryTargetChars,
       },
@@ -337,7 +353,7 @@ export function totalChronicleChars(chronicle: Chronicle): number {
 // The chronicle as a single system message, or null when there's nothing to
 // render so callers can skip injecting an empty message.
 export function buildChronicleSystemMessage(chronicle: Chronicle): ModelMessage | null {
-  const story = storyTexts(chronicle).join('\n\n')
+  const story = summaryText(chronicle)
   return story ? { role: 'system', content: `# Story so far\n\n${story}` } : null
 }
 

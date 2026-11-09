@@ -13,6 +13,8 @@ interface AdventurePanelProps {
   slots: AdventureSlots
   ooc: string[]
   plot: string[]
+  // The running synopsis of the older turns; empty until the first is written.
+  synopsis: string
   context: ContextConfig
   // Developer mode shows the arcs without asking.
   devMode: boolean
@@ -20,6 +22,7 @@ interface AdventurePanelProps {
   onSaveSlots: (next: AdventureSlots) => void
   onSaveOoc: (next: string[]) => void
   onSavePlot: (next: string[]) => void
+  onSaveSynopsis: (next: string) => void
   // Opens the New adventure dialog with the brief as it stands here.
   onNewAdventure: (slots: AdventureSlots) => void
   onDirtyChange: (dirty: boolean) => void
@@ -64,18 +67,21 @@ function EyeIcon() {
 }
 
 // The parts of the adventure the player shapes: the brief and style guide it
-// is written from, their standing OOC instructions, and the arcs, which give
-// the plot away and stay hidden until asked for.
+// is written from, the synopsis of the story so far, their standing OOC
+// instructions, and the arcs, which give the plot away and stay hidden until
+// asked for.
 export function AdventurePanel({
   slots,
   ooc,
   plot,
+  synopsis,
   context,
   devMode,
   busy,
   onSaveSlots,
   onSaveOoc,
   onSavePlot,
+  onSaveSynopsis,
   onNewAdventure,
   onDirtyChange,
 }: AdventurePanelProps) {
@@ -84,6 +90,7 @@ export function AdventurePanel({
   const [oocError, setOocError] = useState<string | null>(null)
   const [plotDraft, setPlotDraft] = useState(() => listToDraft(plot))
   const [plotError, setPlotError] = useState<string | null>(null)
+  const [synopsisDraft, setSynopsisDraft] = useState(synopsis)
   const [arcsRevealed, setArcsRevealed] = useState(false)
   const showArcs = devMode || arcsRevealed
 
@@ -106,11 +113,17 @@ export function AdventurePanel({
     setPlotDraft(listToDraft(plot))
     setPlotError(null)
   }
+  const [prevSynopsis, setPrevSynopsis] = useState(synopsis)
+  if (prevSynopsis !== synopsis) {
+    setPrevSynopsis(synopsis)
+    setSynopsisDraft(synopsis)
+  }
 
   const slotsDirty = ADVENTURE_SLOTS.some((def) => (slotDrafts[def.key] ?? '') !== (slots[def.key] ?? ''))
   const oocDirty = context.includeOoc && oocDraft !== listToDraft(ooc)
   const plotDirty = context.includePlotOutline && plotDraft !== listToDraft(plot)
-  const anyDirty = slotsDirty || oocDirty || plotDirty
+  const synopsisDirty = synopsisDraft !== synopsis
+  const anyDirty = slotsDirty || oocDirty || plotDirty || synopsisDirty
   useReportDirty(anyDirty, onDirtyChange)
 
   // Return the parsed list, or null after setting the section's error.
@@ -152,9 +165,11 @@ export function AdventurePanel({
     if (slotsDirty) onSaveSlots(trimSlots(slotDrafts))
     if (nextOoc) onSaveOoc(nextOoc)
     if (nextPlot) onSavePlot(nextPlot)
+    if (synopsisDirty) onSaveSynopsis(synopsisDraft)
   }
 
   function revert() {
+    setSynopsisDraft(synopsis)
     setSlotDrafts({ ...slots })
     setOocDraft(listToDraft(ooc))
     setOocError(null)
@@ -183,6 +198,31 @@ export function AdventurePanel({
             </small>
           </label>
         ))}
+
+        <label>
+          <span>Story so far</span>
+          {synopsis ? (
+            <>
+              <textarea
+                value={synopsisDraft}
+                onChange={(e) => setSynopsisDraft(e.target.value)}
+                rows={8}
+                readOnly={busy}
+              />
+              <small className="hint">
+                The DM&apos;s synopsis of the older turns, written afresh as the story grows. Edit it
+                to change what the DM remembers of them, and each new synopsis builds on what you
+                wrote. Clear it and the DM reads those turns in full again until the next one is
+                written. Changes apply from the next turn.
+              </small>
+            </>
+          ) : (
+            <small className="hint">
+              Once the story has grown long enough for older turns to be folded away, the DM&apos;s
+              synopsis of them appears here for you to edit.
+            </small>
+          )}
+        </label>
 
         {context.includeOoc && (
           <label>

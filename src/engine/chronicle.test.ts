@@ -10,6 +10,7 @@ import {
   rebuildCallCount,
   rebuildChronicle,
   sameChronicle,
+  withSummaryText,
   withoutEntries,
   type ChronicleSettings,
   type LegacyChronicleEntry,
@@ -288,6 +289,30 @@ describe('rebuildChronicle', () => {
     // The old text plays no part: the first rewrite starts from nothing.
     const first = await mockedSummarizer.mock.results[0].value
     expect(summariesSeen()).toEqual(['', first.summary])
+  })
+})
+
+describe('editing the summary', () => {
+  const summary: Chronicle = [[entry('s', 't0', 't5')]]
+
+  it('keeps the same turns with the new text, so the cutoff does not move', () => {
+    const edited = withSummaryText(summary, TEN, '  You are a cooper now.  ')
+    expect(edited[0][0].text).toBe('You are a cooper now.')
+    expect(turnRanges(edited, TEN)).toEqual([[0, 6]])
+  })
+
+  it('folds a chronicle saved with several entries into the one edited summary', () => {
+    const edited = withSummaryText([[entry('b', 't4', 't7')], [entry('a', 't0', 't3')]], TEN, 'One story.')
+    expect(edited.flat()).toHaveLength(1)
+    expect(turnRanges(edited, TEN)).toEqual([[0, 8]])
+  })
+
+  it('leaves the chronicle alone when the text has not changed', () => {
+    expect(withSummaryText(summary, TEN, ' s ')).toBe(summary)
+  })
+
+  it('removes the summary when the text is cleared, so the turns are live again', () => {
+    expect(withSummaryText(summary, TEN, '   ')).toEqual([])
   })
 })
 

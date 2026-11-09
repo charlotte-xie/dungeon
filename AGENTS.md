@@ -91,7 +91,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
   - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying the player's OOC and arc edits across restores, undo/redo/retry, and coordination of the running operation.
 - `src/prompts/*.md`: the product's own LLM prompts (the narrator's and the Plotter's system prompts, the Plotter's per-turn steps and nudges, turn reminders, each record's rules for its tool's description, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. A file holding several short prompts splits them under `## name` headings. Prompt wording lives here rather than in code, and tests don't pin it. They are part of the game, not instructions for coding agents.
 - `src/hooks/`: React hooks. `useGameController.ts` drives turns.
-- `src/ui/`: the tabs and their panels. Every player sees Play, Adventure (the scenario brief, style guide, OOC list, and the arcs, hidden until revealed because they give the plot away), Saves and Settings. Developer mode adds State (memory, live state and the chronicle) and Context (the next requests exactly as they will be posted), and the trace beside each reply.
+- `src/ui/`: the tabs and their panels. Every player sees Play, Adventure (the scenario brief, style guide, the editable synopsis of the older turns, OOC list, and the arcs, hidden until revealed because they give the plot away), Saves and Settings. Developer mode adds State (memory, live state and the chronicle) and Context (the next requests exactly as they will be posted), and the trace beside each reply.
 
 ## Working on this project
 

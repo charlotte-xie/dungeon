@@ -370,10 +370,17 @@ export function useGameController(settings: GameSettings) {
     setCompacting(false)
   }
 
-  // The player's own edit to the chronicle, or clearing it.
+  // The player's own edit to the chronicle, or clearing it. Undo and Redo keep
+  // it, as they keep the player's edits to the OOC list and the arcs.
   function editChronicle(next: Chronicle) {
     if (sameChronicle(chronicleNow.current, next)) return
     cancelBackgroundCompaction()
+    dispatchRecovery({
+      type: 'rebase',
+      from: chronicleNow.current,
+      chronicle: next,
+      beforeFits: !!chronicleRanges(next, latestTurns.current.slice(0, -1)),
+    })
     commitChronicle(next)
   }
 
