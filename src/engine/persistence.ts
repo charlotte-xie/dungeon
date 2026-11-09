@@ -2,8 +2,10 @@
 // sees only loadStored*/persist* functions and the SavedGame type.
 
 import { indexChronicle, totalChronicleEntries, type LegacyChronicleEntry, type StoredChronicle } from './chronicle'
-import { ADVENTURE_SLOTS, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
+import { ADVENTURE_SLOTS, DEFAULT_BASE_URL, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
 import type { ReasoningEffort } from './model/types'
+import { keyFor, withKey, type ProviderKeys } from './providerKeys'
+import { UNSAFE_PATH_SEGMENTS } from './state'
 import type {
   AdventureSlots,
   BriefingCall,
@@ -25,8 +27,7 @@ import type {
 } from './types'
 
 export const LS_MODEL = 'dm.model'
-// Keep the legacy storage key so existing users retain their configured key.
-export const LS_API_KEY = 'dm.xaiKey'
+export const LS_PROVIDER_KEYS = 'dm.providerKeys'
 export const LS_BASE_URL = 'dm.baseUrl'
 export const LS_STATE = 'dm.state'
 export const LS_PLOT = 'dm.plot'
@@ -48,6 +49,8 @@ export const LS_PLOT_BASELINE = 'dm.plotBaseline'
 const LS_MESSAGES_V1 = 'dm.messages'
 // The trace toggle that developer mode replaced; every browser stored it.
 const LS_SHOW_TRACE_LEGACY = 'dm.showTrace'
+// The single API key that one key for each endpoint replaced.
+const LS_API_KEY_LEGACY = 'dm.xaiKey'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -209,6 +212,49 @@ export function loadStoredDevMode(): boolean {
     return localStorage.getItem(LS_DEV_MODE) === 'true'
   } catch {
     return false
+  }
+}
+
+function parseProviderKeys(raw: string | null): ProviderKeys {
+  if (!raw) return {}
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === 'string' && entry[1] !== '' && !UNSAFE_PATH_SEGMENTS.has(entry[0]),
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+// A browser still holding the single key gives it to the endpoint it was saved
+// for. If that can't be written, the old key stays for the next load.
+export function loadStoredProviderKeys(): ProviderKeys {
+  let keys: ProviderKeys = {}
+  try {
+    keys = parseProviderKeys(localStorage.getItem(LS_PROVIDER_KEYS))
+    const legacy = localStorage.getItem(LS_API_KEY_LEGACY)
+    if (legacy === null) return keys
+    const endpoint = loadStored(LS_BASE_URL, DEFAULT_BASE_URL)
+    if (!keyFor(keys, endpoint)) keys = withKey(keys, endpoint, legacy)
+    localStorage.setItem(LS_PROVIDER_KEYS, JSON.stringify(keys))
+    localStorage.removeItem(LS_API_KEY_LEGACY)
+  } catch {
+    // ignore quota / disabled storage
+  }
+  return keys
+}
+
+export function persistProviderKeys(keys: ProviderKeys) {
+  try {
+    if (Object.keys(keys).length) localStorage.setItem(LS_PROVIDER_KEYS, JSON.stringify(keys))
+    else localStorage.removeItem(LS_PROVIDER_KEYS)
+  } catch {
+    // ignore quota / disabled storage
   }
 }
 

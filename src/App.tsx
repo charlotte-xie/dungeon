@@ -507,7 +507,7 @@ function App() {
       {tab === 'settings' && (
         <SettingsPanel
           model={model}
-          apiKey={apiKey}
+          providerKeys={settings.providerKeys}
           baseUrl={baseUrl}
           sampling={sampling}
           context={context}

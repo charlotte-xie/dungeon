@@ -6,7 +6,7 @@
 // without server-side state and the app's client-side prefix caching stays
 // authoritative. Provider-specific wire details stop here.
 
-import { XAI_BASE_URL } from '../config'
+import { endpointId } from '../providerKeys'
 import { normalizeOpenAIChatCompletion, normalizeResponsesApiResponse } from './normalize'
 import { isEventStream, readChatStream, readResponsesStream } from './stream'
 import type {
@@ -18,14 +18,6 @@ import type {
   ProtocolAnomaly,
   WireRequest,
 } from './types'
-
-function trimTrailingSlashes(value: string): string {
-  return value.replace(/\/+$/, '')
-}
-
-function effectiveBaseUrl(baseUrl: string): string {
-  return trimTrailingSlashes((baseUrl || XAI_BASE_URL).trim())
-}
 
 function isXaiHost(baseUrl: string): boolean {
   try {
@@ -249,7 +241,7 @@ function wantsReasoning(request: ModelCompletionRequest): boolean {
 // The Chat Completions request a completion posts, leaving out what this
 // endpoint and model were found to reject.
 export function chatCompletionsRequest(request: ModelCompletionRequest, connection: ModelConnection): WireRequest {
-  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  const baseUrl = endpointId(connection.baseUrl)
   const capabilityKey = capabilityKeyFor(baseUrl, request.model)
   const streams = !!request.onStream && !streamingUnsupported.has(capabilityKey)
   const body: Record<string, unknown> = {
@@ -281,7 +273,7 @@ async function completeOpenAICompatibleChatWithinTimeout(
   connection: ModelConnection,
   signal: AbortSignal,
 ): Promise<ModelCompletion> {
-  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  const baseUrl = endpointId(connection.baseUrl)
   if (!connection.apiKey && isXaiHost(baseUrl)) {
     throw new Error(
       'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
@@ -371,7 +363,7 @@ export async function completeOpenAICompatibleResponses(
 // The Responses request a completion posts, leaving out what this endpoint
 // and model were found to reject.
 export function responsesApiRequest(request: ModelCompletionRequest, connection: ModelConnection): WireRequest {
-  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  const baseUrl = endpointId(connection.baseUrl)
   const capabilityKey = capabilityKeyFor(baseUrl, request.model)
   const body: Record<string, unknown> = {
     model: request.model,
@@ -401,7 +393,7 @@ async function completeResponsesWithinTimeout(
   connection: ModelConnection,
   signal: AbortSignal,
 ): Promise<ModelCompletion> {
-  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  const baseUrl = endpointId(connection.baseUrl)
   if (!connection.apiKey && isXaiHost(baseUrl)) {
     throw new Error(
       'xAI API key not set. Open Settings and paste your key — or point Base URL at a local server.',
@@ -444,7 +436,7 @@ async function listOpenAICompatibleModelsWithinTimeout(
   connection: ModelConnection,
   signal: AbortSignal,
 ): Promise<string[]> {
-  const baseUrl = effectiveBaseUrl(connection.baseUrl)
+  const baseUrl = endpointId(connection.baseUrl)
   const response = await fetch(`${baseUrl}/models`, {
     method: 'GET',
     headers: authorizationHeaders(connection.apiKey),

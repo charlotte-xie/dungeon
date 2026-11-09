@@ -8,9 +8,12 @@ import {
   loadStoredDevMode,
   loadStoredOocBaseline,
   loadStoredPlotBaseline,
+  loadStoredProviderKeys,
   loadStoredRecovery,
   normalizeSavedGame,
+  persistProviderKeys,
 } from './persistence'
+import { keyFor } from './providerKeys'
 
 function validSave() {
   return {
@@ -213,6 +216,106 @@ describe('role settings', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('provider keys', () => {
+  const XAI = 'https://api.x.ai/v1'
+  const MISTRAL = 'https://api.mistral.ai/v1'
+
+  function stubStorage(items: Record<string, string>) {
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => items[key] ?? null,
+      setItem: (key: string, value: string) => {
+        items[key] = value
+      },
+      removeItem: (key: string) => {
+        delete items[key]
+      },
+    })
+    return items
+  }
+
+  it('has none for a new installation', () => {
+    stubStorage({})
+    expect(loadStoredProviderKeys()).toEqual({})
+  })
+
+  it('restores what was saved for each endpoint', () => {
+    stubStorage({})
+    persistProviderKeys({ [XAI]: 'xai-key', [MISTRAL]: 'mistral-key' })
+    const keys = loadStoredProviderKeys()
+    expect(keyFor(keys, XAI)).toBe('xai-key')
+    expect(keyFor(keys, MISTRAL)).toBe('mistral-key')
+  })
+
+  it('stores nothing once the last key is gone', () => {
+    const items = stubStorage({ 'dm.providerKeys': JSON.stringify({ [XAI]: 'xai-key' }) })
+    persistProviderKeys({})
+    expect(items).toEqual({})
+  })
+
+  it('gives an old single key to the endpoint it was saved for', () => {
+    const items = stubStorage({ 'dm.xaiKey': 'old-key', 'dm.baseUrl': `${MISTRAL}/` })
+    const keys = loadStoredProviderKeys()
+    expect(keyFor(keys, MISTRAL)).toBe('old-key')
+    expect(keyFor(keys, XAI)).toBe('')
+    expect('dm.xaiKey' in items).toBe(false)
+    expect(keyFor(loadStoredProviderKeys(), MISTRAL)).toBe('old-key')
+  })
+
+  it('gives an old single key to the default endpoint when no URL was saved', () => {
+    stubStorage({ 'dm.xaiKey': 'old-key' })
+    expect(keyFor(loadStoredProviderKeys(), XAI)).toBe('old-key')
+  })
+
+  it('never lets an old single key replace a remembered one', () => {
+    stubStorage({
+      'dm.xaiKey': 'old-key',
+      'dm.providerKeys': JSON.stringify({ [XAI]: 'current-key' }),
+    })
+    expect(keyFor(loadStoredProviderKeys(), XAI)).toBe('current-key')
+  })
+
+  it('keeps an old single key usable when it cannot be moved', () => {
+    const items: Record<string, string> = { 'dm.xaiKey': 'old-key' }
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => items[key] ?? null,
+      setItem: () => {
+        throw new Error('quota')
+      },
+      removeItem: (key: string) => {
+        delete items[key]
+      },
+    })
+    expect(keyFor(loadStoredProviderKeys(), XAI)).toBe('old-key')
+    expect(items['dm.xaiKey']).toBe('old-key')
+  })
+
+  it('still moves an old single key when the stored keys are unreadable', () => {
+    stubStorage({ 'dm.xaiKey': 'old-key', 'dm.providerKeys': '{not json' })
+    expect(keyFor(loadStoredProviderKeys(), XAI)).toBe('old-key')
+  })
+
+  it('drops stored entries of the wrong shape or with unsafe names', () => {
+    stubStorage({
+      'dm.providerKeys': `{"${XAI}":"xai-key","${MISTRAL}":42,"blank":"","__proto__":"x","constructor":"y"}`,
+    })
+    expect(loadStoredProviderKeys()).toEqual({ [XAI]: 'xai-key' })
+  })
+
+  it('ignores stored keys that are not an object', () => {
+    stubStorage({ 'dm.providerKeys': '["xai-key"]' })
+    expect(loadStoredProviderKeys()).toEqual({})
+  })
+
+  it('has none when storage is unavailable', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+    })
+    expect(loadStoredProviderKeys()).toEqual({})
+  })
 })
 
 describe('developer mode', () => {

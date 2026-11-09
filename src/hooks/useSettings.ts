@@ -6,12 +6,14 @@ import {
   LS_DEV_MODE,
   LS_MODEL,
   LS_SAMPLING,
-  LS_API_KEY,
   loadStored,
   loadStoredContext,
   loadStoredDevMode,
+  loadStoredProviderKeys,
   loadStoredSampling,
+  persistProviderKeys,
 } from '../engine/persistence'
+import { keyFor, type ProviderKeys } from '../engine/providerKeys'
 import type { ContextConfig, SamplingParams } from '../engine/types'
 
 // App-level configuration: connection, sampling and context-assembly options,
@@ -19,7 +21,7 @@ import type { ContextConfig, SamplingParams } from '../engine/types'
 // controller, not here.
 export function useSettings() {
   const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
-  const [apiKey, setApiKey] = useState(() => loadStored(LS_API_KEY, ''))
+  const [providerKeys, setProviderKeys] = useState<ProviderKeys>(() => loadStoredProviderKeys())
   const [baseUrl, setBaseUrl] = useState(() => loadStored(LS_BASE_URL, DEFAULT_BASE_URL))
   const [sampling, setSampling] = useState<SamplingParams>(() => loadStoredSampling())
   const [context, setContext] = useState<ContextConfig>(() => loadStoredContext())
@@ -27,21 +29,20 @@ export function useSettings() {
 
   function save(
     nextModel: string,
-    nextApiKey: string,
+    nextProviderKeys: ProviderKeys,
     nextBaseUrl: string,
     nextSampling: SamplingParams,
     nextContext: ContextConfig,
     nextDevMode: boolean,
   ) {
     setModel(nextModel)
-    setApiKey(nextApiKey)
+    setProviderKeys(nextProviderKeys)
     setBaseUrl(nextBaseUrl)
     setSampling(nextSampling)
     setContext(nextContext)
     setDevMode(nextDevMode)
+    persistProviderKeys(nextProviderKeys)
     try {
-      if (nextApiKey) localStorage.setItem(LS_API_KEY, nextApiKey)
-      else localStorage.removeItem(LS_API_KEY)
       if (nextModel) localStorage.setItem(LS_MODEL, nextModel)
       else localStorage.removeItem(LS_MODEL)
       if (nextBaseUrl && nextBaseUrl !== DEFAULT_BASE_URL)
@@ -56,5 +57,7 @@ export function useSettings() {
     }
   }
 
-  return { model, apiKey, baseUrl, sampling, context, devMode, save }
+  const apiKey = keyFor(providerKeys, baseUrl)
+
+  return { model, apiKey, providerKeys, baseUrl, sampling, context, devMode, save }
 }

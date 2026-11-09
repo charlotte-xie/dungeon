@@ -14,7 +14,7 @@ Security of personal information is paramount. These rules apply to every contri
 
 ### Players' data
 
-- **Keys stay in the player's browser.** The app has no backend and no analytics. A player's API key lives in their browser's `localStorage` and is sent only as the `Authorization` header to the endpoint they configured. The app never writes it into saves, exports, traces, or logs. Keep it that way.
+- **Keys stay in the player's browser.** The app has no backend and no analytics. A player's API keys live in their browser's `localStorage`, one for each endpoint, and each is sent only as the `Authorization` header to the endpoint it was saved for. The app never writes them into saves, exports, traces, or logs. Keep it that way.
 - **No third parties.** Don't add telemetry, third-party scripts or fonts, or requests to any host other than the configured endpoint.
 - **Play is private writing.** Save files and play transcripts belong to the player. Never commit them (`.saves` is gitignored) or keys, tokens, and `.env` files. Quote only what a bug report needs.
 
@@ -62,13 +62,13 @@ Pushes to `master` deploy to GitHub Pages via `.github/workflows/deploy.yml`. Pl
 
 In **Settings**:
 
-- **API key** — required by hosted providers; local servers may accept a placeholder.
+- **API key** — required by hosted providers; local servers may accept a placeholder. One is remembered for each base URL, so changing the URL brings back that endpoint's key.
 - **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
 - **Narrator model / reasoning** — defaults to `grok-4.3` with reasoning off: the narrator writes from the plotter's briefing without thinking first.
 - **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
 - **Summariser model / reasoning** — defaults to `grok-4.3` with low reasoning: it works out what matters in the turns before writing.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
-- The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API key.
+- The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API keys.
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - **Default OOC instructions** — the standing instructions each new adventure starts with, one per line. They ship empty, and the player changes them in play like any OOC direction. British English and the usual reply length are set in the narrator's system prompt, so the Plotter never reads them.
 - **Allow NSFW / mature themes** — the content stance both roles are given.
@@ -87,6 +87,7 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
   - `tools.ts`: tool schemas and the game-state executor. `state.ts`: path operations on world state.
   - `chronicle.ts`: the chronicle, one running summary of the older turns that indexes the complete history. It points at the run of turns it covers, so the model's view can always be rebuilt from the history and the chronicle, and the cutoff between summarised and live turns follows from it. Compaction, in rare drain events, rewrites the summary from its last version and the real turns being folded in, so it always covers the whole story up to the cutoff. It runs in the background after a reply, so no turn waits on it, and its result goes in between turns only if nothing has changed the chronicle meanwhile and every turn it points at is still in the log.
   - `persistence.ts`: all `localStorage` IO, the save-file format, and its migrations.
+  - `providerKeys.ts`: what identifies an endpoint, and the API key remembered for each.
   - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying the player's OOC and arc edits across restores, undo/redo/retry, and coordination of the running operation.
 - `src/prompts/*.md`: the product's own LLM prompts (the narrator's and the Plotter's system prompts, the Plotter's per-turn steps and nudges, turn reminders, each record's rules for its tool's description, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. A file holding several short prompts splits them under `## name` headings. Prompt wording lives here rather than in code, and tests don't pin it. They are part of the game, not instructions for coding agents.
 - `src/hooks/`: React hooks. `useGameController.ts` drives turns.

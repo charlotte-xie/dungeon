@@ -13,6 +13,7 @@ import {
 } from '../engine/config'
 import { listModels } from '../engine/model/client'
 import type { ReasoningEffort } from '../engine/model/types'
+import { keyFor, withKey, type ProviderKeys } from '../engine/providerKeys'
 import type { ContextConfig, SamplingParams } from '../engine/types'
 import { useReportDirty } from '../hooks/useReportDirty'
 
@@ -24,14 +25,14 @@ const ROLE_NAMES: Record<ModelRole, string> = {
 
 interface SettingsPanelProps {
   model: string
-  apiKey: string
+  providerKeys: ProviderKeys
   baseUrl: string
   sampling: SamplingParams
   context: ContextConfig
   devMode: boolean
   onSave: (
     model: string,
-    apiKey: string,
+    providerKeys: ProviderKeys,
     baseUrl: string,
     sampling: SamplingParams,
     context: ContextConfig,
@@ -103,7 +104,7 @@ function ModelRow({ name, value, onChange, choices, emptyChoice, placeholder, ti
 
 export function SettingsPanel({
   model,
-  apiKey,
+  providerKeys,
   baseUrl,
   sampling,
   context,
@@ -112,7 +113,7 @@ export function SettingsPanel({
   onDirtyChange,
 }: SettingsPanelProps) {
   const [draftModel, setDraftModel] = useState(model)
-  const [draftApiKey, setDraftApiKey] = useState(apiKey)
+  const [draftProviderKeys, setDraftProviderKeys] = useState<ProviderKeys>(providerKeys)
   const [draftBaseUrl, setDraftBaseUrl] = useState(baseUrl || DEFAULT_BASE_URL)
   const [draftSampling, setDraftSampling] = useState<SamplingParams>(sampling)
   const [draftContext, setDraftContext] = useState<ContextConfig>(context)
@@ -122,6 +123,10 @@ export function SettingsPanel({
   const [detectError, setDetectError] = useState<string | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const detectControllerRef = useRef<AbortController | null>(null)
+
+  // The key field always shows the key of the URL in the box, so changing the
+  // URL can't carry a key to another endpoint.
+  const draftApiKey = keyFor(draftProviderKeys, draftBaseUrl)
 
   useEffect(
     () => () => {
@@ -148,7 +153,7 @@ export function SettingsPanel({
     try {
       const ids = await listModels(
         draftBaseUrl.trim() || DEFAULT_BASE_URL,
-        draftApiKey.trim(),
+        draftApiKey,
         controller.signal,
       )
       if (detectControllerRef.current !== controller) return
@@ -179,7 +184,7 @@ export function SettingsPanel({
 
   const dirty =
     draftModel !== model ||
-    draftApiKey !== apiKey ||
+    JSON.stringify(draftProviderKeys) !== JSON.stringify(providerKeys) ||
     draftBaseUrl !== (baseUrl || DEFAULT_BASE_URL) ||
     JSON.stringify(draftSampling) !== JSON.stringify(sampling) ||
     JSON.stringify(draftContext) !== JSON.stringify(context) ||
@@ -198,12 +203,10 @@ export function SettingsPanel({
       return
     }
     const nextModel = draftModel.trim()
-    const nextApiKey = draftApiKey.trim()
     const nextBaseUrl = draftBaseUrl.trim() || DEFAULT_BASE_URL
-    onSave(nextModel, nextApiKey, nextBaseUrl, draftSampling, nextContext, draftDevMode)
+    onSave(nextModel, draftProviderKeys, nextBaseUrl, draftSampling, nextContext, draftDevMode)
     // The drafts become what was saved, so the tab is no longer dirty.
     setDraftModel(nextModel)
-    setDraftApiKey(nextApiKey)
     setDraftBaseUrl(nextBaseUrl)
     setDraftContext(nextContext)
     setSettingsError(null)
@@ -212,7 +215,7 @@ export function SettingsPanel({
   function revert() {
     resetDetection()
     setDraftModel(model)
-    setDraftApiKey(apiKey)
+    setDraftProviderKeys(providerKeys)
     setDraftBaseUrl(baseUrl || DEFAULT_BASE_URL)
     setDraftSampling(sampling)
     setDraftContext(context)
@@ -321,14 +324,15 @@ export function SettingsPanel({
                 <option value="responses">Responses (xAI, OpenAI, Ollama, vLLM)</option>
               </select>
             </label>
-            <label title="Stored in this browser's localStorage and sent directly to the configured endpoint. Leave blank when the endpoint does not require authentication.">
+            <label title="Remembered in this browser's localStorage for the base URL above, and sent only to that endpoint. Leave blank when the endpoint does not require authentication.">
               <span>API key (optional if endpoint permits)</span>
               <input
                 type="password"
                 value={draftApiKey}
                 onChange={(e) => {
                   resetDetection()
-                  setDraftApiKey(e.target.value)
+                  const key = e.target.value
+                  setDraftProviderKeys((keys) => withKey(keys, draftBaseUrl, key))
                 }}
                 placeholder="provider API key"
                 spellCheck={false}

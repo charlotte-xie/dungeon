@@ -5,7 +5,7 @@ import type { JsonValue, WorldState } from './types'
 
 export const STATE_RULES = buildStateRules()
 
-const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
+export const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
 
 export function isSafeStatePath(path: string): boolean {
   const keys = path.split('.').filter(Boolean)
