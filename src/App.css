@@ -4,7 +4,10 @@
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
+  /* The height the browser shows now, without the room its toolbars take
+     when they are out of sight, so the header and composer stay in view. */
   height: 100vh;
+  height: 100dvh;
   box-sizing: border-box;
 }
 
