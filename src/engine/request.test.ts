@@ -17,9 +17,8 @@ import {
   type ModelMessagesArgs,
 } from './request'
 import type { ModelMessage } from './model/types'
-import { PLOTTER_SYSTEM_PROMPT, buildTurnReminder } from '../prompts'
-import { STATE_RULES } from './state'
-import { MEMORY_RULES, OOC_RULES, PLOT_RULES } from './tools'
+import { buildMemoryRules, buildStateRules, buildTurnReminder, plotterSystemPrompt } from '../prompts'
+import { oocRules, plotRules } from './tools'
 import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
 const SLOTS: AdventureSlots = { scenario: 'A haunted mill.', styleGuide: '' }
@@ -32,7 +31,9 @@ const ALL_FLAGS: ContextFlags = {
 }
 
 // Each record's rules, which travel in the description of the tool that keeps it.
-const RULES = [MEMORY_RULES, PLOT_RULES, STATE_RULES, OOC_RULES]
+const PLOTTER_SYSTEM_PROMPT = plotterSystemPrompt()
+const PLOT_RULES = plotRules()
+const RULES = [buildMemoryRules(), PLOT_RULES, buildStateRules(), oocRules()]
 
 // Records only the Plotter reads in full: the narrator gets the scene in its
 // notes, and the OOC list and recalled memories only through story updates.

@@ -72,7 +72,7 @@ In **Settings**:
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - **Default OOC instructions** — the standing instructions each new adventure starts with, one per line. They ship empty, and the player changes them in play like any OOC direction. British English and the usual reply length are set in the narrator's system prompt, so the Plotter never reads them.
 - **Allow NSFW / mature themes** — the content stance both roles are given.
-- **Developer mode** — off by default and remembered in the browser. It adds the **State** and **Context** tabs, the trace and error details beside each reply, and the technical settings: the reviser, temperature, compaction limits, the summary length, the state cleanup nudge, and the experimental flags that switch records and context options on or off.
+- **Developer mode** — off by default and remembered in the browser. It adds the **State**, **Context** and **Prompts** tabs, the trace and error details beside each reply, and the technical settings: the reviser, temperature, compaction limits, the summary length, the state cleanup nudge, and the experimental flags that switch records and context options on or off.
 
 The scenario brief and style guide are the adventure's own, edited in the **Adventure** tab beside the synopsis, its OOC list and arcs.
 
@@ -89,9 +89,9 @@ New settings default to the Responses API. Grok 4.7 supports low, medium, high, 
   - `persistence.ts`: all `localStorage` IO, the save-file format, and its migrations.
   - `providerKeys.ts`: what identifies an endpoint, and the API key remembered for each.
   - `steering.ts`, `turnRecovery.ts`, `operation.ts`: Rewrite guidance and carrying the player's OOC and arc edits across restores, undo/redo/retry, and coordination of the running operation.
-- `src/prompts/*.md`: the product's own LLM prompts (the narrator's and the Plotter's system prompts, the Plotter's per-turn steps and nudges, turn reminders, each record's rules for its tool's description, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. A file holding several short prompts splits them under `## name` headings. Prompt wording lives here rather than in code, and tests don't pin it. They are part of the game, not instructions for coding agents.
+- `src/prompts/*.md`: the product's own LLM prompts (the narrator's and the Plotter's system prompts, the Plotter's per-turn steps and nudges, turn reminders, each record's rules for its tool's description, summariser, reviser), loaded by `src/prompts.ts` with `{{var}}` templating. A file holding several short prompts splits them under `## name` headings. Every prompt is read when it is used, so an edit in the Prompts tab, kept in the browser, applies from the next request. Prompt wording lives here rather than in code, and tests don't pin it. They are part of the game, not instructions for coding agents.
 - `src/hooks/`: React hooks. `useGameController.ts` drives turns.
-- `src/ui/`: the tabs and their panels. Every player sees Play, Adventure (the scenario brief, style guide, the editable synopsis of the older turns, OOC list, and the arcs, hidden until revealed because they give the plot away), Saves and Settings. Developer mode adds State (memory, live state and the chronicle) and Context (the next requests exactly as they will be posted), and the trace beside each reply.
+- `src/ui/`: the tabs and their panels. Every player sees Play, Adventure (the scenario brief, style guide, the editable synopsis of the older turns, OOC list, and the arcs, hidden until revealed because they give the plot away), Saves and Settings. Developer mode adds State (memory, live state and the chronicle), Context (the next requests exactly as they will be posted) and Prompts (each prompt file, to edit and try in play, and reset to its default), and the trace beside each reply.
 
 ## Working on this project
 

@@ -6,7 +6,7 @@
 // The chronicle module decides which turns to fold in and at what target
 // length; the agent just renders the inputs and calls the model.
 
-import { SUMMARIZER_SYSTEM_PROMPT, buildSummarizerInputs } from '../../prompts'
+import { buildSummarizerInputs, summarizerSystemPrompt } from '../../prompts'
 import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type { ApiProtocol, ModelMessage, ReasoningEffort } from '../model/types'
@@ -49,7 +49,7 @@ export async function runSummarizer(
   const userContent = buildSummarizerInputs(input.scenario, input.previousSummary, input.turns, input.targetChars)
 
   const messages: ModelMessage[] = [
-    { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },
+    { role: 'system', content: summarizerSystemPrompt() },
     { role: 'user', content: userContent },
   ]
 

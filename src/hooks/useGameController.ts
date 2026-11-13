@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { buildNewAdventureBootstrap, CONTINUE_DIRECTIVE } from '../prompts'
+import { buildNewAdventureBootstrap, continueDirective, narratorSystemPrompt } from '../prompts'
 import {
   EmptyNarrativeError,
   nextTurnRequests,
@@ -77,7 +77,6 @@ import {
 // Everything the turn engine needs from app settings. Owned by useSettings;
 // passed in each render so the controller always sees the current values.
 export interface GameSettings {
-  systemPrompt: string
   model: string
   apiKey: string
   baseUrl: string
@@ -123,7 +122,7 @@ const PLOTTER_STATUS: Record<PlotterStage, string> = {
 // memory, chronicle, turns, recovery state) and the turn engine that mutates it.
 // App.tsx is a pure view over what this returns.
 export function useGameController(settings: GameSettings) {
-  const { systemPrompt, model, apiKey, baseUrl, sampling, context } = settings
+  const { model, apiKey, baseUrl, sampling, context } = settings
 
   const [slots, setSlots] = useState<AdventureSlots>(() => loadStoredSlots())
   const [state, setState] = useState<WorldState>(() => loadStoredState())
@@ -446,7 +445,7 @@ export function useGameController(settings: GameSettings) {
     data: StoryData
   }): NarratorContext {
     return {
-      systemPrompt,
+      systemPrompt: narratorSystemPrompt(),
       model,
       reasoningEffort: context.narratorReasoning,
       plotterModel: context.plotterModel,
@@ -713,7 +712,7 @@ export function useGameController(settings: GameSettings) {
     if (operations.busy || turns.length === 0) return
     if (unanswered) return retry()
     await runTurn({
-      pendingTurn: makePendingTurn('continue', CONTINUE_DIRECTIVE),
+      pendingTurn: makePendingTurn('continue', continueDirective()),
       baseTurns: turns,
       world: worldSnapshot(),
       slots,

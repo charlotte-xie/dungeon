@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { UPDATE_MEMORY_TOOL } from './engine/tools'
 import {
   buildMemoryRules,
   buildNewAdventureBootstrap,
@@ -7,15 +8,27 @@ import {
   buildStateRules,
   buildSummarizerInputs,
   buildTurnReminder,
-  CONTINUE_DIRECTIVE,
-  DEFAULT_SYSTEM_PROMPT,
-  PLOTTER_SYSTEM_PROMPT,
-  NSFW_OFF_PROMPT,
-  NSFW_ON_PROMPT,
-  REVISER_SYSTEM_PROMPT,
-  SUMMARIZER_SYSTEM_PROMPT,
+  contentStance,
+  continueDirective,
+  narratorSystemPrompt,
+  plotterSystemPrompt,
+  reviserSystemPrompt,
+  summarizerSystemPrompt,
   plotterTurnText,
+  missingSections,
+  promptOverrides,
+  PROMPT_DEFAULTS,
+  setPromptOverrides,
 } from './prompts'
+
+// The prompts as shipped: no test here sets an edit.
+const CONTINUE_DIRECTIVE = continueDirective()
+const DEFAULT_SYSTEM_PROMPT = narratorSystemPrompt()
+const PLOTTER_SYSTEM_PROMPT = plotterSystemPrompt()
+const NSFW_ON_PROMPT = contentStance(true)
+const NSFW_OFF_PROMPT = contentStance(false)
+const REVISER_SYSTEM_PROMPT = reviserSystemPrompt()
+const SUMMARIZER_SYSTEM_PROMPT = summarizerSystemPrompt()
 
 // The prompts' wording is the maintainer's to change. These tests check only
 // what the code relies on, and guard against wording that play showed pulls
@@ -104,3 +117,39 @@ describe('prompts', () => {
     expect(SUMMARIZER_SYSTEM_PROMPT).not.toContain('1,500')
   })
 })
+
+describe('edits to the prompts', () => {
+  afterEach(() => setPromptOverrides({}))
+
+  it('apply from the next use, and the default comes back once the edit is gone', () => {
+    setPromptOverrides({ 'dm-system.md': 'Edited brief.' })
+    expect(narratorSystemPrompt()).toBe('Edited brief.')
+    setPromptOverrides({})
+    expect(narratorSystemPrompt()).toBe(DEFAULT_SYSTEM_PROMPT)
+  })
+
+  it('reach a section read by name, and the tool description that carries a record’s rules', () => {
+    const reminders = PROMPT_DEFAULTS['turn-reminder.md'].replace(/## player\n[^\n]*/, '## player\nEdited reminder.')
+    setPromptOverrides({ 'turn-reminder.md': reminders, 'memory-rules.md': 'Edited rules.' })
+    expect(buildTurnReminder('player')).toBe('Edited reminder.')
+    expect(buildTurnReminder('continue')).toBe(sectionOf(PROMPT_DEFAULTS['turn-reminder.md'], 'continue'))
+    expect(UPDATE_MEMORY_TOOL.description.startsWith('Edited rules.\n\n')).toBe(true)
+  })
+
+  it('keeps only edits to prompt files that differ from the default', () => {
+    setPromptOverrides({ 'notes.md': 'x', 'reviser.md': PROMPT_DEFAULTS['reviser.md'], 'nsfw.md': '## on\nA\n## off\nB' })
+    expect(promptOverrides()).toEqual({ 'nsfw.md': '## on\nA\n## off\nB' })
+  })
+
+  it('names the sections an edit has dropped', () => {
+    expect(missingSections('nsfw.md', '## on\nA')).toEqual(['off'])
+    expect(missingSections('nsfw.md', PROMPT_DEFAULTS['nsfw.md'])).toEqual([])
+    expect(missingSections('dm-system.md', 'Anything at all.')).toEqual([])
+  })
+})
+
+function sectionOf(template: string, name: string): string {
+  const start = template.indexOf(`## ${name}\n`) + `## ${name}\n`.length
+  const end = template.indexOf('\n## ', start)
+  return template.slice(start, end < 0 ? undefined : end).trim()
+}

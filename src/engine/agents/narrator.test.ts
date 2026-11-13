@@ -10,7 +10,7 @@ import {
 } from './narrator'
 import { completeModel } from '../model/client'
 import type { ModelCompletion, ModelCompletionRequest, ModelMessage } from '../model/types'
-import { STATE_RULES } from '../state'
+import { buildStateRules } from '../../prompts'
 import type { Turn } from '../types'
 
 vi.mock('../model/client', () => ({ completeModel: vi.fn() }))
@@ -109,7 +109,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(plotterReq.tools?.map((t) => t.name)).toEqual(
       expect.arrayContaining(['update_state', 'update_memory', 'recall_memory', 'steer']),
     )
-    expect(plotterReq.tools?.find((t) => t.name === 'update_state')?.description).toBe(STATE_RULES)
+    expect(plotterReq.tools?.find((t) => t.name === 'update_state')?.description).toBe(buildStateRules())
     expect(plotterReq.messages.some((m) => m.toolCalls?.some((c) => c.id === 'ctx-check-state'))).toBe(
       true,
     )
@@ -118,7 +118,7 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     // notes for the reply, as one call of its own after the player's input.
     expect(narratorReq.label).toBe('narrator:0')
     expect(narratorReq.tools ?? []).toEqual([])
-    expect(narratorReq.messages.some((m) => m.content.includes(STATE_RULES))).toBe(false)
+    expect(narratorReq.messages.some((m) => m.content.includes(buildStateRules()))).toBe(false)
     const inputIdx = narratorReq.messages.findIndex((m) => m.role === 'user' && m.content === 'I knock.')
     const call = narratorReq.messages[inputIdx + 1]
     expect(call.toolCalls?.map((c) => c.name)).toEqual(['get_steer'])

@@ -8,9 +8,11 @@ import {
   loadStoredDevMode,
   loadStoredOocBaseline,
   loadStoredPlotBaseline,
+  loadStoredPromptOverrides,
   loadStoredProviderKeys,
   loadStoredRecovery,
   normalizeSavedGame,
+  persistPromptOverrides,
   persistProviderKeys,
 } from './persistence'
 import { keyFor } from './providerKeys'
@@ -216,6 +218,44 @@ describe('role settings', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('prompt edits', () => {
+  function stubStorage(items: Record<string, string>) {
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => items[key] ?? null,
+      setItem: (key: string, value: string) => {
+        items[key] = value
+      },
+      removeItem: (key: string) => {
+        delete items[key]
+      },
+    })
+    return items
+  }
+
+  it('restores what was saved, and keeps nothing once every edit is reset', () => {
+    const items = stubStorage({})
+    persistPromptOverrides({ 'dm-system.md': 'Edited brief.' })
+    expect(loadStoredPromptOverrides()).toEqual({ 'dm-system.md': 'Edited brief.' })
+    persistPromptOverrides({})
+    expect(items).toEqual({})
+    expect(loadStoredPromptOverrides()).toEqual({})
+  })
+
+  it('keeps only text, under names that are safe to look up', () => {
+    stubStorage({
+      'dm.promptOverrides': '{"nsfw.md": "Text.", "reviser.md": 7, "__proto__": "x", "constructor": "y"}',
+    })
+    expect(loadStoredPromptOverrides()).toEqual({ 'nsfw.md': 'Text.' })
+  })
+
+  it('has none when what is stored is not a map of edits', () => {
+    stubStorage({ 'dm.promptOverrides': '["dm-system.md"]' })
+    expect(loadStoredPromptOverrides()).toEqual({})
+    stubStorage({ 'dm.promptOverrides': '{not json' })
+    expect(loadStoredPromptOverrides()).toEqual({})
+  })
 })
 
 describe('provider keys', () => {

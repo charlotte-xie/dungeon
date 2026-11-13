@@ -1,9 +1,6 @@
 // World-state primitives: immutable path ops.
 
-import { buildStateRules } from '../prompts'
 import type { JsonValue, WorldState } from './types'
-
-export const STATE_RULES = buildStateRules()
 
 export const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
 

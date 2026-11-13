@@ -45,6 +45,7 @@ export const LS_DEV_MODE = 'dm.devMode'
 export const LS_RECOVERY = 'dm.recovery'
 export const LS_OOC_BASELINE = 'dm.oocBaseline'
 export const LS_PLOT_BASELINE = 'dm.plotBaseline'
+export const LS_PROMPT_OVERRIDES = 'dm.promptOverrides'
 
 const LS_MESSAGES_V1 = 'dm.messages'
 // The trace toggle that developer mode replaced; every browser stored it.
@@ -247,6 +248,32 @@ export function loadStoredProviderKeys(): ProviderKeys {
     // ignore quota / disabled storage
   }
   return keys
+}
+
+// The player's edits to the prompt files, by file name, from developer
+// mode's Prompts tab. Only text is kept; which names are prompt files is the
+// prompts' own to decide.
+export function loadStoredPromptOverrides(): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_PROMPT_OVERRIDES) ?? 'null')
+    if (!isRecord(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string' && !UNSAFE_PATH_SEGMENTS.has(entry[0]),
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+export function persistPromptOverrides(overrides: Readonly<Record<string, string>>) {
+  try {
+    if (Object.keys(overrides).length) localStorage.setItem(LS_PROMPT_OVERRIDES, JSON.stringify(overrides))
+    else localStorage.removeItem(LS_PROMPT_OVERRIDES)
+  } catch {
+    // ignore quota / disabled storage
+  }
 }
 
 export function persistProviderKeys(keys: ProviderKeys) {

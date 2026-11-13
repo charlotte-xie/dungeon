@@ -1,4 +1,4 @@
-export type AppTab = 'play' | 'adventure' | 'saves' | 'settings' | 'state' | 'context'
+export type AppTab = 'play' | 'adventure' | 'saves' | 'settings' | 'state' | 'context' | 'prompts'
 
 const PLAYER_TABS: { id: AppTab; label: string }[] = [
   { id: 'play', label: 'Play' },
@@ -11,6 +11,7 @@ const PLAYER_TABS: { id: AppTab; label: string }[] = [
 const DEV_TABS: { id: AppTab; label: string; title: string }[] = [
   { id: 'state', label: 'State', title: 'Memory, live state and the chronicle' },
   { id: 'context', label: 'Context', title: 'The next requests, exactly as they will be posted' },
+  { id: 'prompts', label: 'Prompts', title: 'The prompts, to edit and try in play' },
 ]
 
 export function TabBar({ tab, devMode, onChange }: {

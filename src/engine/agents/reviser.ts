@@ -6,7 +6,7 @@
 // One-shot: no tool use, no iteration loop. The reviser never mutates state,
 // plot, or memory — it only rewrites prose.
 
-import { REVISER_SYSTEM_PROMPT } from '../../prompts'
+import { reviserSystemPrompt } from '../../prompts'
 import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
 import type { ApiProtocol, ModelCompletionRequest, ModelConnection, ModelMessage } from '../model/types'
@@ -36,7 +36,7 @@ function buildReviserMessages(
 ): ModelMessage[] {
   const styleGuide = slots.styleGuide?.trim() ?? ''
   const messages: ModelMessage[] = [
-    { role: 'system', content: REVISER_SYSTEM_PROMPT },
+    { role: 'system', content: reviserSystemPrompt() },
   ]
   if (styleGuide) {
     messages.push({

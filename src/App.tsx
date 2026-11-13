@@ -1,6 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import './App.css'
-import { DEFAULT_SYSTEM_PROMPT } from './prompts'
 import { entryTurnNumbers, summaryText, totalChronicleEntries, withSummaryText } from './engine/chronicle'
 import { DEFAULT_STATE } from './engine/config'
 import { describeModelError } from './engine/model/errors'
@@ -11,6 +10,7 @@ import { useSaves } from './hooks/useSaves'
 import { useSettings } from './hooks/useSettings'
 import { AdventurePanel } from './ui/AdventurePanel'
 import { ContextViewer } from './ui/ContextViewer'
+import { PromptsPanel } from './ui/PromptsPanel'
 import { Elapsed } from './ui/Elapsed'
 import { EditableMessage } from './ui/EditableMessage'
 import { ErrorDetails } from './ui/ErrorDetails'
@@ -35,10 +35,9 @@ function traceCalls(t: Turn): ModelCallView[] {
 }
 
 function App() {
-  const systemPrompt = DEFAULT_SYSTEM_PROMPT
   const settings = useSettings()
   const { model, apiKey, baseUrl, sampling, context, devMode } = settings
-  const game = useGameController({ systemPrompt, model, apiKey, baseUrl, sampling, context })
+  const game = useGameController({ model, apiKey, baseUrl, sampling, context })
   const saves = useSaves({
     captureGame: game.captureGame,
     restoreGame: game.restoreGame,
@@ -543,6 +542,7 @@ function App() {
         />
       )}
       {devMode && tab === 'context' && <ContextViewer requests={game.nextRequests()} />}
+      {devMode && tab === 'prompts' && <PromptsPanel busy={thinking} onDirtyChange={setTabDirty} />}
       {newAdventureSlots && (
         <NewAdventurePrompt
           slots={newAdventureSlots}

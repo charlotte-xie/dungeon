@@ -37,12 +37,7 @@
 // The payloads are pure data. The per-record bookkeeping guidance (what to
 // record this turn, soft size pressure) travels in the Plotter's instruction.
 
-import {
-  NSFW_OFF_PROMPT,
-  NSFW_ON_PROMPT,
-  PLOTTER_SYSTEM_PROMPT,
-  buildTurnReminder,
-} from '../prompts'
+import { buildTurnReminder, contentStance, plotterSystemPrompt } from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import {
@@ -295,7 +290,7 @@ function buildFrameMessages(
   systemPrompt: string,
   role: 'narrator' | 'plotter',
 ): ModelMessage[] {
-  const parts = [systemPrompt, args.nsfw ? NSFW_ON_PROMPT : NSFW_OFF_PROMPT]
+  const parts = [systemPrompt, contentStance(args.nsfw)]
   for (const def of ADVENTURE_SLOTS) {
     const value = (args.slots[def.key] ?? '').trim()
     if (!value || (role === 'plotter' && def.narratorOnly)) continue
@@ -616,7 +611,7 @@ export interface PlotterMessagesArgs extends ModelMessagesArgs {
 // latest input, the records whole as tool results, then its instruction.
 export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections {
   return {
-    system: buildFrameMessages(args, PLOTTER_SYSTEM_PROMPT, 'plotter'),
+    system: buildFrameMessages(args, plotterSystemPrompt(), 'plotter'),
     chronicle: chronicleMessages(args.chronicle),
     history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'plotter'),
     tail: [
