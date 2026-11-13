@@ -29,7 +29,7 @@ Security of personal information is paramount. These rules apply to every contri
   git config --local user.email charlotte-xie@users.noreply.github.com
   ```
 
-- **Credentials stay yours.** Agents never create, change, or swap logins, and never fall back to a different one. If a push asks for credentials or fails to authenticate, the agent stops and asks you. When you ask, an agent may set up your API key for local play, in `.env.local` or the browser, but never prints, logs, or commits it.
+- **Credentials stay yours.** Agents never create, change, or swap logins, and never fall back to a different one. If a push asks for credentials or fails to authenticate, the agent stops and asks you. When you ask, an agent may set up your API key for local play in `.env.local`, but never prints, logs, or commits it.
 - **Nothing leaves without your say.** Agents don't send repo content or your data to outside services available on your machine (mail, chat, cloud storage, MCP servers) unless you ask. The only git remote is `origin` at `https://github.com/charlotte-xie/dungeon.git`; don't add others. Commit and push only when asked: pushing to `master` publishes the site.
 
 ### Untrusted input
