@@ -120,4 +120,4 @@ Each of these comes from rebuilding one 26-turn story, so one run.
 - Look for what recurs across turns and runs. A single hand-back or odd ending is not a finding.
 - A fix often moves a failure rather than removing it: the ending rule that stopped prompting endings started ultimatums. After a change, look for the new habit as well as the old one.
 - Several changes tried at once can't be told apart.
-- Check the request as it will be posted (Inspect), not a summary of it.
+- Check the request as it will be posted (the Context tab), not a summary of it.

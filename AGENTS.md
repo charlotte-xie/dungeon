@@ -72,9 +72,9 @@ In **Settings**:
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - **Default OOC instructions** — the standing instructions each new adventure starts with, one per line. They ship empty, and the player changes them in play like any OOC direction. British English and the usual reply length are set in the narrator's system prompt, so the Plotter never reads them.
 - **Allow NSFW / mature themes** — the content stance both roles are given.
-- **Developer mode** — off by default and remembered in the browser. It adds the **State** and **Context** tabs, the trace and error details beside each reply, and the technical settings: the reviser, temperature, compaction limits, the state cleanup nudge, and the experimental flags that switch records and context options on or off.
+- **Developer mode** — off by default and remembered in the browser. It adds the **State** and **Context** tabs, the trace and error details beside each reply, and the technical settings: the reviser, temperature, compaction limits, the summary length, the state cleanup nudge, and the experimental flags that switch records and context options on or off.
 
-The scenario brief and style guide are the adventure's own, edited in the **Adventure** tab beside its OOC list and arcs.
+The scenario brief and style guide are the adventure's own, edited in the **Adventure** tab beside the synopsis, its OOC list and arcs.
 
 New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The plotter runs first: it updates the records, recalls memories and steers the reply, and the narrator then writes from that briefing. The two send separate requests, and each reuses its own cached prefix from the previous turn, so the plotter model can differ from the narrator model without losing caching.
 
