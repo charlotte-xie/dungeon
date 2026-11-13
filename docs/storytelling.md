@@ -94,6 +94,7 @@ Each of these breaks a requirement above. Seen regularly, they mean the prompts 
 - Explaining instead of telling: "It sounds like a practical offer. It also sounds like an invitation…", "…if you leave him, the creature will be on you next."
 - The same closing image reply after reply: "Outside, a bus hisses… Inside, the evening has narrowed to…", "The ticket stub lies between you…".
 - The same detail escalating reply after reply: "The rain drums harder", "drives harder", "beats harder".
+- The player's input echoed back instead of told as story around their direction: "stop him" returned as "You stop him."
 - The player's character moved, or given feelings, beyond their input: "You turn left.", "neither of you is in a hurry to leave".
 - The player's character told in the third person: "They finish the drinks".
 - The player's character made to speak on a Continue: "'You telephoned someone from the shop that night,' you say." (it's OK if the player previously gave an open ended instruction like "go about my day", but shouldn't make any significant decisions for them)
