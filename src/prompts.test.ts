@@ -141,6 +141,12 @@ describe('edits to the prompts', () => {
     expect(promptOverrides()).toEqual({ 'nsfw.md': '## on\nA\n## off\nB' })
   })
 
+  it('reads a section an older edit lacks from the default, so play carries on', () => {
+    setPromptOverrides({ 'nsfw.md': '## on\nEdited stance.' })
+    expect(contentStance(true)).toBe('Edited stance.')
+    expect(contentStance(false)).toBe(sectionOf(PROMPT_DEFAULTS['nsfw.md'], 'off'))
+  })
+
   it('names the sections an edit has dropped', () => {
     expect(missingSections('nsfw.md', '## on\nA')).toEqual(['off'])
     expect(missingSections('nsfw.md', PROMPT_DEFAULTS['nsfw.md'])).toEqual([])

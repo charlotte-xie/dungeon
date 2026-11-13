@@ -91,11 +91,12 @@ export function missingSections(file: PromptFile, text: string): string[] {
   return [...sections(PROMPT_DEFAULTS[file]).keys()].filter((name) => !kept.has(name))
 }
 
-// Reads a section by name, filled with its variables; a missing section is a
-// bug.
+// Reads a section by name, filled with its variables. An edit made before its
+// default gained a section reads that section from the default; a section
+// missing from the default is a bug.
 function sectionReader<Name extends string>(file: PromptFile) {
   return (name: Name, vars: Record<string, string | number> = {}): string => {
-    const text = sections(promptText(file)).get(name)
+    const text = sections(promptText(file)).get(name) ?? sections(PROMPT_DEFAULTS[file]).get(name)
     if (text === undefined) throw new Error(`${file} has no "## ${name}" section`)
     return fill(text, vars)
   }

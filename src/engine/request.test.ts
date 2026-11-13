@@ -17,7 +17,7 @@ import {
   type ModelMessagesArgs,
 } from './request'
 import type { ModelMessage } from './model/types'
-import { buildMemoryRules, buildStateRules, buildTurnReminder, plotterSystemPrompt } from '../prompts'
+import { buildMemoryRules, buildStateRules, buildTurnReminder, plotterSystemPrompt, setPromptOverrides } from '../prompts'
 import { oocRules, plotRules } from './tools'
 import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
@@ -371,6 +371,20 @@ describe('buildPlotterMessages layout', () => {
     const shared = first.slice(0, -6)
     expect(shared[shared.length - 1]).toMatchObject({ role: 'user', content: 'I knock.' })
     expect(second.slice(0, shared.length)).toEqual(shared)
+  })
+
+  it('carries edits to the prompts from the next request, in the system prompt and the tools', () => {
+    const history = [playerTurn('t1', 'I knock.')]
+    setPromptOverrides({ 'plotter-system.md': 'Edited Plotter brief.', 'memory-rules.md': 'Edited memory rules.' })
+    try {
+      const p = buildPlotterSections({ ...args(history), pivot: PIVOT })
+      expect(p.system[0].content.startsWith('Edited Plotter brief.\n\n')).toBe(true)
+      const memoryTool = buildPlotterTools(ALL_FLAGS).find((t) => t.name === 'update_memory')
+      expect(memoryTool?.description.startsWith('Edited memory rules.\n\n')).toBe(true)
+    } finally {
+      setPromptOverrides({})
+    }
+    expect(buildPlotterSections({ ...args(history), pivot: PIVOT }).system[0].content.startsWith(`${PLOTTER_SYSTEM_PROMPT}\n\n`)).toBe(true)
   })
 
   it('shares the story with the narrator request, without the narrator’s story updates', () => {
