@@ -13,7 +13,7 @@ import {
   loadStoredSampling,
   persistProviderKeys,
 } from '../engine/persistence'
-import { keyFor, type ProviderKeys } from '../engine/providerKeys'
+import { keyFor, withDevKey, type ProviderKeys } from '../engine/providerKeys'
 import type { ContextConfig, SamplingParams } from '../engine/types'
 
 // App-level configuration: connection, sampling and context-assembly options,
@@ -21,7 +21,7 @@ import type { ContextConfig, SamplingParams } from '../engine/types'
 // controller, not here.
 export function useSettings() {
   const [model, setModel] = useState(() => loadStored(LS_MODEL, DEFAULT_MODEL))
-  const [providerKeys, setProviderKeys] = useState<ProviderKeys>(() => loadStoredProviderKeys())
+  const [providerKeys, setProviderKeys] = useState<ProviderKeys>(() => withDevKey(loadStoredProviderKeys()))
   const [baseUrl, setBaseUrl] = useState(() => loadStored(LS_BASE_URL, DEFAULT_BASE_URL))
   const [sampling, setSampling] = useState<SamplingParams>(() => loadStoredSampling())
   const [context, setContext] = useState<ContextConfig>(() => loadStoredContext())

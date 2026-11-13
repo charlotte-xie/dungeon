@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BASE_URL } from './config'
-import { endpointId, keyFor, withKey } from './providerKeys'
+import { endpointId, keyFor, withDevKey, withKey } from './providerKeys'
 
 const XAI = 'https://api.x.ai/v1'
 const MISTRAL = 'https://api.mistral.ai/v1'
@@ -57,5 +57,23 @@ describe('provider keys', () => {
   it('finds nothing inherited under an endpoint named after an object member', () => {
     expect(keyFor({}, 'constructor')).toBe('')
     expect(keyFor({}, '__proto__')).toBe('')
+  })
+})
+
+describe('the dev server’s xAI key', () => {
+  it('stands in for xAI when the browser has no key of its own, and for no other endpoint', () => {
+    const keys = withDevKey(withKey({}, MISTRAL, 'mistral-key'), 'dev-key')
+    expect(keyFor(keys, XAI)).toBe('dev-key')
+    expect(keyFor(keys, MISTRAL)).toBe('mistral-key')
+  })
+
+  it('gives way to a key the browser saved for xAI', () => {
+    expect(keyFor(withDevKey(withKey({}, XAI, 'saved-key'), 'dev-key'), XAI)).toBe('saved-key')
+  })
+
+  it('is empty outside the dev server, so nothing changes', () => {
+    const keys = withKey({}, MISTRAL, 'mistral-key')
+    expect(withDevKey(keys)).toBe(keys)
+    expect(withDevKey(keys, '')).toBe(keys)
   })
 })
