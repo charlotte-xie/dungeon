@@ -19,6 +19,9 @@ interface AdventurePanelProps {
   // Developer mode shows the arcs without asking.
   devMode: boolean
   busy: boolean
+  // A new synopsis is being written in the background, and will replace this
+  // one when it goes in, so the synopsis can't be edited until then.
+  compacting: boolean
   onSaveSlots: (next: AdventureSlots) => void
   onSaveOoc: (next: string[]) => void
   onSavePlot: (next: string[]) => void
@@ -78,6 +81,7 @@ export function AdventurePanel({
   context,
   devMode,
   busy,
+  compacting,
   onSaveSlots,
   onSaveOoc,
   onSavePlot,
@@ -122,7 +126,8 @@ export function AdventurePanel({
   const slotsDirty = ADVENTURE_SLOTS.some((def) => (slotDrafts[def.key] ?? '') !== (slots[def.key] ?? ''))
   const oocDirty = context.includeOoc && oocDraft !== listToDraft(ooc)
   const plotDirty = context.includePlotOutline && plotDraft !== listToDraft(plot)
-  const synopsisDirty = synopsisDraft !== synopsis
+  // Saving trims the synopsis, so space at either end is no edit.
+  const synopsisDirty = synopsisDraft.trim() !== synopsis.trim()
   const anyDirty = slotsDirty || oocDirty || plotDirty || synopsisDirty
   useReportDirty(anyDirty, onDirtyChange)
 
@@ -207,13 +212,14 @@ export function AdventurePanel({
                 value={synopsisDraft}
                 onChange={(e) => setSynopsisDraft(e.target.value)}
                 rows={8}
-                readOnly={busy}
+                readOnly={busy || compacting}
               />
               <small className="hint">
                 The DM&apos;s synopsis of the older turns, written afresh as the story grows. Edit it
                 to change what the DM remembers of them, and each new synopsis builds on what you
                 wrote. Clear it and the DM reads those turns in full again until the next one is
                 written. Changes apply from the next turn.
+                {compacting && ' The DM is writing a new synopsis now; you can edit it once that is done.'}
               </small>
             </>
           ) : (

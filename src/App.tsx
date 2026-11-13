@@ -482,6 +482,7 @@ function App() {
           context={context}
           devMode={devMode}
           busy={thinking}
+          compacting={game.compacting}
           onSaveSlots={game.commitSlots}
           onSaveOoc={game.commitOoc}
           onSavePlot={game.commitPlot}
