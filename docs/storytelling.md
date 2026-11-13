@@ -24,7 +24,7 @@ What a good story in this app is. Prompt and design changes are checked against 
 - The character is the player's. They do only what the player's input says or implies, on a Continue too: the story never has them act, speak or decide beyond it.
 - Their thoughts, feelings and intentions are the player's own, never written for them, alone or as something shared with someone else ("something neither of you has named").
 - In the story they are always "you". Others may know them by a name, from the scenario, the player, or one that fits the story from the start, but nothing ever calls them "the player".
-- Each reply opens with the player's move, briefly, in their exact words when they gave them. When the player gives only the gist of what they say, it is told without inventing a quote.
+- The story reflects the player's input wherever it fits the telling best, with their direct speech quoted verbatim. When the player gives only the gist of what they say, it is told without inventing a quote.
 
 ## NPCs
 
