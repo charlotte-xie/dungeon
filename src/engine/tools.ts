@@ -18,6 +18,10 @@ export const MAX_OOC_ITEM_CHARS = 300
 export const EVENTS_FACET = 'events'
 export const MAX_ENTRY_EVENTS = 5
 
+// An entry kept as a single sentence, as old saves have them, moves under
+// this facet before anything is written below it.
+const SINGLE_NOTE_FACET = 'is'
+
 // The entry's events list that a path writes to or under, if any.
 function eventsPathOf(path: string): string | undefined {
   const segments = path.split('.').filter(Boolean)
@@ -571,6 +575,16 @@ export function executeTool(
       const notes: string[] = []
       let failed = false
       let next: Memory = memory
+      // Put a value at a path. A write below an entry that is a single
+      // sentence adds to that note instead of replacing it.
+      const put = (path: string, value: JsonValue): void => {
+        const [entry, ...below] = path.split('.').filter(Boolean)
+        const held = getByPath(next, entry)
+        if (below.length > 0 && typeof held === 'string') {
+          next = setByPath(next, entry, { [SINGLE_NOTE_FACET]: held })
+        }
+        next = setByPath(next, path, value)
+      }
       // Remove a path and prune any ancestor objects it leaves empty.
       const deleteAndPrune = (m: Memory, path: string): Memory => {
         let out = deleteByPath(m, path)
@@ -614,7 +628,7 @@ export function executeTool(
           )
         } else {
           const replaced = existing !== undefined
-          next = setByPath(next, toRaw, value)
+          put(toRaw, value)
           notes.push(`moved ${fromPath} → ${toRaw}${replaced ? ' (replaced previous value)' : ''}`)
         }
       }
@@ -636,7 +650,7 @@ export function executeTool(
           next = deleteAndPrune(next, path)
           return true
         }
-        next = setByPath(next, path, value)
+        put(path, value)
         return true
       }
 
@@ -645,7 +659,7 @@ export function executeTool(
       const addEvents = (path: string, value: JsonValue): void => {
         const held = eventItems(getByPath(next, path)) ?? []
         const added = (eventItems(value) ?? []).filter((item) => !held.includes(item))
-        next = setByPath(next, path, [...held, ...added])
+        put(path, [...held, ...added])
       }
 
       // A set replaces the value at its path; paths it doesn't name survive.

@@ -181,6 +181,34 @@ describe('tool execution boundaries', () => {
     expect(result.result).toBe('ok — memory: set the_baker.bond')
   })
 
+  it('keeps an entry held as a single sentence when something is written below it', () => {
+    const note = 'Hesta, the baker on Mill Lane.'
+    const update = (args: object) =>
+      executeTool('update_memory', JSON.stringify(args), { state: {}, plot: [], memory: { hesta: note }, ooc: [] })
+        .data.memory
+
+    expect(update({ events: { hesta: 'Hesta hid the watch.' } })).toEqual({
+      hesta: { is: note, events: ['Hesta hid the watch.'] },
+    })
+    expect(update({ set: { 'hesta.mood': 'wary' } })).toEqual({ hesta: { is: note, mood: 'wary' } })
+    expect(update({ merge: { hesta: { wants: { shop: 'keep the bakery' } } } })).toEqual({
+      hesta: { is: note, wants: { shop: 'keep the bakery' } },
+    })
+    expect(update({ merge: { 'hesta.events': ['Hesta lied.'] } })).toEqual({ hesta: { is: note, events: ['Hesta lied.'] } })
+    expect(
+      executeTool('update_memory', JSON.stringify({ move: { watch: 'hesta.holds' } }), {
+        state: {},
+        plot: [],
+        memory: { hesta: note, watch: 'a watch' },
+        ooc: [],
+      }).data.memory,
+    ).toEqual({ hesta: { is: note, holds: 'a watch' } })
+
+    // Writing the entry itself, or the sentence's own facet, still replaces it.
+    expect(update({ set: { hesta: { is: 'the baker' } } })).toEqual({ hesta: { is: 'the baker' } })
+    expect(update({ set: { 'hesta.is': 'the baker' } })).toEqual({ hesta: { is: 'the baker' } })
+  })
+
   it('replaces the entire value at a path with set, and keeps what merge does not name', () => {
     const thread = { is: 'the drowning', status: 'the families not speaking', truth: 'the rail was cut' }
     const data = { state: {}, plot: [], memory: { drowning: thread }, ooc: [] }
