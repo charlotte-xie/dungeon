@@ -144,7 +144,7 @@ Check each reply against [the storytelling requirements](../storytelling.md). Th
 
 **The player's character**
 
-- After the player's own input, the reply should open with their move: what they did, briefly, and what they said, in their exact words. Note replies that open on someone else's response instead, paraphrase the player's speech, or echo the input word for word.
+- After the player's own input, the story should reflect it, with what they said quoted verbatim. Note replies that echo the input instead of telling how it goes ("stop him" returned as "You stop him."), lose the player's move, paraphrase their speech, or invent a quote from a gist.
 - The narrator moves, speaks or decides for the player ("You turn left."), or tells them what they feel. On Continue, moving the player along through routine is softer; still note it.
 
 **The Plotter**
