@@ -22,6 +22,7 @@
 import { buildTurnReminder, plotterTurnText, type PlotterTurnSection } from '../../prompts'
 import {
   CONTEXT_SUBSYSTEMS,
+  NARRATOR_OWN_CALL_TOOLS,
   buildNarratorMessages,
   buildPlotterGuidance,
   buildPlotterMessages,
@@ -31,13 +32,11 @@ import {
   narratorView,
   storyUpdateCalls,
   type ContextFlags,
+  type ModelMessagesArgs,
 } from '../request'
 import {
   BRIEFING_TOOLS,
-  GET_OOC_INSTRUCTIONS_TOOL,
   GET_STEER_TOOL,
-  GET_STORY_ARCS_TOOL,
-  RECALL_MEMORIES_TOOL,
   RECALL_MEMORY_TOOL,
   STEER_TOOL,
   executeEnabledTool,
@@ -68,7 +67,6 @@ import type {
 } from '../types'
 
 export interface NarratorContext {
-  systemPrompt: string
   model: string
   reasoningEffort?: ReasoningEffort
   plotterModel?: string
@@ -234,16 +232,13 @@ function roleConnections(ctx: NarratorContext): { plotter: ModelConnection; narr
   }
 }
 
-// The story both roles' requests are built from. The turn being played gets
-// its story update once the Plotter is done.
-function storyOf(ctx: NarratorContext) {
-  const latest = ctx.history.length - 1
+// The story both roles' requests are built from.
+function storyOf(ctx: NarratorContext): ModelMessagesArgs {
   return {
-    systemPrompt: ctx.systemPrompt,
     slots: ctx.slots,
     chronicle: ctx.chronicle,
     folded: ctx.folded,
-    history: ctx.history.map((t, i) => (i === latest ? { ...t, storyUpdate: undefined } : t)),
+    history: ctx.history,
     data: ctx.initialData,
     includePriorPlayerTurns: ctx.includePriorPlayerTurns,
     flags: ctx.flags,
@@ -279,18 +274,18 @@ function plotterRequest(
 }
 
 // The narrator's request, from what the Plotter left: the data, its
-// briefing, and the turn's story update.
+// briefing, and the turn's story update, which the turn being played carries
+// as every turn before it does.
 function narratorMessagesFor(
   ctx: NarratorContext,
   data: StoryData,
   briefing: BriefingCall[],
   storyUpdate: StoryUpdate | undefined,
 ): ModelMessage[] {
-  const story = storyOf(ctx)
   const latest = ctx.history.length - 1
   return buildNarratorMessages({
-    ...story,
-    history: story.history.map((t, i) => (i === latest ? { ...t, storyUpdate } : t)),
+    ...storyOf(ctx),
+    history: ctx.history.map((t, i) => (i === latest ? { ...t, storyUpdate } : t)),
     data,
     briefing,
   })
@@ -316,7 +311,7 @@ function narratorRequest(
     reasoningEffort: ctx.reasoningEffort,
     messages,
     ...(options.withSchemas
-      ? { tools: [RECALL_MEMORIES_TOOL, GET_STORY_ARCS_TOOL, GET_OOC_INSTRUCTIONS_TOOL, GET_STEER_TOOL], toolChoice: 'none' as const }
+      ? { tools: [...NARRATOR_OWN_CALL_TOOLS], toolChoice: 'none' as const }
       : {}),
     temperature: ctx.sampling.temperature,
     label: options.label,
@@ -353,8 +348,7 @@ export function nextTurnRequests(
         },
       ]
     : []
-  const latest = ctx.history.length - 1
-  const storyUpdate = buildStoryUpdate(ctx.history.slice(0, latest), [], ctx.initialData, ctx.flags, ctx.folded)
+  const storyUpdate = buildStoryUpdate(narratorView(ctx), [], ctx.initialData, ctx.flags)
   const messages = narratorMessagesFor(ctx, ctx.initialData, [], storyUpdate)
   return [
     ...plotter,
@@ -397,7 +391,9 @@ export async function runNarrator(
 ): Promise<NarratorResult> {
   let data = ctx.initialData
   const { plotter: plotterConnection, narrator: narratorConnection } = roleConnections(ctx)
-  const latest = ctx.history.length - 1
+  // What the narrator holds before this turn: the turn's story update is the
+  // step from here, and is told against it.
+  const viewBefore = narratorView(ctx)
 
   const plotterTrace: TraceEvent[] = []
   const narratorTrace: TraceEvent[] = []
@@ -573,7 +569,7 @@ export async function runNarrator(
     }
     plotting = {
       briefing: [...briefing],
-      storyUpdate: buildStoryUpdate(ctx.history.slice(0, latest), briefing, data, ctx.flags, ctx.folded),
+      storyUpdate: buildStoryUpdate(viewBefore, briefing, data, ctx.flags),
       trace: [...plotterTrace],
       reasoningTokens: reasoningTokens || undefined,
       error,
@@ -591,11 +587,10 @@ export async function runNarrator(
   // narrator, as they would after a Plotter that recorded nothing.
   const storyUpdate = plotting
     ? plotting.storyUpdate
-    : buildStoryUpdate(ctx.history.slice(0, latest), [], data, ctx.flags, ctx.folded)
+    : buildStoryUpdate(viewBefore, [], data, ctx.flags)
   const narratorMessages = narratorMessagesFor(ctx, data, briefing, storyUpdate)
   // The story update and the notes show in the narrator's trace, which is
   // never replayed into either role's context.
-  const viewBefore = narratorView(ctx.folded, ctx.history.slice(0, latest), ctx.flags)
   for (const call of storyUpdate ? storyUpdateCalls(storyUpdate, viewBefore) : []) {
     trace.push({ kind: 'call', name: call.name, arguments: '{}', result: call.result })
   }

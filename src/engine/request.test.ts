@@ -11,15 +11,25 @@ import {
   buildReplyNotes,
   buildStateGuidance,
   buildStoryUpdate,
+  narratorView,
   storyUpdateCalls,
   synopsisStoryUpdate,
   buildStatePayload,
+  NARRATOR_OWN_CALL_TOOLS,
   type ContextFlags,
   type ModelMessagesArgs,
+  type NarratorMessagesArgs,
   type NarratorView,
 } from './request'
 import type { ModelMessage } from './model/types'
-import { buildMemoryRules, buildStateRules, buildTurnReminder, plotterSystemPrompt, setPromptOverrides } from '../prompts'
+import {
+  buildMemoryRules,
+  buildStateRules,
+  buildTurnReminder,
+  narratorSystemPrompt,
+  plotterSystemPrompt,
+  setPromptOverrides,
+} from '../prompts'
 import { oocRules, plotRules } from './tools'
 import type { AdventureSlots, BriefingCall, StoryUpdate, Turn } from './types'
 
@@ -32,8 +42,9 @@ const ALL_FLAGS: ContextFlags = {
   includeOoc: true,
 }
 
-// Each record's rules, which travel in the description of the tool that keeps it.
+const NARRATOR_SYSTEM_PROMPT = narratorSystemPrompt()
 const PLOTTER_SYSTEM_PROMPT = plotterSystemPrompt()
+// Each record's rules, which travel in the description of the tool that keeps it.
 const PLOT_RULES = plotRules()
 const RULES = [buildMemoryRules(), PLOT_RULES, buildStateRules(), oocRules()]
 
@@ -45,6 +56,11 @@ const UPDATE: StoryUpdate = { recalled: { Hesta: { is: 'The baker.' } } }
 
 // A narrator that has been told nothing yet.
 const NOTHING_IN_VIEW: NarratorView = { memory: new Map() }
+
+// What the narrator holds as the turn after these begins.
+function heldAfter(turns: Turn[], folded: Turn[] = []): NarratorView {
+  return narratorView({ folded, history: [...turns, playerTurn('now', 'I wait.')], flags: ALL_FLAGS })
+}
 
 const BRIEFING: BriefingCall[] = [
   { name: 'recall_memory', arguments: '{"names":["player","Hesta"]}', result: '{"player":{}}' },
@@ -66,9 +82,8 @@ function args(
   overrides?: Partial<ContextFlags>,
   reminderAsSystem = true,
   briefing?: BriefingCall[],
-): ModelMessagesArgs {
+): NarratorMessagesArgs {
   return {
-    systemPrompt: 'system prompt',
     slots: SLOTS,
     chronicle: [],
     folded: [],
@@ -83,7 +98,7 @@ function args(
     flags: { ...ALL_FLAGS, ...overrides },
     nsfw: false,
     reminderAsSystem,
-    briefing,
+    briefing: briefing ?? [],
   }
 }
 
@@ -120,7 +135,7 @@ describe('buildNarratorMessages layout', () => {
     const messages = narrator([playerTurn('t1', 'I enter the mill.')])
     const prefix = messages.slice(0, messages.findIndex((m) => m.role === 'user'))
     expect(prefix.map((m) => m.role)).toEqual(['system'])
-    expect(prefix[0].content.startsWith('system prompt\n\n')).toBe(true)
+    expect(prefix[0].content.startsWith(`${NARRATOR_SYSTEM_PROMPT}\n\n`)).toBe(true)
     expect(prefix[0].content).toContain('# Scenario brief\n\nA haunted mill.')
     for (const rules of RULES) {
       expect(messages.some((m) => m.content.includes(rules))).toBe(false)
@@ -210,6 +225,20 @@ describe('buildNarratorMessages layout', () => {
     })
     expect(messages.some((m) => m.toolCalls?.length || m.role === 'tool')).toBe(false)
     expect(messages[messages.length - 2]).toMatchObject({ role: 'user', content: 'Hello?' })
+  })
+
+  it('has a schema for every call it holds as its own', () => {
+    // A provider that won't take a replayed call without its schema is sent these.
+    const history = [
+      playerTurn('t1', 'I knock.', 'No answer.', {
+        recalled: { Hesta: { is: 'The baker.' } },
+        arcs: ['The miller returns.'],
+        ooc: ['Keep replies short.'],
+      }),
+      playerTurn('t2', 'I wait.', undefined, { changed: { Hesta: { is: 'The widowed baker.' } } }),
+    ]
+    const names = narrator(history, undefined, BRIEFING).flatMap((m) => m.toolCalls?.map((c) => c.name) ?? [])
+    expect(new Set(names)).toEqual(new Set(NARRATOR_OWN_CALL_TOOLS.map((t) => t.name)))
   })
 
   it('never replays past turns’ other tool activity or reasoning', () => {
@@ -403,9 +432,9 @@ describe('buildPlotterMessages layout', () => {
     // follow it in both, in the same one message.
     expect(n.system).toHaveLength(1)
     expect(p.system).toHaveLength(1)
-    expect(n.system[0].content.startsWith('system prompt\n\n')).toBe(true)
+    expect(n.system[0].content.startsWith(`${NARRATOR_SYSTEM_PROMPT}\n\n`)).toBe(true)
     expect(p.system[0].content.startsWith(`${PLOTTER_SYSTEM_PROMPT}\n\n`)).toBe(true)
-    const shared = n.system[0].content.slice('system prompt'.length)
+    const shared = n.system[0].content.slice(NARRATOR_SYSTEM_PROMPT.length)
     expect(p.system[0].content.slice(PLOTTER_SYSTEM_PROMPT.length)).toBe(shared)
   })
 })
@@ -454,11 +483,10 @@ describe('buildStoryUpdate', () => {
 
   it('adds recalled entries as they stand, and the OOC list', () => {
     const update = buildStoryUpdate(
-      [],
+      NOTHING_IN_VIEW,
       [recall(['Hesta', 'Nobody']), { name: 'steer', arguments: '{"text":"Hesta looks up."}', result: 'ok' }],
       data,
       ALL_FLAGS,
-      [],
     )
     // Entries come from the records, not the recall's result; unknown names
     // and unrecalled entries stay out, and the steer is for the reply alone.
@@ -472,9 +500,9 @@ describe('buildStoryUpdate', () => {
 
   it('adds only what is new to the narrator’s view or changed', () => {
     const earlier = [done('t1', { recalled: { Hesta: { is: 'The baker.' } }, ooc: ['Keep replies short.'] })]
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], data, ALL_FLAGS, [])).toBeUndefined()
+    expect(buildStoryUpdate(heldAfter(earlier),[recall(['Hesta'])], data, ALL_FLAGS)).toBeUndefined()
     const changed = { ...data, memory: { Hesta: { is: 'The widowed baker.' } }, ooc: [] }
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], changed, ALL_FLAGS, [])).toEqual({
+    expect(buildStoryUpdate(heldAfter(earlier),[recall(['Hesta'])], changed, ALL_FLAGS)).toEqual({
       changed: { Hesta: { is: 'The widowed baker.' } },
       // A cleared list is news too.
       ooc: [],
@@ -487,11 +515,11 @@ describe('buildStoryUpdate', () => {
       done('t2', { changed: { Hesta: { events: ['c'] } } }),
     ]
     const now = (events: string[]) => ({ ...data, memory: { Hesta: { is: 'The baker.', events } }, ooc: [] })
-    expect(buildStoryUpdate(earlier, [], now(['a', 'b', 'c', 'd']), ALL_FLAGS, [])?.changed).toEqual({
+    expect(buildStoryUpdate(heldAfter(earlier),[], now(['a', 'b', 'c', 'd']), ALL_FLAGS)?.changed).toEqual({
       Hesta: { events: ['d'] },
     })
     // The oldest falling off the end of the list is no news.
-    expect(buildStoryUpdate(earlier, [], now(['b', 'c']), ALL_FLAGS, [])?.changed).toBeUndefined()
+    expect(buildStoryUpdate(heldAfter(earlier),[], now(['b', 'c']), ALL_FLAGS)?.changed).toBeUndefined()
   })
 
   it('says only what changed in an entry the narrator holds, never the rest again', () => {
@@ -509,7 +537,7 @@ describe('buildStoryUpdate', () => {
       ooc: [],
       memory: { Saoirse: { is: 'a marine biologist', wants: { move: 'take up the post in Tromsø' }, regard: 'warming' } },
     }
-    expect(buildStoryUpdate(earlier, [recall(['Saoirse'])], now, ALL_FLAGS, [])).toEqual({
+    expect(buildStoryUpdate(heldAfter(earlier),[recall(['Saoirse'])], now, ALL_FLAGS)).toEqual({
       changed: { Saoirse: { wants: { stay: null }, regard: 'warming', wearing: null } },
     })
   })
@@ -524,7 +552,7 @@ describe('buildStoryUpdate', () => {
       ooc: [],
       memory: { Hesta: { is: 'The widowed baker.', wants: { shop: 'keep the bakery open' } } },
     }
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS, [])).toBeUndefined()
+    expect(buildStoryUpdate(heldAfter(earlier),[recall(['Hesta'])], now, ALL_FLAGS)).toBeUndefined()
   })
 
   it('gives an entry in full again once its full version is out of view', () => {
@@ -532,7 +560,7 @@ describe('buildStoryUpdate', () => {
     // that gave it; a change alone can't be read.
     const earlier = [done('t2', { changed: { Hesta: { is: 'The widowed baker.' } } })]
     const now = { ...data, ooc: [], memory: { Hesta: { is: 'The widowed baker.', bond: 'wary' } } }
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS, [])).toEqual({
+    expect(buildStoryUpdate(heldAfter(earlier),[recall(['Hesta'])], now, ALL_FLAGS)).toEqual({
       recalled: { Hesta: { is: 'The widowed baker.', bond: 'wary' } },
     })
   })
@@ -545,7 +573,7 @@ describe('buildStoryUpdate', () => {
       ooc: [],
     }
     // Tam changed too, but the narrator has never been given Tam.
-    expect(buildStoryUpdate(earlier, [], changed, ALL_FLAGS, [])).toEqual({
+    expect(buildStoryUpdate(heldAfter(earlier),[], changed, ALL_FLAGS)).toEqual({
       changed: { Hesta: { is: 'The widowed baker.' } },
     })
   })
@@ -556,10 +584,10 @@ describe('buildStoryUpdate', () => {
       ...done('f', { ooc: ['Keep replies short.'] }),
       reply: { id: 'f-reply', model: 'test', text: '(falters)', error: 'boom' },
     }
-    expect(buildStoryUpdate([failed, done('t2')], [], data, ALL_FLAGS, [])).toEqual({
+    expect(buildStoryUpdate(heldAfter([failed, done('t2')]),[], data, ALL_FLAGS)).toEqual({
       ooc: ['Keep replies short.'],
     })
-    expect(buildStoryUpdate([], [], { ...data, ooc: [] }, ALL_FLAGS, [])).toBeUndefined()
+    expect(buildStoryUpdate(NOTHING_IN_VIEW, [],{ ...data, ooc: [] }, ALL_FLAGS)).toBeUndefined()
   })
 
   it('tells the narrator the whole OOC list first, then only what is added or withdrawn', () => {
@@ -577,13 +605,13 @@ describe('buildStoryUpdate', () => {
 
   it('gives the narrator the arcs whole whenever they change, whoever changed them', () => {
     const arcs = { ...data, ooc: [], plot: ['The miller returns at dusk.', 'The flood takes the bridge.'] }
-    expect(buildStoryUpdate([], [], arcs, ALL_FLAGS, [])).toEqual({ arcs: arcs.plot })
+    expect(buildStoryUpdate(NOTHING_IN_VIEW, [],arcs, ALL_FLAGS)).toEqual({ arcs: arcs.plot })
     const t1 = done('t1', { arcs: arcs.plot })
-    expect(buildStoryUpdate([t1], [], arcs, ALL_FLAGS, [])).toBeUndefined()
+    expect(buildStoryUpdate(heldAfter([t1]),[], arcs, ALL_FLAGS)).toBeUndefined()
     // An arc the player rewrote between turns goes out like the Plotter's.
     const edited = { ...arcs, plot: ['The miller returns at dusk.', 'The flood spares the bridge, not the mill.'] }
-    expect(buildStoryUpdate([t1], [], edited, ALL_FLAGS, [])).toEqual({ arcs: edited.plot })
-    expect(buildStoryUpdate([t1], [], { ...arcs, plot: [] }, ALL_FLAGS, [])).toEqual({ arcs: [] })
+    expect(buildStoryUpdate(heldAfter([t1]),[], edited, ALL_FLAGS)).toEqual({ arcs: edited.plot })
+    expect(buildStoryUpdate(heldAfter([t1]),[], { ...arcs, plot: [] }, ALL_FLAGS)).toEqual({ arcs: [] })
     const calls = storyUpdateCalls({ arcs: arcs.plot }, NOTHING_IN_VIEW)
     expect(calls).toEqual([
       {
@@ -597,18 +625,17 @@ describe('buildStoryUpdate', () => {
 
   it('leaves out what is switched off', () => {
     const update = buildStoryUpdate(
-      [],
+      NOTHING_IN_VIEW,
       [recall(['Hesta']), { name: 'steer', arguments: '{"text":"x"}', result: 'ok' }],
       { ...data, plot: ['The miller returns at dusk.'] },
       { ...ALL_FLAGS, includeMemory: false, includePlotOutline: false, includeOoc: false },
-      [],
     )
     expect(update).toBeUndefined()
   })
 
   it('forgets, without a word, a held entry memory no longer has', () => {
     const earlier = [done('t1', { recalled: { Hesta: { is: 'The baker.' } } })]
-    const update = buildStoryUpdate(earlier, [], { ...data, memory: {}, ooc: [] }, ALL_FLAGS, [])
+    const update = buildStoryUpdate(heldAfter(earlier),[], { ...data, memory: {}, ooc: [] }, ALL_FLAGS)
     expect(update).toEqual({ forgotten: ['Hesta'] })
     expect(storyUpdateCalls(update ?? {}, NOTHING_IN_VIEW)).toEqual([])
     // Once forgotten, it isn't told again after a fold.
@@ -667,7 +694,7 @@ describe('the narrator’s view across a fold', () => {
     }
     // Held across the fold: a change goes as a change, and unchanged lists
     // aren't told again.
-    expect(buildStoryUpdate([], [], data, ALL_FLAGS, folded)).toEqual({
+    expect(buildStoryUpdate(heldAfter([], folded), [], data, ALL_FLAGS)).toEqual({
       changed: { Hesta: { is: 'The widowed baker.' } },
     })
   })

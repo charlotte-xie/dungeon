@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { buildNewAdventureBootstrap, continueDirective, narratorSystemPrompt, promptOverrides } from '../prompts'
+import { buildNewAdventureBootstrap, continueDirective, promptOverrides } from '../prompts'
 import { applyPromptOverrides } from './usePromptOverrides'
 import {
   EmptyNarrativeError,
@@ -462,7 +462,6 @@ export function useGameController(settings: GameSettings) {
     // The chronicle covers the turns up to its cutoff; the rest are in view.
     const cutoff = chronicleCutoff(turn.chronicle, turn.log)
     return {
-      systemPrompt: narratorSystemPrompt(),
       model,
       reasoningEffort: context.narratorReasoning,
       plotterModel: context.plotterModel,

@@ -29,7 +29,6 @@ function completion(partial: Partial<ModelCompletion>): ModelCompletion {
 }
 
 const CTX: NarratorContext = {
-  systemPrompt: 'sys',
   model: 'test-model',
   apiKey: 'k',
   baseUrl: 'http://x',

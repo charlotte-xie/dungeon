@@ -40,7 +40,7 @@
 // The payloads are pure data. The per-record bookkeeping guidance (what to
 // record this turn, soft size pressure) travels in the Plotter's instruction.
 
-import { buildTurnReminder, contentStance, plotterSystemPrompt } from '../prompts'
+import { buildTurnReminder, contentStance, narratorSystemPrompt, plotterSystemPrompt } from '../prompts'
 import { buildChronicleSystemMessage } from './chronicle'
 import { ADVENTURE_SLOTS } from './config'
 import {
@@ -250,13 +250,13 @@ export function buildPlotterGuidance(
     .join('\n\n')
 }
 
+// The story both roles' requests are built from.
 export interface ModelMessagesArgs {
-  // The narrator's system prompt; the Plotter has its own.
-  systemPrompt: string
   slots: AdventureSlots
   chronicle: Chronicle
   // The turns the chronicle covers, before those in view.
   folded: Turn[]
+  // The story in view, ending with the turn being played.
   history: Turn[]
   data: StoryData
   includePriorPlayerTurns: boolean
@@ -265,13 +265,9 @@ export interface ModelMessagesArgs {
   // Send the turn reminder (narrator) or pivot (Plotter) as a trailing system
   // message, or else as an in-channel (OOC: ...) user message.
   reminderAsSystem: boolean
-  // The Plotter's briefing for the reply being written, from which the
-  // narrator's notes are built. The Plotter's own request ignores it.
-  briefing?: BriefingCall[]
 }
 
-// One request, in its architectural sections, so the Context viewer can show
-// each without re-parsing the flattened list.
+// One request, in its sections by how long each lasts.
 export interface RequestSections {
   // Stable prefix: one system message holding the role's system prompt, the
   // content stance and the adventure slots.
@@ -291,11 +287,8 @@ export function flattenSections(sections: RequestSections): ModelMessage[] {
 // headings. The narrator gets every slot; the Plotter leaves out the
 // narrator's writing guidance. Some chat templates take only one system
 // message at the start.
-function buildFrameMessages(
-  args: ModelMessagesArgs,
-  systemPrompt: string,
-  role: 'narrator' | 'plotter',
-): ModelMessage[] {
+function buildFrameMessages(args: ModelMessagesArgs, role: 'narrator' | 'plotter'): ModelMessage[] {
+  const systemPrompt = role === 'narrator' ? narratorSystemPrompt() : plotterSystemPrompt()
   const parts = [systemPrompt, contentStance(args.nsfw)]
   for (const def of ADVENTURE_SLOTS) {
     const value = (args.slots[def.key] ?? '').trim()
@@ -405,9 +398,16 @@ function applyStoryUpdate(view: NarratorView, update: StoryUpdate | undefined): 
   return { memory, ooc: update.ooc ?? view.ooc, arcs: update.arcs ?? view.arcs }
 }
 
-// The view after these turns' updates, failed turns aside.
+// The turns that are replayed. A failed turn produced no narration, and its
+// input was never answered, so neither is replayed, and its story update
+// never reached the narrator.
+function replayed(turns: Turn[]): Turn[] {
+  return turns.filter((t) => !t.reply.error)
+}
+
+// The view after these turns' updates.
 function viewAfter(view: NarratorView, turns: Turn[]): NarratorView {
-  return turns.reduce((v, t) => (t.reply.error ? v : applyStoryUpdate(v, t.storyUpdate)), view)
+  return replayed(turns).reduce((v, t) => applyStoryUpdate(v, t.storyUpdate), view)
 }
 
 // A list goes when it differs from the one in view, or when none is in view
@@ -461,25 +461,23 @@ export function synopsisStoryUpdate(folded: Turn[], flags: ContextFlags): StoryU
   return storyUpdateFor(NOTHING_IN_VIEW, shownRecords(flags, viewAfter(NOTHING_IN_VIEW, folded)))
 }
 
-// What the narrator holds before the turn being played: the first step, then
-// the updates of the turns in view before it.
-export function narratorView(folded: Turn[], earlier: Turn[], flags: ContextFlags): NarratorView {
-  return viewAfter(applyStoryUpdate(NOTHING_IN_VIEW, synopsisStoryUpdate(folded, flags)), earlier)
+// What the narrator holds before the turn being played, the last in history:
+// the first step, then the updates of the turns in view before it.
+export function narratorView(story: Pick<ModelMessagesArgs, 'folded' | 'history' | 'flags'>): NarratorView {
+  const first = applyStoryUpdate(NOTHING_IN_VIEW, synopsisStoryUpdate(story.folded, story.flags))
+  return viewAfter(first, story.history.slice(0, -1))
 }
 
-// What the turn adds to the narrator's history: the step to the records as
-// they stand after the Plotter's updates, for the entries the narrator holds
-// and those the Plotter recalled. Once recalled, an entry is kept current
-// without being recalled again. `folded` are the turns the synopsis covers,
-// and `earlier` those in view before this turn.
+// What the turn adds to the narrator's history: the step from the view it
+// holds to the records as they stand after the Plotter's updates, for the
+// entries the narrator holds and those the Plotter recalled. Once recalled, an
+// entry is kept current without being recalled again.
 export function buildStoryUpdate(
-  earlier: Turn[],
+  view: NarratorView,
   briefing: BriefingCall[],
   data: StoryData,
   flags: ContextFlags,
-  folded: Turn[],
 ): StoryUpdate | undefined {
-  const view = narratorView(folded, earlier, flags)
   const recalledNames = briefingArgs(briefing, RECALL_MEMORY_TOOL.name).flatMap((a) =>
     Array.isArray(a.names) ? a.names.filter((n): n is string => typeof n === 'string') : [],
   )
@@ -547,6 +545,16 @@ export function buildReplyNotes(
   return sections.join('\n\n')
 }
 
+// Every call the narrator's requests hold as its own: the story updates and
+// the notes. A provider that won't take a replayed call without its schema is
+// sent these, in this order, with calls forbidden.
+export const NARRATOR_OWN_CALL_TOOLS: readonly ModelToolDefinition[] = [
+  RECALL_MEMORIES_TOOL,
+  GET_STORY_ARCS_TOOL,
+  GET_OOC_INSTRUCTIONS_TOOL,
+  GET_STEER_TOOL,
+]
+
 // One of the narrator's own calls and its result.
 function ownCallMessages(id: string, name: string, content: string): ModelMessage[] {
   return [
@@ -579,52 +587,50 @@ function synopsisStepId(folded: Turn[]): string {
   return folded.at(-1)?.id ?? ''
 }
 
-// History replays the durable story: each turn's input, its story update for
-// the narrator, and its narration prose. For the narrator, the first step of
-// story updates comes first, told against nothing in view, and each turn's is
-// told against the view the steps before it left. The Plotter gets the
-// records whole in its tail, so the story updates are the narrator's alone.
-// The opening and Continue inputs stay too — they are fixed short strings,
-// they keep user/assistant roles alternating, and dropping them once the turn
-// completed would remove bytes an earlier request already sent. Other tool
-// activity and reasoning are ephemeral scaffolding of the turn that produced
-// them — each role gets what it needs fresh in its tail, and stale snapshots
-// would only bloat the transcript.
-function buildHistoryMessages(
+// The durable story both roles replay: each turn's input and its narration
+// prose, with `between` adding what goes between the two. The opening and
+// Continue inputs stay — they are fixed short strings, they keep
+// user/assistant roles alternating, and dropping them once the turn completed
+// would remove bytes an earlier request already sent. Other tool activity and
+// reasoning are ephemeral scaffolding of the turn that produced them — each
+// role gets what it needs fresh in its tail, and stale snapshots would only
+// bloat the transcript.
+function buildTurnMessages(
   history: Turn[],
   includePriorPlayerTurns: boolean,
-  role: 'narrator' | 'plotter',
-  folded: Turn[],
-  flags: ContextFlags,
+  between: (turn: Turn) => ModelMessage[] = () => [],
 ): ModelMessage[] {
-  const messages: ModelMessage[] = []
-  let view = NOTHING_IN_VIEW
-  const tell = (id: string, update: StoryUpdate | undefined) => {
-    if (!update || role !== 'narrator') return
-    messages.push(...buildStoryUpdateMessages(id, update, view))
-    view = applyStoryUpdate(view, update)
-  }
-  tell(synopsisStepId(folded), synopsisStoryUpdate(folded, flags))
-  for (let i = 0; i < history.length; i++) {
-    const t = history[i]
-    // A failed turn has no narration to replay, and its input was never
-    // answered — replaying either would present the failure as story.
-    if (t.reply.error) continue
-    const isLast = i === history.length - 1
+  const latest = history.at(-1)
+  return replayed(history).flatMap((t): ModelMessage[] => {
     const hasReply = !!t.reply.text
-    const inputIsHistorical = !isLast && hasReply
+    const inputIsHistorical = t !== latest && hasReply
     const includeInput =
       t.input !== undefined &&
       (includePriorPlayerTurns || !inputIsHistorical || t.kind !== 'player')
-    if (includeInput) {
-      messages.push({ role: 'user', content: t.input ?? '' })
-    }
-    tell(t.id, t.storyUpdate)
-    if (hasReply) {
-      messages.push({ role: 'assistant', content: t.reply.text ?? '' })
-    }
+    return [
+      ...(includeInput ? [{ role: 'user' as const, content: t.input ?? '' }] : []),
+      ...between(t),
+      ...(hasReply ? [{ role: 'assistant' as const, content: t.reply.text ?? '' }] : []),
+    ]
+  })
+}
+
+// The narrator's history: the first step, told against nothing in view, then
+// the turns, each with its story update between its input and its reply, told
+// against the view the steps before it left. The Plotter gets the records
+// whole in its tail, so the story updates are the narrator's alone.
+function buildNarratorHistory(args: ModelMessagesArgs): ModelMessage[] {
+  let view = NOTHING_IN_VIEW
+  const tell = (id: string, update: StoryUpdate | undefined): ModelMessage[] => {
+    if (!update) return []
+    const messages = buildStoryUpdateMessages(id, update, view)
+    view = applyStoryUpdate(view, update)
+    return messages
   }
-  return messages
+  return [
+    ...tell(synopsisStepId(args.folded), synopsisStoryUpdate(args.folded, args.flags)),
+    ...buildTurnMessages(args.history, args.includePriorPlayerTurns, (t) => tell(t.id, t.storyUpdate)),
+  ]
 }
 
 function chronicleMessages(chronicle: Chronicle): ModelMessage[] {
@@ -641,16 +647,22 @@ function directiveMessage(content: string, asSystem: boolean): ModelMessage {
   return asSystem ? { role: 'system', content } : { role: 'user', content: `(OOC: ${content})` }
 }
 
+export interface NarratorMessagesArgs extends ModelMessagesArgs {
+  // The Plotter's briefing for the reply being written, from which the
+  // narrator's notes are built.
+  briefing: BriefingCall[]
+}
+
 // The narrator's request: it writes the reply from the story, its story
 // updates, and its notes for this reply, with no tools. The latest turn
 // carries the story update just made.
-export function buildNarratorSections(args: ModelMessagesArgs): RequestSections {
+export function buildNarratorSections(args: NarratorMessagesArgs): RequestSections {
   return {
-    system: buildFrameMessages(args, args.systemPrompt, 'narrator'),
+    system: buildFrameMessages(args, 'narrator'),
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'narrator', args.folded, args.flags),
+    history: buildNarratorHistory(args),
     tail: [
-      ...buildReplyNotesMessages(buildReplyNotes(args.briefing ?? [], args.data, args.flags)),
+      ...buildReplyNotesMessages(buildReplyNotes(args.briefing, args.data, args.flags)),
       directiveMessage(
         buildTurnReminder(args.history.at(-1)?.kind, args.history.at(-1)?.input),
         args.reminderAsSystem,
@@ -659,7 +671,7 @@ export function buildNarratorSections(args: ModelMessagesArgs): RequestSections 
   }
 }
 
-export function buildNarratorMessages(args: ModelMessagesArgs): ModelMessage[] {
+export function buildNarratorMessages(args: NarratorMessagesArgs): ModelMessage[] {
   return flattenSections(buildNarratorSections(args))
 }
 
@@ -672,9 +684,9 @@ export interface PlotterMessagesArgs extends ModelMessagesArgs {
 // latest input, the records whole as tool results, then its instruction.
 export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections {
   return {
-    system: buildFrameMessages(args, plotterSystemPrompt(), 'plotter'),
+    system: buildFrameMessages(args, 'plotter'),
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'plotter', args.folded, args.flags),
+    history: buildTurnMessages(args.history, args.includePriorPlayerTurns),
     tail: [
       ...buildContextInjectionMessages(args.data, args.flags),
       directiveMessage(args.pivot, args.reminderAsSystem),
