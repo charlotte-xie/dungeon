@@ -24,6 +24,11 @@ None yet: the story begins with these turns.
 
 --- END OF THE TURNS ---
 
+## no-turns
+--- THE TURNS ---
+
+There are no new turns. Keep the recent developments the last summary tells.
+
 ## turn
 --- TURN {{number}} ---
 

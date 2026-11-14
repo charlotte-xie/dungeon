@@ -187,13 +187,16 @@ export function summarizerSystemPrompt(): string {
   return promptText('summarizer.md').trim()
 }
 
-const summarizerInputsText = sectionReader<'scenario' | 'story' | 'story-start' | 'turns' | 'turn' | 'length' | 'instruction'>(
+const summarizerInputsText = sectionReader<
+  'scenario' | 'story' | 'story-start' | 'turns' | 'no-turns' | 'turn' | 'length' | 'instruction'
+>(
   'summarizer-inputs.md',
 )
 
 // The summariser's input: the scenario, the last summary (or word that the
 // story starts with these turns), the run of turns that follow it, each headed
-// by its number in the log, the length its story so far aims for, then what to
+// by its number in the log, or word that there are none when the summary is
+// written again from itself, the length its story so far aims for, then what to
 // write. The length rides here rather than in the system prompt, which stays
 // the same for every call.
 export function buildSummarizerInputs(
@@ -208,7 +211,7 @@ export function buildSummarizerInputs(
     previousSummary
       ? summarizerInputsText('story', { story: previousSummary })
       : summarizerInputsText('story-start'),
-    summarizerInputsText('turns', { count: turns.length, turns: body }),
+    turns.length ? summarizerInputsText('turns', { count: turns.length, turns: body }) : summarizerInputsText('no-turns'),
     summarizerInputsText('length', { chars: targetChars.toLocaleString('en-GB') }),
     summarizerInputsText('instruction'),
   ].join('\n\n')

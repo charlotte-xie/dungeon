@@ -688,6 +688,24 @@ header h1 {
   cursor: not-allowed;
 }
 
+/* A small number field read as part of a phrase beside a button. */
+.inspect-actions .inline-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #aaa;
+}
+
+.inspect-actions .inline-number input[type='number'] {
+  width: 4rem;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  background: #1a1a1a;
+  color: #e6e6e6;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
 /* Narrow windows: the sections run across the top instead. */
 @media (max-width: 700px) {
   .inspect-screen {

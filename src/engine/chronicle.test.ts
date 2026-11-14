@@ -243,16 +243,57 @@ describe('compaction', () => {
     }
   })
 
-  it('folds every live turn but the latest when forced, below the threshold', async () => {
+  it('folds every live turn but the latest it is asked to keep, below the threshold', async () => {
     const turns = completedTurns(6)
-    const forced = (chronicle: Chronicle) =>
-      compactChronicle(turns, chronicle, DEFAULTS, AGENT, new AbortController().signal, undefined, true)
-    const chronicle = await forced([])
-    expect(turnRanges(chronicle, turns)).toEqual([[0, 5]])
-    expect(mockedSummarizer).toHaveBeenCalledTimes(1)
-    // With only the latest turn live there is nothing to force.
+    const keeping = (keep: number, chronicle: Chronicle = []) =>
+      compactChronicle(turns, chronicle, DEFAULTS, AGENT, new AbortController().signal, { keep })
+    expect(turnRanges(await keeping(1), turns)).toEqual([[0, 5]])
+    expect(turnRanges(await keeping(2), turns)).toEqual([[0, 4]])
+    // Keeping none still keeps the latest turn live.
+    expect(turnRanges(await keeping(0), turns)).toEqual([[0, 5]])
+    // With a summary, only the turns after it are read.
     mockedSummarizer.mockClear()
-    expect(await forced(chronicle)).toBe(chronicle)
+    await keeping(1, [[entry('old', 't0', 't2')]])
+    expect(summariesSeen()).toEqual(['old'])
+    expect(turnNumbersRead(0)).toEqual([4, 5])
+  })
+
+  it('takes a long fold it is asked for in stretches, telling how far it has got', async () => {
+    const turns = completedTurns(12)
+    const progress: string[] = []
+    const chronicle = await compactChronicle(turns, [], SMALL, AGENT, new AbortController().signal, {
+      keep: 2,
+      onProgress: (label) => progress.push(label),
+    })
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 10]])
+    expect(mockedSummarizer.mock.calls.map((_, i) => turnNumbersRead(i))).toEqual([
+      [1, 2, 3, 4],
+      [5, 6, 7, 8],
+      [9, 10],
+    ])
+    expect(progress).toHaveLength(3)
+  })
+
+  it('writes the summary again from itself when there are no turns to fold', async () => {
+    const turns = completedTurns(6)
+    const chronicle: Chronicle = [[entry('old', 't0', 't3')]]
+    const rewritten = await compactChronicle(turns, chronicle, DEFAULTS, AGENT, new AbortController().signal, {
+      keep: 4,
+    })
+    expect(mockedSummarizer).toHaveBeenCalledTimes(1)
+    expect(summariesSeen()).toEqual(['old'])
+    expect(turnNumbersRead(0)).toEqual([])
+    expect(rewritten[0][0].text).not.toBe('old')
+    // The cutoff stays where it was.
+    expect(turnRanges(rewritten, turns)).toEqual([[0, 4]])
+  })
+
+  it('leaves the chronicle alone when asked to keep every turn and there is no summary', async () => {
+    const turns = completedTurns(3)
+    const empty: Chronicle = []
+    expect(
+      await compactChronicle(turns, empty, DEFAULTS, AGENT, new AbortController().signal, { keep: 5 }),
+    ).toBe(empty)
     expect(mockedSummarizer).not.toHaveBeenCalled()
   })
 

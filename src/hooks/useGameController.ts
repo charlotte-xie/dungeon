@@ -15,7 +15,7 @@ import { summarizerRequest } from '../engine/agents/summarizer'
 import { wireRequest } from '../engine/model/client'
 import type { WireRequest } from '../engine/model/types'
 import {
-  canForceCompaction,
+  canCompact,
   chronicleCutoff,
   chronicleNeedsCompaction,
   chronicleRanges,
@@ -199,8 +199,7 @@ export function useGameController(settings: GameSettings) {
     compactionFloor: context.compactionFloor,
     summaryTargetChars: context.summaryTargetChars,
   }
-  const canCompact = chronicleNeedsCompaction(turns, chronicle, compactionSettings)
-  const canForceCompact = canForceCompaction(turns, chronicle)
+  const compactable = canCompact(turns, chronicle)
 
   useEffect(() => {
     latestTurns.current = turns
@@ -375,15 +374,22 @@ export function useGameController(settings: GameSettings) {
     const queued = queuedCompaction.current
     queuedCompaction.current = null
     if (!queued || queued.version !== chronicleVersion.current) return
+    if (!chronicleRanges(queued.chronicle, latestTurns.current)) return
+    commitFold(queued.from, queued.chronicle)
+  }
+
+  // A summariser's result goes in, replacing `from`: the folded turns' traces
+  // are dropped, and Undo and Redo keep the new chronicle rather than put the
+  // old one back.
+  function commitFold(from: Chronicle, next: Chronicle) {
     const log = latestTurns.current
-    if (!chronicleRanges(queued.chronicle, log)) return
-    commitChronicle(queued.chronicle)
-    setTurns((ts) => stripTracesBefore(ts, chronicleCutoff(queued.chronicle, ts)))
+    commitChronicle(next)
+    setTurns((ts) => stripTracesBefore(ts, chronicleCutoff(next, ts)))
     dispatchRecovery({
       type: 'rebase',
-      from: queued.from,
-      chronicle: queued.chronicle,
-      beforeFits: !!chronicleRanges(queued.chronicle, log.slice(0, -1)),
+      from,
+      chronicle: next,
+      beforeFits: !!chronicleRanges(next, log.slice(0, -1)),
     })
   }
 
@@ -818,25 +824,24 @@ export function useGameController(settings: GameSettings) {
     })
   }
 
-  // Compact the chronicle now; forced, fold every live turn but the latest
-  // whether or not compaction is due, to test what follows it.
-  async function compactNow(force = false) {
+  // Compact the chronicle now, whether or not a fold is due: fold every live
+  // turn but the latest `keep`, or with none to fold, write the summary again
+  // from itself.
+  async function compactNow(keep: number) {
     if (operations.busy) return
     const settings = compactionSettings
-    if (force ? !canForceCompaction(turns, chronicle) : !chronicleNeedsCompaction(turns, chronicle, settings)) {
-      alert('Nothing to compact: chronicle is up to date.')
+    const kept = Math.max(1, keep)
+    const cutoff = chronicleCutoff(chronicle, turns)
+    const live = turns.length - cutoff
+    if (live <= kept && !cutoff) {
+      alert(`Nothing to compact: keeping the latest ${kept} live leaves no turn to fold, and there is no summary yet.`)
       return
     }
-    const what = force
-      ? 'Force a compaction now? Every live turn except the latest is folded into the summary, whether or not compaction is due'
-      : 'Compact the chronicle now? The oldest live turns are folded into the summary'
-    if (
-      !confirm(
-        `${what} — the full text stays visible in your log, but the model will only see the summary from then on. This is lossy, cannot be undone, and runs summariser model calls immediately.`,
-      )
-    ) {
-      return
-    }
+    const what =
+      live > kept
+        ? `Compact now? Every live turn but the latest ${kept} is folded into the summary. The full text stays in your log, but the model sees only the summary from then on. This runs summariser calls now`
+        : 'Rewrite the summary now? No turns are left to fold, so the summary is written again from itself, replacing its text, including any edits you made. This runs one summariser call now'
+    if (!confirm(`${what}.`)) return
     cancelBackgroundCompaction()
     const operation = beginOperation(false, 'Compacting chronicle…')
     if (!operation) return
@@ -848,15 +853,16 @@ export function useGameController(settings: GameSettings) {
         settings,
         summariserArgs(turns[0]?.id),
         controller.signal,
-        (label) => {
-          if (operationCanCommit(operation)) setStatusText(label)
+        {
+          keep,
+          onProgress: (label) => {
+            if (operationCanCommit(operation)) setStatusText(label)
+          },
         },
-        force,
       )
       if (!operationCanCommit(operation)) return
       setCompactionError(null)
-      commitChronicle(compacted)
-      setTurns((ts) => stripTracesBefore(ts, chronicleCutoff(compacted, ts)))
+      commitFold(chronicle, compacted)
     } catch (err) {
       if (!controller.signal.aborted && isCurrentOperation(operation)) {
         alert(`Compaction failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -895,7 +901,7 @@ export function useGameController(settings: GameSettings) {
         },
       )
       if (!operationCanCommit(operation)) return
-      commitChronicle(rebuilt)
+      commitFold(chronicle, rebuilt)
     } catch (err) {
       if (!controller.signal.aborted && isCurrentOperation(operation)) {
         alert(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -988,8 +994,7 @@ export function useGameController(settings: GameSettings) {
     statusText: status.text,
     statusSince: status.since,
     streamed,
-    canCompact,
-    canForceCompact,
+    canCompact: compactable,
     compactionError,
     // Whether older turns are being folded into the chronicle in the background.
     compacting,

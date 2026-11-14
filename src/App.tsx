@@ -528,9 +528,7 @@ function App() {
           context={context}
           busy={thinking}
           canCompact={game.canCompact}
-          canForceCompact={game.canForceCompact}
-          onCompact={() => void game.compactNow()}
-          onForceCompact={() => void game.compactNow(true)}
+          onCompact={(keep) => void game.compactNow(keep)}
           onRebuildChronicle={() => void game.rebuildChronicleNow()}
           onResetState={() => game.commitState(structuredClone(DEFAULT_STATE))}
           onSaveState={game.commitState}

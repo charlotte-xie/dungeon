@@ -14,10 +14,11 @@ interface StateViewerProps {
   compacting: boolean
   context: ContextConfig
   busy: boolean
+  // Whether there is a turn to fold or a summary to write again.
   canCompact: boolean
-  canForceCompact: boolean
-  onCompact: () => void
-  onForceCompact: () => void
+  // Fold every live turn but the latest `keep`, or with none to fold, write
+  // the summary again from itself.
+  onCompact: (keep: number) => void
   onRebuildChronicle: () => void
   onResetState: () => void
   onSaveState: (next: WorldState) => void
@@ -44,9 +45,7 @@ export function StateViewer({
   context,
   busy,
   canCompact,
-  canForceCompact,
   onCompact,
-  onForceCompact,
   onRebuildChronicle,
   onResetState,
   onSaveState,
@@ -70,6 +69,9 @@ export function StateViewer({
   // Chronicle entry edits, keyed by entry id; an entry not in the map is
   // unedited. Clearing an entry's text deletes it on save.
   const [chronicleDraft, setChronicleDraft] = useState<Record<string, string>>({})
+  // How many of the latest turns Compact keeps live, starting at the fold
+  // floor.
+  const [keepLive, setKeepLive] = useState(() => Math.max(1, context.compactionFloor))
 
   // Reset local drafts when the parent's prop changes (e.g. after a turn that
   // mutated state or memory). Adjusting state during render — a documented
@@ -217,28 +219,31 @@ export function StateViewer({
             </button>
           )}
           {tab === 'chronicle' && canCompact && (
-            <button
-              className="ghost"
-              onClick={onCompact}
-              disabled={busy || anyDirty}
-              title={anyDirty ? 'Save or discard your edits first' : 'Fold older turns into the chronicle now'}
-            >
-              Compact now
-            </button>
-          )}
-          {tab === 'chronicle' && canForceCompact && (
-            <button
-              className="ghost"
-              onClick={onForceCompact}
-              disabled={busy || anyDirty}
-              title={
-                anyDirty
-                  ? 'Save or discard your edits first'
-                  : 'Fold every turn but the latest into the chronicle now, whether or not compaction is due'
-              }
-            >
-              Force compact
-            </button>
+            <>
+              <label className="inline-number" title="How many of the latest turns stay live, in full">
+                Keep
+                <input
+                  type="number"
+                  min={1}
+                  value={keepLive}
+                  onChange={(e) => setKeepLive(Math.max(1, Math.floor(Number(e.target.value)) || 1))}
+                  disabled={busy}
+                />
+                live
+              </label>
+              <button
+                className="ghost"
+                onClick={() => onCompact(keepLive)}
+                disabled={busy || anyDirty}
+                title={
+                  anyDirty
+                    ? 'Save or discard your edits first'
+                    : 'Fold every live turn but the latest you keep into the summary now; with none to fold, write the summary again from itself'
+                }
+              >
+                Compact
+              </button>
+            </>
           )}
           {tab === 'chronicle' && totalEntries > 0 && (
             <button

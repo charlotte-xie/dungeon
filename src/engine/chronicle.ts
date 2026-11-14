@@ -291,13 +291,7 @@ async function foldTurns(
       continue
     }
     const result = await runSummarizer(input, signal)
-    next = [[{
-      id: crypto.randomUUID(),
-      text: result.summary,
-      firstTurnId: turns[0].id,
-      lastTurnId: turns[last - 1].id,
-      createdAt: Date.now(),
-    }]]
+    next = summaryReaching(turns, last, result.summary)
   }
   return next
 }
@@ -322,27 +316,61 @@ function turnsForSummary(turns: Turn[], start: number, end: number): SummaryTurn
   return inputs
 }
 
-// Folds the live tail into the summary if an event is due. A forced pass, for
-// testing what follows compaction, folds every live turn but the latest
-// whether or not the threshold is reached.
+// The chronicle as one summary of turns [0, end).
+function summaryReaching(turns: Turn[], end: number, text: string): Chronicle {
+  return [[{
+    id: crypto.randomUUID(),
+    text,
+    firstTurnId: turns[0].id,
+    lastTurnId: turns[end - 1].id,
+    createdAt: Date.now(),
+  }]]
+}
+
+export interface CompactOptions {
+  // Keep this many of the latest turns live, at least one, and fold the rest
+  // now, whether or not a fold is due. With nothing left to fold, the summary
+  // is written again from itself. Left out, the live turns are folded down to
+  // the floor once they reach the threshold.
+  keep?: number
+  onProgress?: (label: string) => void
+}
+
+// Folds the live tail into the summary when a fold is due, or as `keep` asks.
 export async function compactChronicle(
   turns: Turn[],
   chronicle: Chronicle,
   settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
-  onProgress?: (label: string) => void,
-  force = false,
+  { keep, onProgress }: CompactOptions = {},
 ): Promise<Chronicle> {
   const N = Math.max(2, settings.compactionThreshold)
   const cutoff = chronicleCutoff(chronicle, turns)
-  const live = turns.length - cutoff
-  const forcing = force && live > 1
-  if (live < N && !forcing) return chronicle
-  const targetCutoff = turns.length - (forcing ? 1 : drainFloor(settings, N))
+  if (keep === undefined && turns.length - cutoff < N) return chronicle
+  const targetCutoff = turns.length - (keep === undefined ? drainFloor(settings, N) : Math.max(1, keep))
+  if (targetCutoff <= cutoff) {
+    onProgress?.('Rewriting the summary…')
+    return rewriteSummary(turns, chronicle, settings, agent, signal)
+  }
   return foldTurns(turns, chronicle, cutoff, targetCutoff, settings, agent, signal, (step, total) =>
     onProgress?.(`Folding turns into chronicle… ${step} of ${total}`),
   )
+}
+
+// The summary written again from itself, with no new turns: what the current
+// prompt makes of it. With no summary, the chronicle is left as it is.
+async function rewriteSummary(
+  turns: Turn[],
+  chronicle: Chronicle,
+  settings: ChronicleSettings,
+  agent: ChronicleAgentArgs,
+  signal: AbortSignal,
+): Promise<Chronicle> {
+  const cutoff = chronicleCutoff(chronicle, turns)
+  if (!cutoff) return chronicle
+  const result = await runSummarizer(summarizerInput(turns, chronicle, cutoff, cutoff, settings, agent), signal)
+  return summaryReaching(turns, cutoff, result.summary)
 }
 
 // The summary written afresh from the turns it covers, replaying compaction
@@ -365,10 +393,10 @@ export function rebuildCallCount(turns: Turn[], chronicle: Chronicle, settings: 
   return Math.ceil(chronicleCutoff(chronicle, turns) / stretchLength(settings))
 }
 
-// A forced compaction has something to fold once there is a live turn
-// before the latest.
-export function canForceCompaction(turns: Turn[], chronicle: Chronicle): boolean {
-  return turns.length - chronicleCutoff(chronicle, turns) > 1
+// Compacting by hand has something to do: a live turn before the latest to
+// fold, or a summary to write again.
+export function canCompact(turns: Turn[], chronicle: Chronicle): boolean {
+  return turns.length - chronicleCutoff(chronicle, turns) > 1 || chronicleCutoff(chronicle, turns) > 0
 }
 
 export function chronicleNeedsCompaction(
