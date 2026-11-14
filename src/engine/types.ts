@@ -156,8 +156,8 @@ export interface ContextConfig {
   // frozen, so the request prefix stays byte-stable for provider caching.
   // A floor at or above N counts as half of N.
   compactionFloor: number
-  // The length the running summary aims for, in characters, however long the
-  // story grows. A hint to the model, not a cap.
+  // The length the running summary's story so far aims for, in characters,
+  // however long the story grows. A hint to the model, not a cap.
   summaryTargetChars: number
   stateCleanupChars: number
   includePriorPlayerTurns: boolean

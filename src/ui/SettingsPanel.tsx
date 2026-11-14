@@ -531,7 +531,7 @@ export function SettingsPanel({
                   />
                 </label>
                 <label
-                  title={`The length the running summary aims for, in characters, however long the story grows. A hint to the model, not a cap. Default ${DEFAULT_CONTEXT.summaryTargetChars.toLocaleString()}.`}
+                  title={`The length the story so far at the head of the running summary aims for, in characters, however long the story grows; the summary's other sections take the room they need. A hint to the model, not a cap. Default ${DEFAULT_CONTEXT.summaryTargetChars.toLocaleString()}.`}
                 >
                   <span>Summary length (chars)</span>
                   <input

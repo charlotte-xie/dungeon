@@ -1,7 +1,7 @@
 // Summariser agent. Single-purpose: given the summary of the story so far and
 // the run of consecutive turns that follows it, each turn rendered as
 // PLAYER:/DM: lines and numbered as in the log, rewrite the summary to cover
-// the extended story at about the requested length.
+// the extended story, its story so far at about the requested length.
 //
 // The chronicle module decides which turns to fold in and at what target
 // length; the agent just renders the inputs and calls the model.
@@ -27,7 +27,8 @@ export interface SummarizerInput {
   previousSummary: string
   // The turns the new summary reaches the end of.
   turns: SummaryTurn[]
-  // The length to aim for, in chars: a hint to the model, not a cap.
+  // The length the story so far aims for, in chars: a hint to the model, not
+  // a cap. The rest of the summary takes the room it needs.
   targetChars: number
 }
 

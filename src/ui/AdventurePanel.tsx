@@ -215,11 +215,12 @@ export function AdventurePanel({
                 readOnly={busy || compacting}
               />
               <small className="hint">
-                The DM&apos;s synopsis of the older turns, written afresh as the story grows. Edit it
-                to change what the DM remembers of them, and each new synopsis builds on what you
-                wrote. Clear it and the DM reads those turns in full again until the next one is
-                written. Changes apply from the next turn.
-                {compacting && ' The DM is writing a new synopsis now; you can edit it once that is done.'}
+                The DM&apos;s summary of the older turns, written afresh as the story grows: a
+                synopsis, then the key characters, story arcs, continuity facts and recent
+                developments. Edit it to change what the DM remembers of them, and each new summary
+                builds on what you wrote. Clear it and the DM reads those turns in full again until
+                the next one is written. Changes apply from the next turn.
+                {compacting && ' The DM is writing a new summary now; you can edit it once that is done.'}
               </small>
             </>
           ) : (

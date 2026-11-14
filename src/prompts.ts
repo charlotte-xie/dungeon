@@ -191,11 +191,11 @@ const summarizerInputsText = sectionReader<'scenario' | 'story' | 'story-start' 
   'summarizer-inputs.md',
 )
 
-// The summariser's input: the scenario, the summary so far (or word that the
+// The summariser's input: the scenario, the last summary (or word that the
 // story starts with these turns), the run of turns that follow it, each headed
-// by its number in the log, the length to aim for, then what to write. The
-// length rides here rather than in the system prompt, which stays the same for
-// every call.
+// by its number in the log, the length its story so far aims for, then what to
+// write. The length rides here rather than in the system prompt, which stays
+// the same for every call.
 export function buildSummarizerInputs(
   scenario: string,
   previousSummary: string,

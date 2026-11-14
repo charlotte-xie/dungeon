@@ -6,16 +6,16 @@
 --- END OF THE SCENARIO ---
 
 ## story
---- THE STORY SO FAR ---
+--- THE LAST SUMMARY ---
 
 {{story}}
 
---- END OF THE STORY SO FAR ---
+--- END OF THE LAST SUMMARY ---
 
 ## story-start
---- THE STORY SO FAR ---
+--- THE LAST SUMMARY ---
 
-The story begins with these turns.
+None yet: the story begins with these turns.
 
 ## turns
 --- THE TURNS ({{count}}) ---
@@ -30,7 +30,7 @@ The story begins with these turns.
 {{text}}
 
 ## length
-Aim for about {{chars}} characters.
+Keep the story so far to about {{chars}} characters; the sections take the room they need.
 
 ## instruction
-Say what this story is about as it now stands: the world it is set in, who the people in it are to one another, and what is at stake.
+Write the summary for the story as it now stands: the story so far, then the four sections.

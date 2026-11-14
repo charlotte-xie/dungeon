@@ -31,7 +31,7 @@ import type { Chronicle, ChronicleEntry, Turn } from './types'
 export interface ChronicleSettings {
   compactionThreshold: number  // N — high watermark; also per-level promotion threshold
   compactionFloor: number      // drain target; see drainFloor
-  summaryTargetChars: number   // the length the summary aims for
+  summaryTargetChars: number   // the length the summary's story so far aims for
 }
 
 // The drain target. An event has to fold something, so a floor at or above N,
