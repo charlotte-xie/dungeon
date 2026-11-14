@@ -28,7 +28,7 @@ const STAGE_TITLES: Record<'plotter' | 'summarizer', string> = {
   plotter:
     'When on, the Plotter runs before each reply: it keeps the records, recalls memories and steers the narrator. When off, the narrator writes from the history and the records as they stand, and only you change them.',
   summarizer:
-    'When on, the summariser folds the older turns into the synopsis in the background once enough turns are live. When off, every turn stays live and each request keeps growing; compacting by hand in the State tab still works.',
+    'When on, the summariser folds the older turns into the summary in the background once enough turns are live. When off, every turn stays live and each request keeps growing; compacting by hand in the State tab still works.',
 }
 
 interface SettingsPanelProps {

@@ -13,14 +13,14 @@ interface AdventurePanelProps {
   slots: AdventureSlots
   ooc: string[]
   plot: string[]
-  // The running synopsis of the older turns; empty until the first is written.
+  // The running summary of the older turns; empty until the first is written.
   synopsis: string
   context: ContextConfig
   // Developer mode shows the arcs without asking.
   devMode: boolean
   busy: boolean
-  // A new synopsis is being written in the background, and will replace this
-  // one when it goes in, so the synopsis can't be edited until then.
+  // A new summary is being written in the background, and will replace this
+  // one when it goes in, so the summary can't be edited until then.
   compacting: boolean
   onSaveSlots: (next: AdventureSlots) => void
   onSaveOoc: (next: string[]) => void
@@ -70,7 +70,7 @@ function EyeIcon() {
 }
 
 // The parts of the adventure the player shapes: the brief and style guide it
-// is written from, the synopsis of the story so far, their standing OOC
+// is written from, the summary of the older turns, their standing OOC
 // instructions, and the arcs, which give the plot away and stay hidden until
 // asked for.
 export function AdventurePanel({
@@ -226,7 +226,7 @@ export function AdventurePanel({
           ) : (
             <small className="hint">
               Once the story has grown long enough for older turns to be folded away, the DM&apos;s
-              synopsis of them appears here for you to edit.
+              summary of them appears here for you to edit.
             </small>
           )}
         </label>
