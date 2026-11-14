@@ -28,7 +28,7 @@ import {
   buildPlotterTools,
   buildReplyNotes,
   buildStoryUpdate,
-  oocInView,
+  narratorView,
   storyUpdateCalls,
   type ContextFlags,
 } from '../request'
@@ -81,7 +81,9 @@ export interface NarratorContext {
   cacheKey?: string
   slots: AdventureSlots
   chronicle: Chronicle
-  // The story so far, ending with the turn being played (input, no reply).
+  // The turns the chronicle covers, before those in view.
+  folded: Turn[]
+  // The story in view, ending with the turn being played (input, no reply).
   history: Turn[]
   initialData: StoryData
   sampling: SamplingParams
@@ -240,6 +242,7 @@ function storyOf(ctx: NarratorContext) {
     systemPrompt: ctx.systemPrompt,
     slots: ctx.slots,
     chronicle: ctx.chronicle,
+    folded: ctx.folded,
     history: ctx.history.map((t, i) => (i === latest ? { ...t, storyUpdate: undefined } : t)),
     data: ctx.initialData,
     includePriorPlayerTurns: ctx.includePriorPlayerTurns,
@@ -351,7 +354,7 @@ export function nextTurnRequests(
       ]
     : []
   const latest = ctx.history.length - 1
-  const storyUpdate = buildStoryUpdate(ctx.history.slice(0, latest), [], ctx.initialData, ctx.flags)
+  const storyUpdate = buildStoryUpdate(ctx.history.slice(0, latest), [], ctx.initialData, ctx.flags, ctx.folded)
   const messages = narratorMessagesFor(ctx, ctx.initialData, [], storyUpdate)
   return [
     ...plotter,
@@ -570,7 +573,7 @@ export async function runNarrator(
     }
     plotting = {
       briefing: [...briefing],
-      storyUpdate: buildStoryUpdate(ctx.history.slice(0, latest), briefing, data, ctx.flags),
+      storyUpdate: buildStoryUpdate(ctx.history.slice(0, latest), briefing, data, ctx.flags, ctx.folded),
       trace: [...plotterTrace],
       reasoningTokens: reasoningTokens || undefined,
       error,
@@ -588,12 +591,12 @@ export async function runNarrator(
   // narrator, as they would after a Plotter that recorded nothing.
   const storyUpdate = plotting
     ? plotting.storyUpdate
-    : buildStoryUpdate(ctx.history.slice(0, latest), [], data, ctx.flags)
+    : buildStoryUpdate(ctx.history.slice(0, latest), [], data, ctx.flags, ctx.folded)
   const narratorMessages = narratorMessagesFor(ctx, data, briefing, storyUpdate)
   // The story update and the notes show in the narrator's trace, which is
   // never replayed into either role's context.
-  const oocBefore = oocInView(ctx.history.slice(0, latest))
-  for (const call of storyUpdate ? storyUpdateCalls(storyUpdate, oocBefore) : []) {
+  const viewBefore = narratorView(ctx.folded, ctx.history.slice(0, latest), ctx.flags)
+  for (const call of storyUpdate ? storyUpdateCalls(storyUpdate, viewBefore) : []) {
     trace.push({ kind: 'call', name: call.name, arguments: '{}', result: call.result })
   }
   const notes = buildReplyNotes(briefing, data, ctx.flags)

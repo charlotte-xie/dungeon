@@ -16,11 +16,14 @@
 //      text, or the fixed opening / Continue input), the narrator's
 //      story update, and its narration prose, so nothing sent once is later
 //      removed. The story update — memory entries newly recalled, or already
-//      in view and changed, and the OOC list when it changed — sits between
-//      the input and the reply as the narrator's own calls, named for what
-//      they bring and saved with the turn so they replay byte for byte. Other
-//      tool calls and reasoning are never replayed. A failed turn produced no
-//      narration and is skipped entirely.
+//      in view and changed, and the arcs and the OOC list when they changed —
+//      sits between the input and the reply as the narrator's own calls,
+//      named for what they bring and saved with the turn so they replay byte
+//      for byte. After a fold, the narrator's history opens with the same
+//      kind of update, telling in full what it held when the folded turns
+//      were folded, so what it has in view carries across the synopsis.
+//      Other tool calls and reasoning are never replayed. A failed turn
+//      produced no narration and is skipped entirely.
 //   3. Tail — volatile, part of the current turn only and never persisted.
 //      The Plotter gets the current records as a seeded tool exchange (one
 //      assistant message that "called" the read tools, then one tool result
@@ -46,6 +49,7 @@ import {
   CHECK_OOC_TOOL,
   CHECK_STATE_TOOL,
   EVENTS_FACET,
+  MAX_ENTRY_EVENTS,
   GET_OOC_INSTRUCTIONS_TOOL,
   GET_STEER_TOOL,
   GET_STORY_ARCS_TOOL,
@@ -251,6 +255,8 @@ export interface ModelMessagesArgs {
   systemPrompt: string
   slots: AdventureSlots
   chronicle: Chronicle
+  // The turns the chronicle covers, before those in view.
+  folded: Turn[]
   history: Turn[]
   data: StoryData
   includePriorPlayerTurns: boolean
@@ -344,109 +350,149 @@ function diffJson(before: JsonValue, after: JsonValue): JsonValue | undefined {
   return changes.length ? Object.fromEntries(changes) : undefined
 }
 
-// Applies a change made by diffJson.
+// Applies a change made by diffJson. An entry's events keep the last few, as
+// memory keeps them.
 function applyJsonChange(base: JsonValue, change: JsonValue): JsonValue {
   if (!isPlainObject(base) || !isPlainObject(change)) return change
   const merged = new Map(Object.entries(base))
   for (const [key, value] of Object.entries(change)) {
     const held = base[key]
     if (value === null) merged.delete(key)
-    else if (key === EVENTS_FACET && Array.isArray(held) && Array.isArray(value)) merged.set(key, [...held, ...value])
+    else if (key === EVENTS_FACET && Array.isArray(held) && Array.isArray(value)) {
+      merged.set(key, [...held, ...value].slice(-MAX_ENTRY_EVENTS))
+    }
     else merged.set(key, Object.hasOwn(base, key) ? applyJsonChange(held, value) : value)
   }
   return Object.fromEntries(merged)
 }
 
-// What the turn adds to the narrator's history, from the Plotter's briefing
-// and the records as they stand after its updates: memory entries recalled
-// that the narrator doesn't hold, in full; for entries it holds, only what
-// has changed since, so nothing unchanged is said again; and the OOC list
-// when it differs from the latest one in view, or has dropped out of view
-// with compaction. `earlier` is the history in view before this turn.
-// Undefined when there is nothing to add.
+// --- The narrator's view of the records ---
+// What the narrator has been told: the memory entries it was given in full,
+// with later changes applied, and the OOC list and arcs it was last given.
+// Every story update is one step from a view: worked out by storyUpdateFor,
+// told by storyUpdateCalls, and taken in by applyStoryUpdate. The first step
+// comes straight after the synopsis and tells, from nothing in view,
+// everything the narrator held when the folded turns were folded; each turn
+// then takes a step from there.
+
+export interface NarratorView {
+  memory: ReadonlyMap<string, JsonValue>
+  ooc?: string[]
+  arcs?: string[]
+}
+
+const NOTHING_IN_VIEW: NarratorView = { memory: new Map() }
+
+// What a step aims for. A record left undefined isn't touched.
+interface ViewTarget {
+  memory?: ReadonlyMap<string, JsonValue>
+  ooc?: string[]
+  arcs?: string[]
+}
+
+// The view once the narrator has been told this update.
+function applyStoryUpdate(view: NarratorView, update: StoryUpdate | undefined): NarratorView {
+  if (!update) return view
+  const memory = new Map(view.memory)
+  for (const [name, entry] of Object.entries(update.recalled ?? {})) memory.set(name, entry)
+  for (const [name, change] of Object.entries(update.changed ?? {})) {
+    // A change to an entry whose full version is out of view can't be read
+    // on its own, so that entry stays out of view.
+    const held = memory.get(name)
+    if (held !== undefined) memory.set(name, applyJsonChange(held, change))
+  }
+  for (const name of update.forgotten ?? []) memory.delete(name)
+  return { memory, ooc: update.ooc ?? view.ooc, arcs: update.arcs ?? view.arcs }
+}
+
+// The view after these turns' updates, failed turns aside.
+function viewAfter(view: NarratorView, turns: Turn[]): NarratorView {
+  return turns.reduce((v, t) => (t.reply.error ? v : applyStoryUpdate(v, t.storyUpdate)), view)
+}
+
+// A list goes when it differs from the one in view, or when none is in view
+// and it holds something.
+function listDiffers(inView: string[] | undefined, list: string[]): boolean {
+  return inView ? JSON.stringify(inView) !== JSON.stringify(list) : list.length > 0
+}
+
+// The step: what to tell a narrator holding `view` so that it holds
+// `target`. Memory entries it doesn't hold go in full; for those it holds,
+// only what has changed, so nothing unchanged is said again; held entries the
+// target no longer has are forgotten. The OOC list and the arcs go whole when
+// they differ. Undefined when there is nothing to tell.
+function storyUpdateFor(view: NarratorView, target: ViewTarget): StoryUpdate | undefined {
+  const update: StoryUpdate = {}
+  if (target.memory) {
+    const recalled: [string, JsonValue][] = []
+    const changed: [string, JsonValue][] = []
+    for (const [name, entry] of target.memory) {
+      const held = view.memory.get(name)
+      if (held === undefined) {
+        recalled.push([name, entry])
+        continue
+      }
+      const change = diffJson(held, entry)
+      if (change !== undefined) changed.push([name, change])
+    }
+    const forgotten = [...view.memory.keys()].filter((name) => !target.memory?.has(name))
+    if (recalled.length) update.recalled = Object.fromEntries(recalled)
+    if (changed.length) update.changed = Object.fromEntries(changed)
+    if (forgotten.length) update.forgotten = forgotten
+  }
+  if (target.arcs && listDiffers(view.arcs, target.arcs)) update.arcs = [...target.arcs]
+  if (target.ooc && listDiffers(view.ooc, target.ooc)) update.ooc = [...target.ooc]
+  return Object.keys(update).length ? update : undefined
+}
+
+// The records a step aims for, of those switched on.
+function shownRecords(flags: ContextFlags, records: ViewTarget): ViewTarget {
+  return {
+    ...(flags.includeMemory ? { memory: records.memory } : {}),
+    ...(flags.includePlotOutline ? { arcs: records.arcs } : {}),
+    ...(flags.includeOoc ? { ooc: records.ooc } : {}),
+  }
+}
+
+// The first step, told straight after the synopsis: from nothing in view, to
+// what the narrator held when these turns were folded. It changes only when
+// more turns are folded. Undefined with nothing folded.
+export function synopsisStoryUpdate(folded: Turn[], flags: ContextFlags): StoryUpdate | undefined {
+  return storyUpdateFor(NOTHING_IN_VIEW, shownRecords(flags, viewAfter(NOTHING_IN_VIEW, folded)))
+}
+
+// What the narrator holds before the turn being played: the first step, then
+// the updates of the turns in view before it.
+export function narratorView(folded: Turn[], earlier: Turn[], flags: ContextFlags): NarratorView {
+  return viewAfter(applyStoryUpdate(NOTHING_IN_VIEW, synopsisStoryUpdate(folded, flags)), earlier)
+}
+
+// What the turn adds to the narrator's history: the step to the records as
+// they stand after the Plotter's updates, for the entries the narrator holds
+// and those the Plotter recalled. Once recalled, an entry is kept current
+// without being recalled again. `folded` are the turns the synopsis covers,
+// and `earlier` those in view before this turn.
 export function buildStoryUpdate(
   earlier: Turn[],
   briefing: BriefingCall[],
   data: StoryData,
   flags: ContextFlags,
+  folded: Turn[],
 ): StoryUpdate | undefined {
-  // The narrator's view of memory: entries it has been given in full, with
-  // later changes applied. A change to an entry whose full version is out of
-  // view can't be read on its own, so that entry counts as not held.
-  const view = new Map<string, JsonValue>()
-  for (const t of earlier) {
-    if (t.reply.error || !t.storyUpdate) continue
-    for (const [name, entry] of Object.entries(t.storyUpdate.recalled ?? {})) view.set(name, entry)
-    for (const [name, change] of Object.entries(t.storyUpdate.changed ?? {})) {
-      const held = view.get(name)
-      if (held !== undefined) view.set(name, applyJsonChange(held, change))
-    }
+  const view = narratorView(folded, earlier, flags)
+  const recalledNames = briefingArgs(briefing, RECALL_MEMORY_TOOL.name).flatMap((a) =>
+    Array.isArray(a.names) ? a.names.filter((n): n is string => typeof n === 'string') : [],
+  )
+  const memory = new Map<string, JsonValue>()
+  for (const name of new Set([...recalledNames, ...view.memory.keys()])) {
+    if (Object.hasOwn(data.memory, name)) memory.set(name, data.memory[name])
   }
-  const oocBefore = oocInView(earlier)
-  const arcsBefore = arcsInView(earlier)
-  const update: StoryUpdate = {}
-  if (flags.includeMemory) {
-    // Newly recalled entries, then those the narrator already holds: once
-    // recalled, an entry is kept current without being recalled again.
-    const recalledNames = briefingArgs(briefing, RECALL_MEMORY_TOOL.name).flatMap((a) =>
-      Array.isArray(a.names) ? a.names.filter((n): n is string => typeof n === 'string') : [],
-    )
-    const recalled: [string, JsonValue][] = []
-    const changed: [string, JsonValue][] = []
-    for (const name of new Set([...recalledNames, ...view.keys()])) {
-      if (!Object.hasOwn(data.memory, name)) continue
-      const current = data.memory[name]
-      const held = view.get(name)
-      if (held === undefined) {
-        recalled.push([name, current])
-        continue
-      }
-      const change = diffJson(held, current)
-      if (change !== undefined) changed.push([name, change])
-    }
-    if (recalled.length) update.recalled = Object.fromEntries(recalled)
-    if (changed.length) update.changed = Object.fromEntries(changed)
-  }
-  // The arcs go whole whenever they differ from those last given, whether
-  // the Plotter or the player changed them.
-  if (flags.includePlotOutline) {
-    const arcsChanged = arcsBefore
-      ? JSON.stringify(arcsBefore) !== JSON.stringify(data.plot)
-      : data.plot.length > 0
-    if (arcsChanged) update.arcs = [...data.plot]
-  }
-  if (flags.includeOoc) {
-    const oocChanged = oocBefore
-      ? JSON.stringify(oocBefore) !== JSON.stringify(data.ooc)
-      : data.ooc.length > 0
-    if (oocChanged) update.ooc = [...data.ooc]
-  }
-  return Object.keys(update).length ? update : undefined
-}
-
-// The OOC list the narrator was last given in these turns. Undefined at the
-// start of the story, and once compaction has folded it away.
-export function oocInView(turns: Turn[]): string[] | undefined {
-  let list: string[] | undefined
-  for (const t of turns) {
-    if (!t.reply.error && t.storyUpdate?.ooc) list = t.storyUpdate.ooc
-  }
-  return list
-}
-
-// Likewise the arcs the narrator was last given.
-function arcsInView(turns: Turn[]): string[] | undefined {
-  let list: string[] | undefined
-  for (const t of turns) {
-    if (!t.reply.error && t.storyUpdate?.arcs) list = t.storyUpdate.arcs
-  }
-  return list
+  return storyUpdateFor(view, shownRecords(flags, { memory, arcs: data.plot, ooc: data.ooc }))
 }
 
 // The OOC instructions as the narrator gets them: the whole list when it has
-// none in view, at the start of the story or after compaction; after that,
-// only what was added and what was withdrawn. Empty when only the order
-// changed.
+// none in view; after that, only what was added and what was withdrawn.
+// Empty when only the order changed.
 function renderOocUpdate(list: string[], before: string[] | undefined): string {
   if (!before) return buildOocPayload(list)
   const added = list.filter((entry) => !before.includes(entry))
@@ -458,17 +504,20 @@ function renderOocUpdate(list: string[], before: string[] | undefined): string {
   ].join('\n\n')
 }
 
-// A story update as the narrator's own calls, each named for what it brings:
-// what it remembers, the story's arcs, then the player's standing OOC
-// instructions. `oocBefore` is the OOC list in view before this update.
+// A story update as the narrator's own calls, told against the view it held
+// before, each named for what it brings: what it remembers, the story's
+// arcs, then the player's standing OOC instructions. A change is told only
+// for an entry in view, since on its own it can't be read; forgotten entries
+// go unsaid.
 export function storyUpdateCalls(
   update: StoryUpdate,
-  oocBefore: string[] | undefined,
+  view: NarratorView,
 ): { name: string; result: string }[] {
   const memories: string[] = []
   if (update.recalled) memories.push(`# Remembered\n\n${buildMemoryPayload(update.recalled)}`)
-  if (update.changed) memories.push(`# Changed\n\n${buildMemoryPayload(update.changed)}`)
-  const ooc = update.ooc ? renderOocUpdate(update.ooc, oocBefore) : ''
+  const changed = Object.entries(update.changed ?? {}).filter(([name]) => view.memory.has(name))
+  if (changed.length) memories.push(`# Changed\n\n${buildMemoryPayload(Object.fromEntries(changed))}`)
+  const ooc = update.ooc ? renderOocUpdate(update.ooc, view.ooc) : ''
   return [
     ...(memories.length ? [{ name: RECALL_MEMORIES_TOOL.name, result: memories.join('\n\n') }] : []),
     ...(update.arcs
@@ -512,35 +561,50 @@ export function buildReplyNotesMessages(notes: string): ModelMessage[] {
   return notes ? ownCallMessages('dm-get-steer', GET_STEER_TOOL.name, notes) : []
 }
 
-// A turn's story update as the DM's own calls, their ids derived from the
-// turn so the replay is byte-stable.
+// A story update as the DM's own calls, their ids derived from the turn so
+// the replay is byte-stable.
 export function buildStoryUpdateMessages(
   turnId: string,
   update: StoryUpdate,
-  oocBefore: string[] | undefined,
+  view: NarratorView,
 ): ModelMessage[] {
-  return storyUpdateCalls(update, oocBefore).flatMap((c) =>
+  return storyUpdateCalls(update, view).flatMap((c) =>
     ownCallMessages(`dm-${turnId.slice(0, 8)}-${c.name.replace(/_/g, '-')}`, c.name, c.result),
   )
 }
 
+// The first step's calls take their ids from the last folded turn, which is
+// never replayed, so they hold until the next fold and match no live turn's.
+function synopsisStepId(folded: Turn[]): string {
+  return folded.at(-1)?.id ?? ''
+}
+
 // History replays the durable story: each turn's input, its story update for
-// the narrator, and its narration prose. The Plotter gets the records whole
-// in its tail, so the story updates are the narrator's alone. The opening and
-// Continue inputs stay too — they are fixed short strings, they keep
-// user/assistant roles alternating, and dropping them once the turn completed
-// would remove bytes an earlier request already sent. Other tool activity and
-// reasoning are ephemeral scaffolding of the turn that produced them — each
-// role gets what it needs fresh in its tail, and stale snapshots would only
-// bloat the transcript.
+// the narrator, and its narration prose. For the narrator, the first step of
+// story updates comes first, told against nothing in view, and each turn's is
+// told against the view the steps before it left. The Plotter gets the
+// records whole in its tail, so the story updates are the narrator's alone.
+// The opening and Continue inputs stay too — they are fixed short strings,
+// they keep user/assistant roles alternating, and dropping them once the turn
+// completed would remove bytes an earlier request already sent. Other tool
+// activity and reasoning are ephemeral scaffolding of the turn that produced
+// them — each role gets what it needs fresh in its tail, and stale snapshots
+// would only bloat the transcript.
 function buildHistoryMessages(
   history: Turn[],
   includePriorPlayerTurns: boolean,
   role: 'narrator' | 'plotter',
+  folded: Turn[],
+  flags: ContextFlags,
 ): ModelMessage[] {
   const messages: ModelMessage[] = []
-  // The OOC list given so far, which each later update is told against.
-  let oocBefore: string[] | undefined
+  let view = NOTHING_IN_VIEW
+  const tell = (id: string, update: StoryUpdate | undefined) => {
+    if (!update || role !== 'narrator') return
+    messages.push(...buildStoryUpdateMessages(id, update, view))
+    view = applyStoryUpdate(view, update)
+  }
+  tell(synopsisStepId(folded), synopsisStoryUpdate(folded, flags))
   for (let i = 0; i < history.length; i++) {
     const t = history[i]
     // A failed turn has no narration to replay, and its input was never
@@ -555,10 +619,7 @@ function buildHistoryMessages(
     if (includeInput) {
       messages.push({ role: 'user', content: t.input ?? '' })
     }
-    if (t.storyUpdate && role === 'narrator') {
-      messages.push(...buildStoryUpdateMessages(t.id, t.storyUpdate, oocBefore))
-      if (t.storyUpdate.ooc) oocBefore = t.storyUpdate.ooc
-    }
+    tell(t.id, t.storyUpdate)
     if (hasReply) {
       messages.push({ role: 'assistant', content: t.reply.text ?? '' })
     }
@@ -587,7 +648,7 @@ export function buildNarratorSections(args: ModelMessagesArgs): RequestSections 
   return {
     system: buildFrameMessages(args, args.systemPrompt, 'narrator'),
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'narrator'),
+    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'narrator', args.folded, args.flags),
     tail: [
       ...buildReplyNotesMessages(buildReplyNotes(args.briefing ?? [], args.data, args.flags)),
       directiveMessage(
@@ -613,7 +674,7 @@ export function buildPlotterSections(args: PlotterMessagesArgs): RequestSections
   return {
     system: buildFrameMessages(args, plotterSystemPrompt(), 'plotter'),
     chronicle: chronicleMessages(args.chronicle),
-    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'plotter'),
+    history: buildHistoryMessages(args.history, args.includePriorPlayerTurns, 'plotter', args.folded, args.flags),
     tail: [
       ...buildContextInjectionMessages(args.data, args.flags),
       directiveMessage(args.pivot, args.reminderAsSystem),

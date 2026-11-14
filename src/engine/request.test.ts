@@ -12,9 +12,11 @@ import {
   buildStateGuidance,
   buildStoryUpdate,
   storyUpdateCalls,
+  synopsisStoryUpdate,
   buildStatePayload,
   type ContextFlags,
   type ModelMessagesArgs,
+  type NarratorView,
 } from './request'
 import type { ModelMessage } from './model/types'
 import { buildMemoryRules, buildStateRules, buildTurnReminder, plotterSystemPrompt, setPromptOverrides } from '../prompts'
@@ -41,6 +43,9 @@ const PLOTTER_ONLY = ['A drifter with a debt.', 'The miller returns at dusk', 'K
 
 const UPDATE: StoryUpdate = { recalled: { Hesta: { is: 'The baker.' } } }
 
+// A narrator that has been told nothing yet.
+const NOTHING_IN_VIEW: NarratorView = { memory: new Map() }
+
 const BRIEFING: BriefingCall[] = [
   { name: 'recall_memory', arguments: '{"names":["player","Hesta"]}', result: '{"player":{}}' },
   { name: 'steer', arguments: '{"text":"Nobody answers."}', result: 'ok' },
@@ -66,6 +71,7 @@ function args(
     systemPrompt: 'system prompt',
     slots: SLOTS,
     chronicle: [],
+    folded: [],
     history,
     data: {
       state: { scene: { location: 'the mill' } },
@@ -151,7 +157,7 @@ describe('buildNarratorMessages layout', () => {
     expect(story[2]).toEqual({
       role: 'tool',
       toolCallId: 'dm-t1-recall-memories',
-      content: storyUpdateCalls(UPDATE, undefined)[0].result,
+      content: storyUpdateCalls(UPDATE, NOTHING_IN_VIEW)[0].result,
     })
     expect(story[5].toolCalls?.map((c) => c.name)).toEqual(['get_ooc_instructions'])
     expect(story[6].content).toBe('1. Keep replies short.')
@@ -452,11 +458,12 @@ describe('buildStoryUpdate', () => {
       [recall(['Hesta', 'Nobody']), { name: 'steer', arguments: '{"text":"Hesta looks up."}', result: 'ok' }],
       data,
       ALL_FLAGS,
+      [],
     )
     // Entries come from the records, not the recall's result; unknown names
     // and unrecalled entries stay out, and the steer is for the reply alone.
     expect(update).toEqual({ recalled: { Hesta: { is: 'The baker.' } }, ooc: ['Keep replies short.'] })
-    const calls = storyUpdateCalls(update ?? {}, undefined)
+    const calls = storyUpdateCalls(update ?? {}, NOTHING_IN_VIEW)
     expect(calls.map((c) => c.name)).toEqual(['recall_memories', 'get_ooc_instructions'])
     expect(calls[0].result).toMatch(/^# Remembered\n\n```json\n[\s\S]*The baker\.[\s\S]*```$/)
     expect(calls[1].result).toBe('1. Keep replies short.')
@@ -465,9 +472,9 @@ describe('buildStoryUpdate', () => {
 
   it('adds only what is new to the narrator’s view or changed', () => {
     const earlier = [done('t1', { recalled: { Hesta: { is: 'The baker.' } }, ooc: ['Keep replies short.'] })]
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], data, ALL_FLAGS)).toBeUndefined()
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], data, ALL_FLAGS, [])).toBeUndefined()
     const changed = { ...data, memory: { Hesta: { is: 'The widowed baker.' } }, ooc: [] }
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], changed, ALL_FLAGS)).toEqual({
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], changed, ALL_FLAGS, [])).toEqual({
       changed: { Hesta: { is: 'The widowed baker.' } },
       // A cleared list is news too.
       ooc: [],
@@ -480,11 +487,11 @@ describe('buildStoryUpdate', () => {
       done('t2', { changed: { Hesta: { events: ['c'] } } }),
     ]
     const now = (events: string[]) => ({ ...data, memory: { Hesta: { is: 'The baker.', events } }, ooc: [] })
-    expect(buildStoryUpdate(earlier, [], now(['a', 'b', 'c', 'd']), ALL_FLAGS)?.changed).toEqual({
+    expect(buildStoryUpdate(earlier, [], now(['a', 'b', 'c', 'd']), ALL_FLAGS, [])?.changed).toEqual({
       Hesta: { events: ['d'] },
     })
     // The oldest falling off the end of the list is no news.
-    expect(buildStoryUpdate(earlier, [], now(['b', 'c']), ALL_FLAGS)?.changed).toBeUndefined()
+    expect(buildStoryUpdate(earlier, [], now(['b', 'c']), ALL_FLAGS, [])?.changed).toBeUndefined()
   })
 
   it('says only what changed in an entry the narrator holds, never the rest again', () => {
@@ -502,7 +509,7 @@ describe('buildStoryUpdate', () => {
       ooc: [],
       memory: { Saoirse: { is: 'a marine biologist', wants: { move: 'take up the post in Tromsø' }, regard: 'warming' } },
     }
-    expect(buildStoryUpdate(earlier, [recall(['Saoirse'])], now, ALL_FLAGS)).toEqual({
+    expect(buildStoryUpdate(earlier, [recall(['Saoirse'])], now, ALL_FLAGS, [])).toEqual({
       changed: { Saoirse: { wants: { stay: null }, regard: 'warming', wearing: null } },
     })
   })
@@ -517,14 +524,15 @@ describe('buildStoryUpdate', () => {
       ooc: [],
       memory: { Hesta: { is: 'The widowed baker.', wants: { shop: 'keep the bakery open' } } },
     }
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS)).toBeUndefined()
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS, [])).toBeUndefined()
   })
 
   it('gives an entry in full again once its full version is out of view', () => {
-    // Compaction dropped the turn that gave it; a change alone can't be read.
+    // A story folded before folded turns kept their updates lost the turn
+    // that gave it; a change alone can't be read.
     const earlier = [done('t2', { changed: { Hesta: { is: 'The widowed baker.' } } })]
     const now = { ...data, ooc: [], memory: { Hesta: { is: 'The widowed baker.', bond: 'wary' } } }
-    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS)).toEqual({
+    expect(buildStoryUpdate(earlier, [recall(['Hesta'])], now, ALL_FLAGS, [])).toEqual({
       recalled: { Hesta: { is: 'The widowed baker.', bond: 'wary' } },
     })
   })
@@ -537,21 +545,21 @@ describe('buildStoryUpdate', () => {
       ooc: [],
     }
     // Tam changed too, but the narrator has never been given Tam.
-    expect(buildStoryUpdate(earlier, [], changed, ALL_FLAGS)).toEqual({
+    expect(buildStoryUpdate(earlier, [], changed, ALL_FLAGS, [])).toEqual({
       changed: { Hesta: { is: 'The widowed baker.' } },
     })
   })
 
-  it('brings the OOC list back once it is out of view', () => {
-    // A failed turn's update was never shown; compaction drops older ones.
+  it('tells the OOC list a failed turn’s update held', () => {
+    // A failed turn's update was never shown.
     const failed: Turn = {
       ...done('f', { ooc: ['Keep replies short.'] }),
       reply: { id: 'f-reply', model: 'test', text: '(falters)', error: 'boom' },
     }
-    expect(buildStoryUpdate([failed, done('t2')], [], data, ALL_FLAGS)).toEqual({
+    expect(buildStoryUpdate([failed, done('t2')], [], data, ALL_FLAGS, [])).toEqual({
       ooc: ['Keep replies short.'],
     })
-    expect(buildStoryUpdate([], [], { ...data, ooc: [] }, ALL_FLAGS)).toBeUndefined()
+    expect(buildStoryUpdate([], [], { ...data, ooc: [] }, ALL_FLAGS, [])).toBeUndefined()
   })
 
   it('tells the narrator the whole OOC list first, then only what is added or withdrawn', () => {
@@ -565,20 +573,18 @@ describe('buildStoryUpdate', () => {
       '1. Keep replies short.\n2. No gore.',
       '# Added\n\n- Slow the pace.\n\n# Withdrawn\n\n- No gore.',
     ])
-    // Once compaction folds the first away, the next is told in full.
-    expect(told([t2])).toEqual(['1. Keep replies short.\n2. Slow the pace.'])
   })
 
   it('gives the narrator the arcs whole whenever they change, whoever changed them', () => {
     const arcs = { ...data, ooc: [], plot: ['The miller returns at dusk.', 'The flood takes the bridge.'] }
-    expect(buildStoryUpdate([], [], arcs, ALL_FLAGS)).toEqual({ arcs: arcs.plot })
+    expect(buildStoryUpdate([], [], arcs, ALL_FLAGS, [])).toEqual({ arcs: arcs.plot })
     const t1 = done('t1', { arcs: arcs.plot })
-    expect(buildStoryUpdate([t1], [], arcs, ALL_FLAGS)).toBeUndefined()
+    expect(buildStoryUpdate([t1], [], arcs, ALL_FLAGS, [])).toBeUndefined()
     // An arc the player rewrote between turns goes out like the Plotter's.
     const edited = { ...arcs, plot: ['The miller returns at dusk.', 'The flood spares the bridge, not the mill.'] }
-    expect(buildStoryUpdate([t1], [], edited, ALL_FLAGS)).toEqual({ arcs: edited.plot })
-    expect(buildStoryUpdate([t1], [], { ...arcs, plot: [] }, ALL_FLAGS)).toEqual({ arcs: [] })
-    const calls = storyUpdateCalls({ arcs: arcs.plot }, undefined)
+    expect(buildStoryUpdate([t1], [], edited, ALL_FLAGS, [])).toEqual({ arcs: edited.plot })
+    expect(buildStoryUpdate([t1], [], { ...arcs, plot: [] }, ALL_FLAGS, [])).toEqual({ arcs: [] })
+    const calls = storyUpdateCalls({ arcs: arcs.plot }, NOTHING_IN_VIEW)
     expect(calls).toEqual([
       {
         name: 'get_story_arcs',
@@ -595,8 +601,97 @@ describe('buildStoryUpdate', () => {
       [recall(['Hesta']), { name: 'steer', arguments: '{"text":"x"}', result: 'ok' }],
       { ...data, plot: ['The miller returns at dusk.'] },
       { ...ALL_FLAGS, includeMemory: false, includePlotOutline: false, includeOoc: false },
+      [],
     )
     expect(update).toBeUndefined()
+  })
+
+  it('forgets, without a word, a held entry memory no longer has', () => {
+    const earlier = [done('t1', { recalled: { Hesta: { is: 'The baker.' } } })]
+    const update = buildStoryUpdate(earlier, [], { ...data, memory: {}, ooc: [] }, ALL_FLAGS, [])
+    expect(update).toEqual({ forgotten: ['Hesta'] })
+    expect(storyUpdateCalls(update ?? {}, NOTHING_IN_VIEW)).toEqual([])
+    // Once forgotten, it isn't told again after a fold.
+    const forgot = done('t2', update)
+    expect(synopsisStoryUpdate([...earlier, forgot], ALL_FLAGS)).toBeUndefined()
+  })
+})
+
+describe('the narrator’s view across a fold', () => {
+  const recalled = { Hesta: { is: 'The baker.', events: ['a'] } }
+  // Turns the synopsis covers, each with what it told the narrator.
+  const folded: Turn[] = [
+    playerTurn('f1', 'I knock.', 'No answer.', { recalled, ooc: ['Keep replies short.'], arcs: ['The miller returns.'] }),
+    playerTurn('f2', 'I wait.', 'Hesta comes.', { changed: { Hesta: { events: ['b'] } }, ooc: ['Keep replies short.', 'No gore.'] }),
+  ]
+  const synopsis: ModelMessagesArgs['chronicle'] = [
+    [{ id: 'c1', text: 'You came to the mill.', firstTurnId: 'f1', lastTurnId: 'f2', createdAt: 0 }],
+  ]
+  const afterFold = (history: Turn[], overrides?: Partial<ModelMessagesArgs>) =>
+    buildNarratorMessages({ ...args(history), chronicle: synopsis, folded, ...overrides })
+
+  it('tells, straight after the synopsis, everything held when the turns were folded', () => {
+    const messages = afterFold([playerTurn('t3', 'I ask about the miller.')])
+    expect(messages[1].content).toContain('You came to the mill.')
+    const told = messages.slice(2, 8)
+    expect(told.map((m) => (m.toolCalls ? m.toolCalls[0].name : m.role))).toEqual([
+      'recall_memories',
+      'tool',
+      'get_story_arcs',
+      'tool',
+      'get_ooc_instructions',
+      'tool',
+    ])
+    // The entry as the narrator held it, its change applied; the lists whole.
+    expect(told[1].content).toContain('"events": [\n      "a",\n      "b"\n    ]')
+    expect(told[3].content).toBe('# Story arcs\n\n1. The miller returns.')
+    expect(told[5].content).toBe('1. Keep replies short.\n2. No gore.')
+    // Its ids come from the last folded turn, which is never replayed.
+    expect(told[0].toolCalls?.[0].id).toBe('dm-f2-recall-memories')
+    expect(messages[8]).toMatchObject({ role: 'user', content: 'I ask about the miller.' })
+  })
+
+  it('does the same with prior player turns left out', () => {
+    const t3 = playerTurn('t3', 'I ask.', 'Hesta shrugs.')
+    const messages = afterFold([t3, playerTurn('t4', 'I leave.')], { includePriorPlayerTurns: false })
+    expect(messages.slice(2, 8).every((m) => m.toolCalls?.length || m.role === 'tool')).toBe(true)
+    expect(messages[8]).toMatchObject({ role: 'assistant', content: 'Hesta shrugs.' })
+  })
+
+  it('works out each turn’s update from what was held at the fold', () => {
+    const data = {
+      state: {},
+      plot: ['The miller returns.'],
+      memory: { Hesta: { is: 'The widowed baker.', events: ['a', 'b'] } },
+      ooc: ['Keep replies short.', 'No gore.'],
+    }
+    // Held across the fold: a change goes as a change, and unchanged lists
+    // aren't told again.
+    expect(buildStoryUpdate([], [], data, ALL_FLAGS, folded)).toEqual({
+      changed: { Hesta: { is: 'The widowed baker.' } },
+    })
+  })
+
+  it('holds the first step’s bytes while turns are played between folds', () => {
+    const t3 = playerTurn('t3', 'I ask.', 'Hesta shrugs.', {
+      changed: { Hesta: { is: 'The widowed baker.' } },
+      ooc: ['Keep replies short.'],
+    })
+    const first = afterFold([playerTurn('t3', 'I ask.')])
+    const next = afterFold([t3, playerTurn('t4', 'I leave.')])
+    expect(next.slice(0, upToLatestInput(first).length)).toEqual(upToLatestInput(first))
+    // The turn's update is told against the view the first step left.
+    const ooc = next.filter((m) => m.toolCallId?.endsWith('-get-ooc-instructions')).map((m) => m.content)
+    expect(ooc).toEqual(['1. Keep replies short.\n2. No gore.', '# Withdrawn\n\n- No gore.'])
+    const changes = next.filter((m) => m.toolCallId === 'dm-t3-recall-memories').map((m) => m.content)
+    expect(changes).toEqual([expect.stringMatching(/^# Changed\n[\s\S]*widowed/)])
+  })
+
+  it('tells no change to an entry that isn’t held', () => {
+    // A story folded before folded turns kept their updates.
+    const orphan = playerTurn('t3', 'I ask.', 'Hesta shrugs.', { changed: { Hesta: { is: 'The widowed baker.' } } })
+    const messages = afterFold([orphan, playerTurn('t4', 'I leave.')], { folded: [] })
+    expect(messages.some((m) => m.content.includes('widowed'))).toBe(false)
   })
 })
 

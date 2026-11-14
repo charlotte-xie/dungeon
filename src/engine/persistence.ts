@@ -141,7 +141,9 @@ function isStoryUpdateLike(value: unknown): value is StoryUpdate {
     (value.arcs === undefined ||
       (Array.isArray(value.arcs) && value.arcs.every((entry) => typeof entry === 'string'))) &&
     (value.ooc === undefined ||
-      (Array.isArray(value.ooc) && value.ooc.every((entry) => typeof entry === 'string')))
+      (Array.isArray(value.ooc) && value.ooc.every((entry) => typeof entry === 'string'))) &&
+    (value.forgotten === undefined ||
+      (Array.isArray(value.forgotten) && value.forgotten.every((name) => typeof name === 'string')))
   )
 }
 

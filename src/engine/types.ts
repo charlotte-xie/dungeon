@@ -53,6 +53,9 @@ export interface StoryUpdate {
   changed?: Memory
   arcs?: string[]
   ooc?: string[]
+  // Entries the narrator held that memory no longer has. Nothing is said:
+  // they leave its view, so they aren't told again after the next fold.
+  forgotten?: string[]
 }
 
 export interface Turn {

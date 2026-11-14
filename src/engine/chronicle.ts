@@ -360,13 +360,12 @@ export function buildChronicleSystemMessage(chronicle: Chronicle): ModelMessage 
 // Strip per-call traces from any reply that's behind the cutoff. Same role as
 // the old stripTracesBefore — those traces were only useful for inspecting
 // the most recent turn, and dropping them keeps storage / save files small.
+// The story update stays: what the narrator was told in the folded turns is
+// what it holds after the synopsis.
 export function stripTracesBefore(turns: Turn[], cutoff: number): Turn[] {
   let changed = false
   const next = turns.map((t, i) => {
-    if (
-      i >= cutoff ||
-      (!t.reply.trace && !t.narrator?.trace && !t.plotter && !t.storyUpdate && !t.briefing)
-    ) {
+    if (i >= cutoff || (!t.reply.trace && !t.narrator?.trace && !t.plotter && !t.briefing)) {
       return t
     }
     changed = true
@@ -377,10 +376,9 @@ export function stripTracesBefore(turns: Turn[], cutoff: number): Turn[] {
       narrator = { ...narrator }
       delete narrator.trace
     }
-    // The plotter call is nothing but trace, and the story update and an old
-    // briefing are only ever replayed to the model, which no longer sees this
-    // turn — drop them all.
-    return { ...t, reply, narrator, plotter: undefined, storyUpdate: undefined, briefing: undefined }
+    // The plotter call is nothing but trace, and an old briefing is only
+    // ever replayed to the model, which no longer sees this turn.
+    return { ...t, reply, narrator, plotter: undefined, briefing: undefined }
   })
   return changed ? next : turns
 }

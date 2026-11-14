@@ -10,6 +10,7 @@ import {
   rebuildCallCount,
   rebuildChronicle,
   sameChronicle,
+  stripTracesBefore,
   withSummaryText,
   withoutEntries,
   type ChronicleSettings,
@@ -390,5 +391,27 @@ describe('failed turns', () => {
     const chronicle: Chronicle = [[entry('a', 'f0', 'f3')]]
     expect(await rebuildChronicle(turns, chronicle, SMALL, AGENT, new AbortController().signal)).toBe(chronicle)
     expect(mockedSummarizer).not.toHaveBeenCalled()
+  })
+})
+
+describe('stripTracesBefore', () => {
+  it('drops the folded turns’ traces and keeps what they told the narrator', () => {
+    const folded: Turn = {
+      id: 'f0',
+      kind: 'player',
+      input: 'I knock.',
+      reply: { id: 'f0-reply', model: 'test', text: 'No answer.', trace: [{ kind: 'thought', text: 'hm' }] },
+      plotter: { id: 'f0-plotter', model: 'test', trace: [] },
+      storyUpdate: { ooc: ['Keep replies short.'] },
+    }
+    const live: Turn = { ...folded, id: 'f1' }
+    const [stripped, kept] = stripTracesBefore([folded, live], 1)
+    expect(stripped.reply.trace).toBeUndefined()
+    expect(stripped.plotter).toBeUndefined()
+    expect(stripped.storyUpdate).toEqual({ ooc: ['Keep replies short.'] })
+    expect(kept).toBe(live)
+    // With nothing left to strip, the log is returned as it is.
+    const again = [stripped, live]
+    expect(stripTracesBefore(again, 1)).toBe(again)
   })
 })

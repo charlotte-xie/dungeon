@@ -36,6 +36,7 @@ const CTX: NarratorContext = {
   protocol: 'chat-completions',
   slots: { scenario: 'A haunted mill.', styleGuide: '' },
   chronicle: [],
+  folded: [],
   history: [
     {
       id: 't1',

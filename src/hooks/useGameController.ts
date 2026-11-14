@@ -455,9 +455,12 @@ export function useGameController(settings: GameSettings) {
     cacheKey: string
     slots: AdventureSlots
     chronicle: Chronicle
-    history: Turn[]
+    // The whole log, ending with the turn being played.
+    log: Turn[]
     data: StoryData
   }): NarratorContext {
+    // The chronicle covers the turns up to its cutoff; the rest are in view.
+    const cutoff = chronicleCutoff(turn.chronicle, turn.log)
     return {
       systemPrompt: narratorSystemPrompt(),
       model,
@@ -470,7 +473,8 @@ export function useGameController(settings: GameSettings) {
       cacheKey: turn.cacheKey,
       slots: turn.slots,
       chronicle: turn.chronicle,
-      history: turn.history,
+      folded: turn.log.slice(0, cutoff),
+      history: turn.log.slice(cutoff),
       initialData: turn.data,
       sampling,
       stateCleanupThreshold: context.stateCleanupChars,
@@ -501,7 +505,7 @@ export function useGameController(settings: GameSettings) {
       cacheKey,
       slots,
       chronicle,
-      history: [...turns, pendingTurn].slice(compactCutoff),
+      log: [...turns, pendingTurn],
       data: { state, plot, memory, ooc },
     })
     // runTurn always listens to the Plotter's stage and thinking.
@@ -641,7 +645,7 @@ export function useGameController(settings: GameSettings) {
           cacheKey,
           slots: turnSlots,
           chronicle: baseChronicle,
-          history: allTurns.slice(chronicleCutoff(baseChronicle, baseTurns)),
+          log: allTurns,
           data: baseData,
         }),
         controller.signal,
