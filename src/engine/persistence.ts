@@ -1,7 +1,13 @@
 // All localStorage IO + save-file shape detection / migration. The React tree
 // sees only loadStored*/persist* functions and the SavedGame type.
 
-import { indexChronicle, totalChronicleEntries, type LegacyChronicleEntry, type StoredChronicle } from './chronicle'
+import {
+  indexChronicle,
+  totalChronicleEntries,
+  type HandFold,
+  type LegacyChronicleEntry,
+  type StoredChronicle,
+} from './chronicle'
 import { ADVENTURE_SLOTS, DEFAULT_BASE_URL, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
 import type { ReasoningEffort } from './model/types'
 import { keyFor, withKey, type ProviderKeys } from './providerKeys'
@@ -46,6 +52,7 @@ export const LS_RECOVERY = 'dm.recovery'
 export const LS_OOC_BASELINE = 'dm.oocBaseline'
 export const LS_PLOT_BASELINE = 'dm.plotBaseline'
 export const LS_PROMPT_OVERRIDES = 'dm.promptOverrides'
+export const LS_PENDING_FOLD = 'dm.pendingFold'
 
 const LS_MESSAGES_V1 = 'dm.messages'
 // The trace toggle that developer mode replaced; every browser stored it.
@@ -276,6 +283,52 @@ export function persistPromptOverrides(overrides: Readonly<Record<string, string
   try {
     if (Object.keys(overrides).length) localStorage.setItem(LS_PROMPT_OVERRIDES, JSON.stringify(overrides))
     else localStorage.removeItem(LS_PROMPT_OVERRIDES)
+  } catch {
+    // ignore quota / disabled storage
+  }
+}
+
+// A fold the player started by hand, kept while it runs. `hidden` says the
+// page was in the background at some point while it ran, where the browser
+// may have cut its requests short; such a run carries on when the page is
+// back, after a reload too. It holds no connection details and never goes in
+// a save file.
+export interface PendingFold {
+  fold: HandFold
+  hidden: boolean
+}
+
+export function loadStoredPendingFold(): PendingFold | null {
+  try {
+    return parsePendingFold(JSON.parse(localStorage.getItem(LS_PENDING_FOLD) ?? 'null'))
+  } catch {
+    return null
+  }
+}
+
+function parsePendingFold(value: unknown): PendingFold | null {
+  if (!isRecord(value) || typeof value.hidden !== 'boolean') return null
+  const fold = parseHandFold(value.fold)
+  return fold && { fold, hidden: value.hidden }
+}
+
+function parseHandFold(value: unknown): HandFold | null {
+  if (!isRecord(value)) return null
+  if (value.kind === 'compact') {
+    return typeof value.throughTurnId === 'string' ? { kind: 'compact', throughTurnId: value.throughTurnId } : null
+  }
+  if (value.kind === 'rewrite') return { kind: 'rewrite' }
+  if (value.kind !== 'rebuild') return null
+  if (value.done === undefined) return { kind: 'rebuild' }
+  const { done } = value
+  if (!isRecord(done) || typeof done.text !== 'string' || typeof done.lastTurnId !== 'string') return null
+  return { kind: 'rebuild', done: { text: done.text, lastTurnId: done.lastTurnId } }
+}
+
+export function persistPendingFold(pending: PendingFold | null) {
+  try {
+    if (pending) localStorage.setItem(LS_PENDING_FOLD, JSON.stringify(pending))
+    else localStorage.removeItem(LS_PENDING_FOLD)
   } catch {
     // ignore quota / disabled storage
   }

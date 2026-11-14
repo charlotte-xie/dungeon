@@ -1,21 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildChronicleSystemMessage,
+  canCompact,
   chronicleCutoff,
   chronicleNeedsCompaction,
   chronicleRanges,
   compactChronicle,
   entryTurnNumbers,
+  handFoldLeft,
   indexChronicle,
   nextFold,
+  planCompaction,
   rebuildCallCount,
   rebuildChronicle,
+  runHandFold,
   sameChronicle,
   stripTracesBefore,
   withSummaryText,
   withoutEntries,
   type ChronicleSettings,
+  type HandFold,
+  type HandFoldEvents,
   type LegacyChronicleEntry,
+  type RebuildProgress,
 } from './chronicle'
 import { runSummarizer, type SummaryTurn } from './agents/summarizer'
 import type { Chronicle, ChronicleEntry, Turn } from './types'
@@ -243,60 +250,6 @@ describe('compaction', () => {
     }
   })
 
-  it('folds every live turn but the latest it is asked to keep, below the threshold', async () => {
-    const turns = completedTurns(6)
-    const keeping = (keep: number, chronicle: Chronicle = []) =>
-      compactChronicle(turns, chronicle, DEFAULTS, AGENT, new AbortController().signal, { keep })
-    expect(turnRanges(await keeping(1), turns)).toEqual([[0, 5]])
-    expect(turnRanges(await keeping(2), turns)).toEqual([[0, 4]])
-    // Keeping none still keeps the latest turn live.
-    expect(turnRanges(await keeping(0), turns)).toEqual([[0, 5]])
-    // With a summary, only the turns after it are read.
-    mockedSummarizer.mockClear()
-    await keeping(1, [[entry('old', 't0', 't2')]])
-    expect(summariesSeen()).toEqual(['old'])
-    expect(turnNumbersRead(0)).toEqual([4, 5])
-  })
-
-  it('takes a long fold it is asked for in stretches, telling how far it has got', async () => {
-    const turns = completedTurns(12)
-    const progress: string[] = []
-    const chronicle = await compactChronicle(turns, [], SMALL, AGENT, new AbortController().signal, {
-      keep: 2,
-      onProgress: (label) => progress.push(label),
-    })
-    expect(turnRanges(chronicle, turns)).toEqual([[0, 10]])
-    expect(mockedSummarizer.mock.calls.map((_, i) => turnNumbersRead(i))).toEqual([
-      [1, 2, 3, 4],
-      [5, 6, 7, 8],
-      [9, 10],
-    ])
-    expect(progress).toHaveLength(3)
-  })
-
-  it('writes the summary again from itself when there are no turns to fold', async () => {
-    const turns = completedTurns(6)
-    const chronicle: Chronicle = [[entry('old', 't0', 't3')]]
-    const rewritten = await compactChronicle(turns, chronicle, DEFAULTS, AGENT, new AbortController().signal, {
-      keep: 4,
-    })
-    expect(mockedSummarizer).toHaveBeenCalledTimes(1)
-    expect(summariesSeen()).toEqual(['old'])
-    expect(turnNumbersRead(0)).toEqual([])
-    expect(rewritten[0][0].text).not.toBe('old')
-    // The cutoff stays where it was.
-    expect(turnRanges(rewritten, turns)).toEqual([[0, 4]])
-  })
-
-  it('leaves the chronicle alone when asked to keep every turn and there is no summary', async () => {
-    const turns = completedTurns(3)
-    const empty: Chronicle = []
-    expect(
-      await compactChronicle(turns, empty, DEFAULTS, AGENT, new AbortController().signal, { keep: 5 }),
-    ).toBe(empty)
-    expect(mockedSummarizer).not.toHaveBeenCalled()
-  })
-
   it('still folds when a stored threshold sits below the floor', async () => {
     // Stored threshold 8 with the default floor 16: an event folds half.
     const turns = completedTurns(8)
@@ -341,19 +294,161 @@ describe('rebuildChronicle', () => {
 
   it('replays compaction from the first turn, covering the same turns', async () => {
     const chronicle: Chronicle = [[entry('b', 't4', 't7')], [entry('a', 't0', 't3')]]
-    const progress: number[] = []
-    const rebuilt = await rebuildChronicle(TEN, chronicle, SMALL, AGENT, new AbortController().signal, (done) =>
-      progress.push(done),
-    )
+    const steps: number[] = []
+    const rebuilt = await rebuildChronicle(TEN, chronicle, SMALL, AGENT, new AbortController().signal, {
+      onStep: (step) => steps.push(step),
+    })
     expect(rebuilt.flat()).toHaveLength(1)
     expect(turnRanges(rebuilt, TEN)).toEqual([[0, 8]])
     expect(turnNumbersRead(0)).toEqual([1, 2, 3, 4])
     expect(turnNumbersRead(1)).toEqual([5, 6, 7, 8])
-    expect(progress).toEqual([1, 2])
+    expect(steps).toEqual([1, 2])
     expect(rebuildCallCount(TEN, chronicle, SMALL)).toBe(2)
     // The old text plays no part: the first rewrite starts from nothing.
     const first = await mockedSummarizer.mock.results[0].value
     expect(summariesSeen()).toEqual(['', first.summary])
+  })
+
+  it('tells how far it has got after each stretch, and carries on from there', async () => {
+    const turns = completedTurns(14)
+    const chronicle: Chronicle = [[entry('old', 't0', 't11')]]
+    const progress: RebuildProgress[] = []
+    await rebuildChronicle(turns, chronicle, SMALL, AGENT, new AbortController().signal, {
+      onProgress: (done) => progress.push(done),
+    })
+    expect(progress.map((p) => p.lastTurnId)).toEqual(['t3', 't7', 't11'])
+
+    // Carrying on from the first stretch reads only the turns after it, and
+    // counts the call already made.
+    mockedSummarizer.mockClear()
+    const steps: [number, number][] = []
+    const rebuilt = await rebuildChronicle(turns, chronicle, SMALL, AGENT, new AbortController().signal, {
+      from: progress[0],
+      onStep: (step, total) => steps.push([step, total]),
+    })
+    expect(summariesSeen()).toEqual([progress[0].text, expect.any(String)])
+    expect(turnNumbersRead(0)).toEqual([5, 6, 7, 8])
+    expect(steps).toEqual([
+      [2, 3],
+      [3, 3],
+    ])
+    expect(turnRanges(rebuilt, turns)).toEqual([[0, 12]])
+  })
+
+  it('starts from the first turn when where it got to is no longer a turn the summary covers', async () => {
+    const turns = completedTurns(14)
+    const chronicle: Chronicle = [[entry('old', 't0', 't7')]]
+    for (const lastTurnId of ['gone', 't11']) {
+      mockedSummarizer.mockClear()
+      await rebuildChronicle(turns, chronicle, SMALL, AGENT, new AbortController().signal, {
+        from: { text: 'stale', lastTurnId },
+      })
+      expect(summariesSeen()[0]).toBe('')
+      expect(turnNumbersRead(0)[0]).toBe(1)
+    }
+  })
+
+  it('makes no call when where it got to is where the summary ends', async () => {
+    const turns = completedTurns(10)
+    const chronicle: Chronicle = [[entry('old', 't0', 't7')]]
+    const rebuilt = await rebuildChronicle(turns, chronicle, SMALL, AGENT, new AbortController().signal, {
+      from: { text: 'All of it, afresh.', lastTurnId: 't7' },
+    })
+    expect(mockedSummarizer).not.toHaveBeenCalled()
+    expect(rebuilt[0][0].text).toBe('All of it, afresh.')
+    expect(turnRanges(rebuilt, turns)).toEqual([[0, 8]])
+  })
+})
+
+describe('folding by hand', () => {
+  const run = (fold: HandFold, turns: Turn[], chronicle: Chronicle, events?: HandFoldEvents) =>
+    runHandFold(fold, turns, chronicle, SMALL, AGENT, new AbortController().signal, events)
+
+  beforeEach(() => {
+    mockedSummarizer.mockClear()
+  })
+
+  it('folds every live turn but the latest it is asked to keep, whether or not a fold is due', async () => {
+    const turns = completedTurns(6)
+    expect(planCompaction(turns, [], 1)).toEqual({ kind: 'compact', throughTurnId: 't4' })
+    expect(planCompaction(turns, [], 2)).toEqual({ kind: 'compact', throughTurnId: 't3' })
+    // Keeping none still keeps the latest turn live.
+    expect(planCompaction(turns, [], 0)).toEqual(planCompaction(turns, [], 1))
+    const chronicle = await run({ kind: 'compact', throughTurnId: 't3' }, turns, [[entry('old', 't0', 't1')]])
+    expect(summariesSeen()).toEqual(['old'])
+    expect(turnNumbersRead(0)).toEqual([3, 4])
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 4]])
+  })
+
+  it('puts each stretch of a long compaction in place as it is written', async () => {
+    const turns = completedTurns(12)
+    const folded: Chronicle[] = []
+    const steps: [number, number][] = []
+    const chronicle = await run(planCompaction(turns, [], 2)!, turns, [], {
+      onStep: (step, total) => steps.push([step, total]),
+      onFolded: (next) => folded.push(next),
+    })
+    expect(folded.map((c) => turnRanges(c, turns))).toEqual([[[0, 4]], [[0, 8]], [[0, 10]]])
+    expect(folded.at(-1)).toBe(chronicle)
+    expect(steps.map(([step]) => step)).toEqual([1, 2, 3])
+  })
+
+  it('carries on a compaction cut short from where the chronicle got to', async () => {
+    const turns = completedTurns(12)
+    const fold = planCompaction(turns, [], 2)!
+    const partway: Chronicle = [[entry('partway', 't0', 't3')]]
+    expect(handFoldLeft(fold, turns, partway)).toBe(true)
+    const chronicle = await run(fold, turns, partway)
+    expect(summariesSeen()[0]).toBe('partway')
+    expect(turnNumbersRead(0)[0]).toBe(5)
+    expect(turnRanges(chronicle, turns)).toEqual([[0, 10]])
+    // Once the chronicle reaches the turn, nothing is left, and no summary is
+    // written again.
+    mockedSummarizer.mockClear()
+    expect(handFoldLeft(fold, turns, chronicle)).toBe(false)
+    expect(await run(fold, turns, chronicle)).toBe(chronicle)
+    expect(mockedSummarizer).not.toHaveBeenCalled()
+  })
+
+  it('writes the summary again from itself when there are no turns to fold', async () => {
+    const turns = completedTurns(6)
+    const chronicle: Chronicle = [[entry('old', 't0', 't3')]]
+    const fold = planCompaction(turns, chronicle, 4)
+    expect(fold).toEqual({ kind: 'rewrite' })
+    const rewritten = await run(fold!, turns, chronicle)
+    expect(mockedSummarizer).toHaveBeenCalledTimes(1)
+    expect(summariesSeen()).toEqual(['old'])
+    expect(turnNumbersRead(0)).toEqual([])
+    expect(rewritten[0][0].text).not.toBe('old')
+    // The cutoff stays where it was.
+    expect(turnRanges(rewritten, turns)).toEqual([[0, 4]])
+  })
+
+  it('has nothing to do when every turn is kept and there is no summary', () => {
+    expect(planCompaction(completedTurns(3), [], 5)).toBeNull()
+    expect(canCompact(completedTurns(1), [])).toBe(false)
+    expect(canCompact(completedTurns(2), [])).toBe(true)
+    expect(canCompact(completedTurns(1), [[entry('old', 't0', 't0')]])).toBe(true)
+  })
+
+  it('keeps a rebuild’s progress aside rather than putting it in place', async () => {
+    const turns = completedTurns(10)
+    const chronicle: Chronicle = [[entry('old', 't0', 't7')]]
+    const rebuilt: HandFold[] = []
+    const folded: Chronicle[] = []
+    await run({ kind: 'rebuild' }, turns, chronicle, {
+      onRebuilt: (fold) => rebuilt.push(fold),
+      onFolded: (next) => folded.push(next),
+    })
+    expect(folded).toEqual([])
+    expect(rebuilt.map((f) => f.kind === 'rebuild' && f.done?.lastTurnId)).toEqual(['t3', 't7'])
+  })
+
+  it('drops a compaction whose turn has gone from the log', () => {
+    const fold: HandFold = { kind: 'compact', throughTurnId: 'gone' }
+    expect(handFoldLeft(fold, TEN, [])).toBe(false)
+    expect(handFoldLeft({ kind: 'rebuild' }, TEN, [])).toBe(false)
+    expect(handFoldLeft({ kind: 'rewrite' }, TEN, [[entry('old', 't0', 't3')]])).toBe(true)
   })
 })
 

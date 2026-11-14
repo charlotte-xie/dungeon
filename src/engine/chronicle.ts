@@ -264,6 +264,13 @@ export function nextFold(
   }
 }
 
+export interface FoldEvents {
+  // A stretch is starting: the `step`th model call of `total`.
+  onStep?: (step: number, total: number) => void
+  // A stretch is written: the chronicle as it now stands.
+  onStretch?: (chronicle: Chronicle) => void
+}
+
 // Rewrites the summary to reach the end of turns [start, end), in stretches
 // of `stretch` turns, one after another so each reads the summary the last one
 // left. A stretch of nothing but failed turns has no story to tell: its turns
@@ -277,7 +284,7 @@ async function foldTurns(
   settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
-  onStep?: (step: number, total: number) => void,
+  { onStep, onStretch }: FoldEvents = {},
 ): Promise<Chronicle> {
   let next = chronicle
   const stretch = stretchLength(settings)
@@ -286,12 +293,12 @@ async function foldTurns(
     onStep?.(i, count)
     const last = Math.min(c + stretch, end)
     const input = summarizerInput(turns, next, c, last, settings, agent)
-    if (!input.turns.length) {
+    if (input.turns.length) {
+      next = summaryReaching(turns, last, (await runSummarizer(input, signal)).summary)
+    } else {
       next = extendLastEntry(next, turns[last - 1].id) ?? next
-      continue
     }
-    const result = await runSummarizer(input, signal)
-    next = summaryReaching(turns, last, result.summary)
+    if (next.length) onStretch?.(next)
   }
   return next
 }
@@ -327,35 +334,98 @@ function summaryReaching(turns: Turn[], end: number, text: string): Chronicle {
   }]]
 }
 
-export interface CompactOptions {
-  // Keep this many of the latest turns live, at least one, and fold the rest
-  // now, whether or not a fold is due. With nothing left to fold, the summary
-  // is written again from itself. Left out, the live turns are folded down to
-  // the floor once they reach the threshold.
-  keep?: number
-  onProgress?: (label: string) => void
-}
-
-// Folds the live tail into the summary when a fold is due, or as `keep` asks.
+// Folds the live tail down to the floor once it reaches the threshold: the
+// fold after a reply.
 export async function compactChronicle(
   turns: Turn[],
   chronicle: Chronicle,
   settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
-  { keep, onProgress }: CompactOptions = {},
 ): Promise<Chronicle> {
   const N = Math.max(2, settings.compactionThreshold)
   const cutoff = chronicleCutoff(chronicle, turns)
-  if (keep === undefined && turns.length - cutoff < N) return chronicle
-  const targetCutoff = turns.length - (keep === undefined ? drainFloor(settings, N) : Math.max(1, keep))
-  if (targetCutoff <= cutoff) {
-    onProgress?.('Rewriting the summary…')
-    return rewriteSummary(turns, chronicle, settings, agent, signal)
+  if (turns.length - cutoff < N) return chronicle
+  return foldTurns(turns, chronicle, cutoff, turns.length - drainFloor(settings, N), settings, agent, signal)
+}
+
+// How far a rebuild has got: the summary it has written of the turns from the
+// first through `lastTurnId`.
+export interface RebuildProgress {
+  text: string
+  lastTurnId: string
+}
+
+// A fold the player asks for by hand, whether or not one is due, as it stands
+// while it runs: fold the live turns through a given turn, write the summary
+// again from itself, or write it afresh from the first turn, with how far that
+// has got.
+export type HandFold =
+  | { kind: 'compact'; throughTurnId: string }
+  | { kind: 'rewrite' }
+  | { kind: 'rebuild'; done?: RebuildProgress }
+
+// Compacting by hand, keeping the latest `keep` turns live (at least one):
+// fold the live turns before them, or with none to fold, write the summary
+// again from itself. With no summary either, there is nothing to do.
+export function planCompaction(turns: Turn[], chronicle: Chronicle, keep: number): HandFold | null {
+  const cutoff = chronicleCutoff(chronicle, turns)
+  const end = turns.length - Math.max(1, keep)
+  if (end > cutoff) return { kind: 'compact', throughTurnId: turns[end - 1].id }
+  return cutoff ? { kind: 'rewrite' } : null
+}
+
+// Compacting by hand has something to do: a live turn before the latest to
+// fold, or a summary to write again.
+export function canCompact(turns: Turn[], chronicle: Chronicle): boolean {
+  return planCompaction(turns, chronicle, 1) !== null
+}
+
+// Whether a fold asked for earlier still has something to do with the log and
+// the chronicle as they now stand.
+export function handFoldLeft(fold: HandFold, turns: Turn[], chronicle: Chronicle): boolean {
+  const cutoff = chronicleCutoff(chronicle, turns)
+  if (fold.kind !== 'compact') return cutoff > 0
+  return turns.findIndex((t) => t.id === fold.throughTurnId) + 1 > cutoff
+}
+
+export interface HandFoldEvents {
+  // A model call is starting: the `step`th of `total`.
+  onStep?: (step: number, total: number) => void
+  // A stretch of a compaction is written: the chronicle to put in place now,
+  // so a run cut short keeps what it has done.
+  onFolded?: (chronicle: Chronicle) => void
+  // A stretch of a rebuild is written: the fold as it now stands, to keep
+  // aside until the rebuild is done.
+  onRebuilt?: (fold: HandFold) => void
+}
+
+// Runs a fold asked for by hand, returning the chronicle it leaves.
+export async function runHandFold(
+  fold: HandFold,
+  turns: Turn[],
+  chronicle: Chronicle,
+  settings: ChronicleSettings,
+  agent: ChronicleAgentArgs,
+  signal: AbortSignal,
+  { onStep, onFolded, onRebuilt }: HandFoldEvents = {},
+): Promise<Chronicle> {
+  const cutoff = chronicleCutoff(chronicle, turns)
+  switch (fold.kind) {
+    case 'compact': {
+      const end = turns.findIndex((t) => t.id === fold.throughTurnId) + 1
+      if (end <= cutoff) return chronicle
+      return foldTurns(turns, chronicle, cutoff, end, settings, agent, signal, { onStep, onStretch: onFolded })
+    }
+    case 'rewrite':
+      return rewriteSummary(turns, chronicle, settings, agent, signal, onStep)
+    case 'rebuild':
+      return rebuildChronicle(turns, chronicle, settings, agent, signal, {
+        from: fold.done,
+        onStep,
+        onProgress: (done) => onRebuilt?.({ kind: 'rebuild', done }),
+      })
   }
-  return foldTurns(turns, chronicle, cutoff, targetCutoff, settings, agent, signal, (step, total) =>
-    onProgress?.(`Folding turns into chronicle… ${step} of ${total}`),
-  )
 }
 
 // The summary written again from itself, with no new turns: what the current
@@ -366,11 +436,24 @@ async function rewriteSummary(
   settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
+  onStep?: (step: number, total: number) => void,
 ): Promise<Chronicle> {
   const cutoff = chronicleCutoff(chronicle, turns)
   if (!cutoff) return chronicle
+  onStep?.(1, 1)
   const result = await runSummarizer(summarizerInput(turns, chronicle, cutoff, cutoff, settings, agent), signal)
   return summaryReaching(turns, cutoff, result.summary)
+}
+
+export interface RebuildOptions {
+  // Where an earlier rebuild got to. It carries on from there if that is
+  // still a turn the summary covers, and starts from the first turn if not.
+  from?: RebuildProgress
+  // A model call is starting: the `step`th of `total`, counting the calls an
+  // earlier rebuild made.
+  onStep?: (step: number, total: number) => void
+  // A stretch is written: how far the rebuild has got.
+  onProgress?: (done: RebuildProgress) => void
 }
 
 // The summary written afresh from the turns it covers, replaying compaction
@@ -382,21 +465,27 @@ export async function rebuildChronicle(
   settings: ChronicleSettings,
   agent: ChronicleAgentArgs,
   signal: AbortSignal,
-  onProgress?: (writing: number, total: number) => void,
+  { from, onStep, onProgress }: RebuildOptions = {},
 ): Promise<Chronicle> {
-  const rebuilt = await foldTurns(turns, [], 0, chronicleCutoff(chronicle, turns), settings, agent, signal, onProgress)
+  const cutoff = chronicleCutoff(chronicle, turns)
+  const reached = from ? turns.findIndex((t) => t.id === from.lastTurnId) + 1 : 0
+  const start = from && reached > 0 && reached <= cutoff ? reached : 0
+  const base = start && from ? summaryReaching(turns, start, from.text) : []
+  const before = Math.ceil(start / stretchLength(settings))
+  const rebuilt = await foldTurns(turns, base, start, cutoff, settings, agent, signal, {
+    onStep: (step, total) => onStep?.(before + step, before + total),
+    onStretch: (next) => {
+      // The newest level's last entry ends the summary.
+      const entry = next.find((level) => level.length)?.at(-1)
+      if (entry) onProgress?.({ text: summaryText(next), lastTurnId: entry.lastTurnId })
+    },
+  })
   return rebuilt.length ? rebuilt : chronicle
 }
 
 // How many model calls a rebuild makes, at most.
 export function rebuildCallCount(turns: Turn[], chronicle: Chronicle, settings: ChronicleSettings): number {
   return Math.ceil(chronicleCutoff(chronicle, turns) / stretchLength(settings))
-}
-
-// Compacting by hand has something to do: a live turn before the latest to
-// fold, or a summary to write again.
-export function canCompact(turns: Turn[], chronicle: Chronicle): boolean {
-  return turns.length - chronicleCutoff(chronicle, turns) > 1 || chronicleCutoff(chronicle, turns) > 0
 }
 
 export function chronicleNeedsCompaction(

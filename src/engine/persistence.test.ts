@@ -7,11 +7,13 @@ import {
   loadStoredContext,
   loadStoredDevMode,
   loadStoredOocBaseline,
+  loadStoredPendingFold,
   loadStoredPlotBaseline,
   loadStoredPromptOverrides,
   loadStoredProviderKeys,
   loadStoredRecovery,
   normalizeSavedGame,
+  persistPendingFold,
   persistPromptOverrides,
   persistProviderKeys,
 } from './persistence'
@@ -286,6 +288,61 @@ describe('prompt edits', () => {
     expect(loadStoredPromptOverrides()).toEqual({})
     stubStorage({ 'dm.promptOverrides': '{not json' })
     expect(loadStoredPromptOverrides()).toEqual({})
+  })
+})
+
+describe('a fold that is running', () => {
+  function stubStorage(items: Record<string, string>) {
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => items[key] ?? null,
+      setItem: (key: string, value: string) => {
+        items[key] = value
+      },
+      removeItem: (key: string) => {
+        delete items[key]
+      },
+    })
+    return items
+  }
+
+  it('comes back as it was stored, and is gone once it ends', () => {
+    const items = stubStorage({})
+    const pending = { fold: { kind: 'rebuild' as const, done: { text: 'So far.', lastTurnId: 't3' } }, hidden: true }
+    persistPendingFold(pending)
+    expect(loadStoredPendingFold()).toEqual(pending)
+    persistPendingFold({ fold: { kind: 'compact', throughTurnId: 't9' }, hidden: false })
+    expect(loadStoredPendingFold()).toEqual({ fold: { kind: 'compact', throughTurnId: 't9' }, hidden: false })
+    persistPendingFold(null)
+    expect(items).toEqual({})
+    expect(loadStoredPendingFold()).toBeNull()
+  })
+
+  it('keeps only the fold’s own fields', () => {
+    stubStorage({
+      'dm.pendingFold': JSON.stringify({
+        fold: { kind: 'rebuild', done: { text: 'So far.', lastTurnId: 't3', extra: 1 }, apiKey: 'k' },
+        hidden: true,
+      }),
+    })
+    expect(loadStoredPendingFold()).toEqual({
+      fold: { kind: 'rebuild', done: { text: 'So far.', lastTurnId: 't3' } },
+      hidden: true,
+    })
+  })
+
+  it('has none when what is stored is not a fold', () => {
+    const notFolds = [
+      '{not json',
+      '[]',
+      JSON.stringify({ fold: { kind: 'compact' }, hidden: true }),
+      JSON.stringify({ fold: { kind: 'rebuild', done: { text: 3, lastTurnId: 't3' } }, hidden: true }),
+      JSON.stringify({ fold: { kind: 'shred' }, hidden: true }),
+      JSON.stringify({ fold: { kind: 'rewrite' } }),
+    ]
+    for (const stored of notFolds) {
+      stubStorage({ 'dm.pendingFold': stored })
+      expect(loadStoredPendingFold()).toBeNull()
+    }
   })
 })
 

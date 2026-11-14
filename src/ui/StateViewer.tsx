@@ -70,8 +70,10 @@ export function StateViewer({
   // unedited. Clearing an entry's text deletes it on save.
   const [chronicleDraft, setChronicleDraft] = useState<Record<string, string>>({})
   // How many of the latest turns Compact keeps live, starting at the fold
-  // floor.
-  const [keepLive, setKeepLive] = useState(() => Math.max(1, context.compactionFloor))
+  // floor. Held as typed, so the field can be cleared to type a new number,
+  // and read as at least one.
+  const [keepLive, setKeepLive] = useState(() => String(Math.max(1, context.compactionFloor)))
+  const keepCount = Math.max(1, Math.floor(Number(keepLive)) || 1)
 
   // Reset local drafts when the parent's prop changes (e.g. after a turn that
   // mutated state or memory). Adjusting state during render — a documented
@@ -226,14 +228,15 @@ export function StateViewer({
                   type="number"
                   min={1}
                   value={keepLive}
-                  onChange={(e) => setKeepLive(Math.max(1, Math.floor(Number(e.target.value)) || 1))}
+                  onChange={(e) => setKeepLive(e.target.value)}
+                  onBlur={() => setKeepLive(String(keepCount))}
                   disabled={busy}
                 />
                 live
               </label>
               <button
                 className="ghost"
-                onClick={() => onCompact(keepLive)}
+                onClick={() => onCompact(keepCount)}
                 disabled={busy || anyDirty}
                 title={
                   anyDirty
