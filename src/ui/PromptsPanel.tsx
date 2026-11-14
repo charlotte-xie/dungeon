@@ -23,8 +23,9 @@ export function PromptsPanel({ busy, onDirtyChange }: { busy: boolean; onDirtyCh
   const editedCount = Object.keys(edits).length
   const sections = PROMPT_FILES.map((file) => ({
     id: file,
-    label: `${file.replace(/\.md$/, '')}${Object.hasOwn(edits, file) ? ' (edited)' : ''}`,
+    label: file.replace(/\.md$/, ''),
     dirty: isDirty(file),
+    edited: Object.hasOwn(edits, file),
   }))
 
   function handleSave() {

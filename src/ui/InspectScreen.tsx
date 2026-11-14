@@ -5,6 +5,8 @@ export interface InspectSection {
   label: string
   // Marks a section with unsaved edits.
   dirty?: boolean
+  // Marks a section whose saved content differs from its default.
+  edited?: boolean
 }
 
 interface InspectScreenProps {
@@ -27,8 +29,9 @@ export function InspectScreen({ title, sections, selected, onSelect, actions, ch
         {sections.map((s) => (
           <button
             key={s.id}
-            className={s.id === selected ? 'active' : ''}
+            className={[s.id === selected && 'active', s.edited && 'edited'].filter(Boolean).join(' ')}
             aria-current={s.id === selected}
+            title={s.edited ? 'Edited: differs from the default' : undefined}
             onClick={() => onSelect(s.id)}
           >
             {s.label}

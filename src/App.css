@@ -213,7 +213,7 @@ header h1 {
   cursor: pointer;
 }
 
-.ghost:hover {
+.ghost:hover:not(:disabled) {
   border-color: #c9a959;
 }
 
@@ -646,6 +646,13 @@ header h1 {
   background: #222;
 }
 
+/* A section that differs from its default reads in the accent colour. */
+.inspect-nav button.edited,
+.inspect-nav button.edited:hover:not(.active),
+.inspect-nav button.edited.active {
+  color: #c9a959;
+}
+
 .inspect-main {
   grid-area: main;
   display: flex;
@@ -669,6 +676,11 @@ header h1 {
 
 .inspect-actions .spacer {
   flex: 1;
+}
+
+.inspect-actions > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Narrow windows: the sections run across the top instead. */
