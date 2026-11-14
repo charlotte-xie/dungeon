@@ -7,6 +7,7 @@ import {
   compactChronicle,
   entryTurnNumbers,
   indexChronicle,
+  nextFold,
   rebuildCallCount,
   rebuildChronicle,
   sameChronicle,
@@ -267,6 +268,28 @@ describe('compaction', () => {
     await compact(completedTurns(32), [])
     await compact(completedTurns(48), [[entry('old', 't0', 't15')]], { ...DEFAULTS, summaryTargetChars: 900 })
     expect(mockedSummarizer.mock.calls.map(([input]) => input.targetChars)).toEqual([1500, 900])
+  })
+})
+
+describe('the next fold', () => {
+  beforeEach(() => {
+    mockedSummarizer.mockClear()
+  })
+
+  it('is the first call the fold sends after the next reply, once it is due', async () => {
+    const turns = completedTurns(48)
+    const chronicle: Chronicle = [[entry('old', 't0', 't15')]]
+    const fold = nextFold(turns, chronicle, DEFAULTS, AGENT)
+    expect(fold).toMatchObject({ first: 17, last: 32, live: 32, threshold: 32, due: true })
+    await compact(turns, chronicle)
+    expect(fold.input).toEqual(mockedSummarizer.mock.calls[0][0])
+  })
+
+  it('reads the turns gathered so far while it is not due', () => {
+    const fold = nextFold(completedTurns(5), [], DEFAULTS, AGENT)
+    expect(fold).toMatchObject({ first: 1, last: 5, live: 5, due: false })
+    expect(fold.input.previousSummary).toBe('')
+    expect(fold.input.turns.map((t) => t.number)).toEqual([1, 2, 3, 4, 5])
   })
 })
 

@@ -607,12 +607,12 @@ describe('nextTurnRequests', () => {
 
     const preview = nextTurnRequests(ctx, { plotter: true, narrator: true })
     const asSent = ({ onStream, ...request }: ModelCompletionRequest) => ({ ...request, streams: !!onStream })
-    expect(preview.map((p) => p.role)).toEqual(['plotter', 'narrator'])
+    expect(preview.map((p) => [p.role, p.sent])).toEqual([['plotter', true], ['narrator', true]])
     expect(preview.map((p) => asSent(p.request))).toEqual(sent.map(asSent))
     expect(preview.map((p) => p.connection)).toEqual(mockedModel.mock.calls.map(([, connection]) => connection))
   })
 
-  it('previews the narrator alone with the Plotter off, as the turn sends it', async () => {
+  it('with the Plotter off, previews the narrator as the turn sends it and the Plotter as unsent', async () => {
     const ctx: NarratorContext = { ...CTX, usePlotter: false, initialData: { ...CTX.initialData, ooc: ['Be brief.'] } }
     const sent: ModelCompletionRequest[] = []
     mockedModel.mockImplementation(async (req) => {
@@ -623,8 +623,11 @@ describe('nextTurnRequests', () => {
 
     const preview = nextTurnRequests(ctx, { plotter: true, narrator: true })
     const asSent = ({ onStream, ...request }: ModelCompletionRequest) => ({ ...request, streams: !!onStream })
-    expect(preview.map((p) => p.role)).toEqual(['narrator'])
-    expect(preview.map((p) => asSent(p.request))).toEqual(sent.map(asSent))
+    expect(preview.map((p) => [p.role, p.sent])).toEqual([['plotter', false], ['narrator', true]])
+    expect(preview.filter((p) => p.sent).map((p) => asSent(p.request))).toEqual(sent.map(asSent))
+    // The Plotter's is what it would send with it on.
+    const on = nextTurnRequests({ ...ctx, usePlotter: true }, { plotter: true, narrator: true })
+    expect(asSent(preview[0].request)).toEqual(asSent(on[0].request))
   })
 })
 

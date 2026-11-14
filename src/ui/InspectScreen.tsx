@@ -7,6 +7,8 @@ export interface InspectSection {
   dirty?: boolean
   // Marks a section whose saved content differs from its default.
   edited?: boolean
+  // Greys out a section for something switched off.
+  muted?: boolean
 }
 
 interface InspectScreenProps {
@@ -29,7 +31,9 @@ export function InspectScreen({ title, sections, selected, onSelect, actions, ch
         {sections.map((s) => (
           <button
             key={s.id}
-            className={[s.id === selected && 'active', s.edited && 'edited'].filter(Boolean).join(' ')}
+            className={[s.id === selected && 'active', s.edited && 'edited', s.muted && 'muted']
+              .filter(Boolean)
+              .join(' ')}
             aria-current={s.id === selected}
             title={s.edited ? 'Edited: differs from the default' : undefined}
             onClick={() => onSelect(s.id)}

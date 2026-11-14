@@ -646,6 +646,11 @@ header h1 {
   background: #222;
 }
 
+/* A section for something switched off is greyed out. */
+.inspect-nav button.muted:not(.active) {
+  opacity: 0.5;
+}
+
 /* A section that differs from its default reads in the accent colour. */
 .inspect-nav button.edited,
 .inspect-nav button.edited:hover:not(.active),

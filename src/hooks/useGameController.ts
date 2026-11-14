@@ -11,6 +11,7 @@ import {
   type Plotting,
 } from '../engine/agents/narrator'
 import { reviserRequest, runReviser } from '../engine/agents/reviser'
+import { summarizerRequest } from '../engine/agents/summarizer'
 import { wireRequest } from '../engine/model/client'
 import type { WireRequest } from '../engine/model/types'
 import {
@@ -19,12 +20,14 @@ import {
   chronicleNeedsCompaction,
   chronicleRanges,
   compactChronicle,
+  nextFold,
   rebuildCallCount,
   rebuildChronicle,
   sameChronicle,
   stripTracesBefore,
   totalChronicleEntries,
   type ChronicleAgentArgs,
+  type NextFold,
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
@@ -108,6 +111,16 @@ function withReviserFailureNote(trace: TraceEvent[], err: unknown): TraceEvent[]
 export interface StreamedTurn {
   narration?: string
   plotterThinking?: string
+}
+
+// One of the next requests, as it will be posted, for the Context view.
+export interface NextRequest {
+  role: 'plotter' | 'narrator' | 'reviser' | 'summarizer'
+  wire: WireRequest
+  // Not sent while its stage is switched off.
+  off: boolean
+  // The summariser's: which turns its next fold reads, and when it runs.
+  fold?: Omit<NextFold, 'input'>
 }
 
 // The status line while the Plotter works. Generic, so it gives nothing of
@@ -493,11 +506,12 @@ export function useGameController(settings: GameSettings) {
   // change under the player at the end: with it on, the reply doesn't stream.
   const narratorStreams = !context.useReviser
 
-  // The next turn's requests, exactly as they will be posted: the Plotter's
-  // first and the narrator's (before the Plotter's briefing), then the
-  // reviser's for the last reply's draft. The input box's text stands in for
-  // the player's input, or a placeholder while it's empty.
-  function nextRequests(): { role: 'plotter' | 'narrator' | 'reviser'; wire: WireRequest }[] {
+  // The next requests, exactly as they will be posted: the Plotter's first
+  // and the narrator's (before the Plotter's briefing), the reviser's for the
+  // last reply's draft, and the summariser's first at the next fold. A stage
+  // that is switched off still shows its request, marked off. The input box's
+  // text stands in for the player's input, or a placeholder while it's empty.
+  function nextRequests(): NextRequest[] {
     const pendingTurn = makePendingTurn('player', input.trim() || '(the player’s next input)')
     const cacheKey = turns[0]?.id ?? pendingTurn.id
     const ctx = narratorContext({
@@ -508,10 +522,9 @@ export function useGameController(settings: GameSettings) {
       data: { state, plot, memory, ooc },
     })
     // runTurn always listens to the Plotter's stage and thinking.
-    const turnRequests = nextTurnRequests(ctx, { plotter: true, narrator: narratorStreams }).map(
-      ({ role, request, connection }) => ({ role, wire: wireRequest(request, connection) }),
+    const turnRequests: NextRequest[] = nextTurnRequests(ctx, { plotter: true, narrator: narratorStreams }).map(
+      ({ role, request, connection, sent }) => ({ role, wire: wireRequest(request, connection), off: !sent }),
     )
-    if (!context.useReviser) return turnRequests
     const lastReply = [...turns].reverse().find((t) => t.reply.text || t.narrator?.text)
     const reviser = reviserRequest({
       model: context.reviserModel,
@@ -523,7 +536,18 @@ export function useGameController(settings: GameSettings) {
       draft: lastReply?.narrator?.text ?? lastReply?.reply.text ?? '(the narrator’s next draft)',
       sampling,
     })
-    return [...turnRequests, { role: 'reviser', wire: wireRequest(reviser.request, reviser.connection) }]
+    const { input: foldInput, ...fold } = nextFold(turns, chronicle, compactionSettings, summariserArgs(turns[0]?.id))
+    const summariser = summarizerRequest(foldInput)
+    return [
+      ...turnRequests,
+      { role: 'reviser', wire: wireRequest(reviser.request, reviser.connection), off: !context.useReviser },
+      {
+        role: 'summarizer',
+        wire: wireRequest(summariser.request, summariser.connection),
+        off: !context.useSummarizer,
+        fold,
+      },
+    ]
   }
 
   // Appends a turn to the log and runs it. Its starting world is kept for

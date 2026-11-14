@@ -24,7 +24,7 @@
 // rebuilt, is taken in stretches of (N - floor) turns, one model call each,
 // every rewrite reading the summary left by the one before.
 
-import { runSummarizer, type SummaryTurn } from './agents/summarizer'
+import { runSummarizer, type SummarizerInput, type SummaryTurn } from './agents/summarizer'
 import type { ApiProtocol, ModelMessage, ReasoningEffort } from './model/types'
 import type { Chronicle, ChronicleEntry, Turn } from './types'
 
@@ -210,6 +210,60 @@ function extendLastEntry(chronicle: Chronicle, lastTurnId: string): Chronicle | 
   return null
 }
 
+// One summariser call: the summary as it stands and turns [start, end).
+function summarizerInput(
+  turns: Turn[],
+  chronicle: Chronicle,
+  start: number,
+  end: number,
+  settings: ChronicleSettings,
+  agent: ChronicleAgentArgs,
+): SummarizerInput {
+  return {
+    model: agent.model,
+    reasoningEffort: agent.reasoningEffort,
+    apiKey: agent.apiKey,
+    baseUrl: agent.baseUrl,
+    protocol: agent.protocol,
+    cacheKey: agent.cacheKey,
+    scenario: agent.scenario,
+    previousSummary: summaryText(chronicle),
+    turns: turnsForSummary(turns, start, end),
+    targetChars: settings.summaryTargetChars,
+  }
+}
+
+// The next fold's first summariser call, as it stands: the summary so far
+// and the oldest live turns, as many as one call reads, or fewer while the
+// fold isn't due. `first` and `last` number those turns from 1. The fold runs
+// after the next reply once `live` turns reach `threshold`, which `due` says.
+export interface NextFold {
+  first: number
+  last: number
+  live: number
+  threshold: number
+  due: boolean
+  input: SummarizerInput
+}
+
+export function nextFold(
+  turns: Turn[],
+  chronicle: Chronicle,
+  settings: ChronicleSettings,
+  agent: ChronicleAgentArgs,
+): NextFold {
+  const cutoff = chronicleCutoff(chronicle, turns)
+  const end = Math.min(cutoff + stretchLength(settings), turns.length)
+  return {
+    first: cutoff + 1,
+    last: end,
+    live: turns.length - cutoff,
+    threshold: Math.max(2, settings.compactionThreshold),
+    due: chronicleNeedsCompaction(turns, chronicle, settings),
+    input: summarizerInput(turns, chronicle, cutoff, end, settings, agent),
+  }
+}
+
 // Rewrites the summary to reach the end of turns [start, end), in stretches
 // of `stretch` turns, one after another so each reads the summary the last one
 // left. A stretch of nothing but failed turns has no story to tell: its turns
@@ -231,26 +285,12 @@ async function foldTurns(
   for (let c = start, i = 1; c < end; c += stretch, i++) {
     onStep?.(i, count)
     const last = Math.min(c + stretch, end)
-    const inputs = turnsForSummary(turns, c, last)
-    if (!inputs.length) {
+    const input = summarizerInput(turns, next, c, last, settings, agent)
+    if (!input.turns.length) {
       next = extendLastEntry(next, turns[last - 1].id) ?? next
       continue
     }
-    const result = await runSummarizer(
-      {
-        model: agent.model,
-        reasoningEffort: agent.reasoningEffort,
-        apiKey: agent.apiKey,
-        baseUrl: agent.baseUrl,
-        protocol: agent.protocol,
-        cacheKey: agent.cacheKey,
-        scenario: agent.scenario,
-        previousSummary: summaryText(next),
-        turns: inputs,
-        targetChars: settings.summaryTargetChars,
-      },
-      signal,
-    )
+    const result = await runSummarizer(input, signal)
     next = [[{
       id: crypto.randomUUID(),
       text: result.summary,

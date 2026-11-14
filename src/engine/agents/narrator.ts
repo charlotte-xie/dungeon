@@ -323,35 +323,35 @@ export interface PreviewRequest {
   role: 'plotter' | 'narrator'
   request: ModelCompletionRequest
   connection: ModelConnection
+  // Whether the next turn sends it: the Plotter doesn't while it is switched
+  // off, or has no record to keep.
+  sent: boolean
 }
 
 // The next turn's requests, as the turn will send them: the Plotter's first
 // request, and the narrator's as it stands before the Plotter runs, so with
-// no steer or recalled memories yet. `streams` says which roles the turn
-// listens to as they write, since a request that streams says so.
+// no steer or recalled memories yet. The Plotter's is there even when the
+// turn won't send it, as it would be sent with the Plotter on. `streams` says
+// which roles the turn listens to as they write, since a request that streams
+// says so.
 export function nextTurnRequests(
   ctx: NarratorContext,
   streams: { plotter: boolean; narrator: boolean },
 ): PreviewRequest[] {
   const connections = roleConnections(ctx)
   const listen = (on: boolean) => (on ? () => {} : undefined)
-  const tools = plotterTools(ctx)
-  const plotter: PreviewRequest[] = tools.length
-    ? [
-        {
-          role: 'plotter',
-          request: plotterRequest(ctx, firstPlotterMessages(ctx), tools, {
-            label: 'plotter:0',
-            onStream: listen(streams.plotter),
-          }),
-          connection: connections.plotter,
-        },
-      ]
-    : []
   const storyUpdate = buildStoryUpdate(narratorView(ctx), [], ctx.initialData, ctx.flags)
   const messages = narratorMessagesFor(ctx, ctx.initialData, [], storyUpdate)
   return [
-    ...plotter,
+    {
+      role: 'plotter',
+      request: plotterRequest(ctx, firstPlotterMessages(ctx), buildPlotterTools(ctx.flags), {
+        label: 'plotter:0',
+        onStream: listen(streams.plotter),
+      }),
+      connection: connections.plotter,
+      sent: plotterTools(ctx).length > 0,
+    },
     {
       role: 'narrator',
       request: narratorRequest(ctx, messages, {
@@ -360,6 +360,7 @@ export function nextTurnRequests(
         onStream: listen(streams.narrator),
       }),
       connection: connections.narrator,
+      sent: true,
     },
   ]
 }

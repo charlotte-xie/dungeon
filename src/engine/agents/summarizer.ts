@@ -9,7 +9,7 @@
 import { buildSummarizerInputs, summarizerSystemPrompt } from '../../prompts'
 import { roleCacheKey } from '../model/cacheKey'
 import { completeModel } from '../model/client'
-import type { ApiProtocol, ModelMessage, ReasoningEffort } from '../model/types'
+import type { ApiProtocol, ModelCompletionRequest, ModelConnection, ReasoningEffort } from '../model/types'
 
 export interface SummarizerInput {
   model: string
@@ -43,32 +43,40 @@ export interface SummarizerResult {
   summary: string
 }
 
-export async function runSummarizer(
-  input: SummarizerInput,
-  signal: AbortSignal,
-): Promise<SummarizerResult> {
-  const userContent = buildSummarizerInputs(input.scenario, input.previousSummary, input.turns, input.targetChars)
-
-  const messages: ModelMessage[] = [
-    { role: 'system', content: summarizerSystemPrompt() },
-    { role: 'user', content: userContent },
-  ]
-
-  const completion = await completeModel(
-    {
+// The summariser's request: runSummarizer sends it, and the Context view
+// shows it.
+export function summarizerRequest(input: SummarizerInput): {
+  request: ModelCompletionRequest
+  connection: ModelConnection
+} {
+  return {
+    request: {
       model: input.model,
       reasoningEffort: input.reasoningEffort,
-      messages,
+      messages: [
+        { role: 'system', content: summarizerSystemPrompt() },
+        {
+          role: 'user',
+          content: buildSummarizerInputs(input.scenario, input.previousSummary, input.turns, input.targetChars),
+        },
+      ],
       label: 'summarizer',
     },
-    {
+    connection: {
       baseUrl: input.baseUrl,
       apiKey: input.apiKey,
       protocol: input.protocol,
       cacheKey: roleCacheKey(input.cacheKey, 'summarizer'),
     },
-    signal,
-  )
+  }
+}
+
+export async function runSummarizer(
+  input: SummarizerInput,
+  signal: AbortSignal,
+): Promise<SummarizerResult> {
+  const { request, connection } = summarizerRequest(input)
+  const completion = await completeModel(request, connection, signal)
   const content = completion.text
   if (!content) throw new Error('Summariser returned an empty continuity record')
   return { summary: content }

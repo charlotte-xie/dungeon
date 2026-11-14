@@ -1,11 +1,6 @@
 import { useState } from 'react'
-import type { WireRequest } from '../engine/model/types'
+import type { NextRequest } from '../hooks/useGameController'
 import { InspectScreen } from './InspectScreen'
-
-export interface NextRequest {
-  role: 'plotter' | 'narrator' | 'reviser'
-  wire: WireRequest
-}
 
 interface ContextViewerProps {
   requests: NextRequest[]
@@ -15,15 +10,25 @@ const ROLE_LABELS: Record<NextRequest['role'], string> = {
   plotter: 'Plotter',
   narrator: 'Narrator',
   reviser: 'Reviser',
+  summarizer: 'Summariser',
 }
 
-// What each request is, and what changes before it is sent for real.
-const ROLE_NOTES: Record<NextRequest['role'], string> = {
-  plotter:
-    'The Plotter’s first request of the next turn. Its later requests in the turn add its calls, their results and any reminder.',
-  narrator:
-    'The narrator’s request as it stands before the Plotter runs: the records the Plotter changes, the memories it recalls and its steer join it then.',
-  reviser: 'The reviser’s request for the last reply’s draft.',
+// What a request is, and what changes before it is sent for real.
+function requestNote({ role, fold }: NextRequest): string {
+  const input = 'The text in the input box stands in for your next input.'
+  switch (role) {
+    case 'plotter':
+      return `The Plotter’s first request of the next turn. Its later requests in the turn add its calls, their results and any reminder. ${input}`
+    case 'narrator':
+      return `The narrator’s request as it stands before the Plotter runs: the records the Plotter changes, the memories it recalls and its steer join it then. ${input}`
+    case 'reviser':
+      return 'The reviser’s request for the last reply’s draft.'
+    case 'summarizer':
+      if (!fold || fold.last < fold.first) return 'The summariser’s first request at the next fold, once there are turns to fold.'
+      return fold.due
+        ? `The summariser’s first request at the next fold, after the next reply: the summary so far and turns ${fold.first}–${fold.last}.`
+        : `The summariser’s first request at the next fold, as it stands: the summary so far and turns ${fold.first}–${fold.last}. Turns are folded after a reply once ${fold.threshold} are live; ${fold.live} are now.`
+  }
 }
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
@@ -102,15 +107,19 @@ export function ContextViewer({ requests }: ContextViewerProps) {
   return (
     <InspectScreen
       title="Next requests"
-      sections={requests.map((r) => ({ id: r.role, label: ROLE_LABELS[r.role] }))}
+      sections={requests.map((r) => ({
+        id: r.role,
+        label: r.off ? `${ROLE_LABELS[r.role]} (off)` : ROLE_LABELS[r.role],
+        muted: r.off,
+      }))}
       selected={current?.role ?? ''}
       onSelect={(id) => setSelected(id as NextRequest['role'])}
     >
       {current && (
         <>
           <p className="hint">
-            {ROLE_NOTES[current.role]} Built by the code that sends it; the text in the input box
-            stands in for your next input.
+            {current.off && 'Switched off in Settings, so it isn’t sent; this is how it would be sent with it on. '}
+            {requestNote(current)} Built by the code that sends it.
           </p>
           <div className="wire-bar">
             <code>POST {current.wire.url}</code>
