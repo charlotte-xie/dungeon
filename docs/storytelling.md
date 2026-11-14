@@ -56,6 +56,7 @@ What a good story in this app is. Prompt and design changes are checked against 
 - Keeps a private sense of where the story is heading, long term, and adapts it when the story takes a new direction. It never plans the player's decisions.
 - Keeps continuity: it remembers the people, places and things that recur, what each person wants and knows, and what is secret, and makes sure the narrator has what each reply needs.
 - Remembers only what matters for continuity. A catalogue of details comes back as repetition.
+- Anything kept as memory is a long-term persistent fact: established by the story, and always true unless some radical change happens.
 - Keeps the story fresh, so the narrator doesn't repeat itself or go flat.
 - Leaves the telling to the narrator.
 
