@@ -1,4 +1,4 @@
-Memory is the continuity notebook: people, places, things and threads. Keep good notes: short descriptions, full sentences, a map for multiple elements. Each note stands on its own, naming who and what it is about. It records persistent facts only; the story itself covers immediate events and the current scene.
+Memory is the continuity notebook: people, places, things and threads. Each note is a lasting fact the story has established, worded so it stays true as the story moves on. Keep good notes: short descriptions, full sentences, a map for multiple elements. Each note stands on its own, naming who and what it is about.
 
 ```json5
 {
@@ -13,9 +13,12 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
       "shop": "Hesta wants to keep her bakery on Mill Lane open.",
       "son": "Hesta wants to keep her son Tam out of the constable's hands."
     },
-    "attitude": "Hesta is wary of Amy and helps Amy only when it costs Hesta nothing.", // how they feel towards others now
+    "relationships": { // ongoing connections with other people
+      "tam": "Hesta is Tam's mother and has raised him alone.",
+      "constable": "Hesta and the Mill Lane constable went to school together."
+    },
     "secrets": { // the plain truth of what they hide, settled now and kept until the story reveals it
-      "tam": "Hesta is hiding her son Tam in the room above her bakery after the Mill Lane pawnshop robbery; only Hesta and Tam know."
+      "tam": "Hesta hid her son Tam in the room above her bakery after the Mill Lane pawnshop robbery; only Hesta and Tam know."
     },
     "events": ["Hesta told the constable at her bakery door that she had not seen her son Tam."] // what has lately happened to them; only the latest few are kept
   },
@@ -31,22 +34,20 @@ Memory is the continuity notebook: people, places, things and threads. Keep good
     "name": "Tam's watch",
     "is": "a dented silver pocket watch belonging to Tam, stopped at ten past four", // what it is and what sets it apart
     "marks": { "lid": "The inside of the lid of Tam's watch is engraved \"For Tam, from his father\"." }, // the particulars that would be noticed
-    "from": "Tam took his watch back from the Mill Lane pawnshop on the night of the robbery.", // how it came to be in the story
-    "where": "Tam's watch is under a loose board in the kitchen of Hesta's bakery; only Tam knows.", // where it is now
+    "from": "Tam took his watch back from the Mill Lane pawnshop on the night of the robbery and hid it under a loose board in the kitchen of Hesta's bakery.", // how it came into the story
     "events": ["Amy saw the loose board in the kitchen of Hesta's bakery and told no one."]
   },
   "pawnshop_robbery": { // a thread that runs on through the story
     "is": "last week's botched robbery of the Mill Lane pawnshop",
-    "status": "The constable is searching Mill Lane for the pawnshop robber, and the pawnbroker has posted a reward.", // how it stands now
     "truth": "The pawnbroker staged the Mill Lane pawnshop robbery for the insurance, and hired Tam as his lookout." // settled now, kept until the story reveals it
   },
   // The player character, always `player`: what the story has established about them. No interiority: this belongs to the player.
   "player": {
     "name": "Amy", // from the scenario, the player introducing themselves, or someone who knows them
-    "is": "a drifter newly arrived in town",
+    "is": "a drifter who served as a cavalry trooper",
     "wearing": { "coat": "patched army greatcoat", "boots": "stout leather walking boots" },
-    "possessions": { "money": "30 pounds", "sabre": "chipped sabre" }, // what they carry that matters
-    "reputation": "Amy is known on Mill Lane as a stranger the constable is watching.", // how others see them
+    "possessions": { "sabre": "Amy's chipped cavalry sabre from her army days" }, // the important things they own
+    "reputation": "Amy is known on Mill Lane as the stranger who stood up to the constable on her first night.", // how others see them
     "events": ["Amy took a room above the chandler's shop on Mill Lane."]
   }
 }
