@@ -716,11 +716,11 @@ header h1 {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.6rem;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.4rem;
 }
 
 .wire-bar code {
-  font-size: 0.8rem;
+  font-size: var(--mono-size);
   overflow-wrap: anywhere;
 }
 
@@ -730,14 +730,13 @@ header h1 {
 }
 
 .wire-tree {
-  font: 0.8rem/1.45 ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  font: var(--mono);
   color: #d6d6d6;
 }
 
 .wire-node > summary {
   cursor: pointer;
   list-style: none;
-  padding: 0.1rem 0;
 }
 
 .wire-node > summary::-webkit-details-marker {
@@ -754,13 +753,9 @@ header h1 {
 }
 
 .wire-children {
-  margin-left: 0.4rem;
-  padding-left: 0.75rem;
+  margin-left: 0.25rem;
+  padding-left: 0.5rem;
   border-left: 1px solid #2a2a2a;
-}
-
-.wire-leaf {
-  padding: 0.1rem 0;
 }
 
 .wire-key { color: #c9a959; }
@@ -768,8 +763,8 @@ header h1 {
 .wire-scalar { color: #6fa8dc; }
 
 .wire-text {
-  margin: 0.25rem 0 0.4rem;
-  padding: 0.5rem 0.75rem;
+  margin: 0.15rem 0 0.25rem;
+  padding: 0.3rem 0.45rem;
   background: #131313;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
@@ -1038,11 +1033,11 @@ header h1 {
 
 .state-json {
   margin: 0;
-  padding: 0.75rem;
+  padding: 0.4rem 0.5rem;
   background: #1a1a1a;
   border: 1px solid #3a3a3a;
   border-radius: 4px;
-  font: 0.8rem/1.45 ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  font: var(--mono);
   color: #d6d6d6;
   max-height: 55vh;
   overflow: auto;
@@ -1099,6 +1094,7 @@ textarea.state-json-editor.tab-editor {
 
 .notice-details pre {
   margin: 0.25rem 0 0;
+  font: var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1257,7 +1253,7 @@ textarea.state-json-editor.tab-editor {
 }
 
 .trace-call-name {
-  font-size: 0.8rem;
+  font-size: var(--mono-size);
   color: #c9a959;
   background: #1a1a1a;
   padding: 0.05rem 0.35rem;
@@ -1266,7 +1262,6 @@ textarea.state-json-editor.tab-editor {
 
 .trace-args {
   max-height: 20vh;
-  font-size: 0.72rem;
 }
 
 .trace-result {
@@ -1303,7 +1298,7 @@ textarea.state-json-editor.tab-editor {
 }
 
 .trace-section-model {
-  font-size: 0.7rem;
+  font-size: var(--mono-size);
   color: #777;
   background: #1a1a1a;
   padding: 0.05rem 0.35rem;
