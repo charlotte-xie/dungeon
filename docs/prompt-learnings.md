@@ -102,6 +102,14 @@ Each of these comes from rebuilding one 26-turn story, so one run.
 - Without the scenario in its input it could not say who the player's character is or what kind of story this is.
 - In the past tense it narrated events in order, whatever else it was asked. In the present tense, "what this story is about", with the world, who the people are to one another and what is at stake, said who they are. "As the back of a novel would tell it" read well but brought in blurb lines that name the mood.
 
+These come from one 51-turn story, folded every ten turns, one run each.
+
+- Asked for the story so far and four headed sections (key characters, story arcs, continuity facts, recent developments), and given the last summary in that same shape, the summariser at low reasoning kept every section but the last word for word from the third fold on and added a sentence to each. A mistake made early ("a visitor initialled 'A.'", after the story had shown A. was Agnes herself) was never put right, and the arcs became an account of what had happened.
+- At high reasoning, with each section a question answered afresh for the story as it now stands, the story so far was retold each time and the early mistakes were corrected, but the continuity facts were still carried forward line for line, with new ones added.
+- Facts worded as how things stood ("her rooms hold a grey cardigan") went stale once the story moved the cardigan. Asked for facts worded to stay true as the story moves on, the new ones were lasting ("were hidden under the school desk") and the summary was about half as long, but a line written as current state at the first fold was carried through every later one.
+- Listing "you" among the key characters gave the player's character a motive ("determined to uncover the truth"), copied into every later summary. Asked only who matters, one run of two still began with "you" and a motive.
+- Recent developments, asked only what happens in the new turns, ended where the live turns pick up in every summary.
+
 ## Tools and record formats
 
 - The example's shape beats the described mechanics. With entry names holding spaces, the Plotter wrote nested objects under `set` and wiped facets, and never used `merge`. With slug keys, a `name` facet and a dotted path in the example, updates kept everything.
