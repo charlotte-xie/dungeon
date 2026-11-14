@@ -23,6 +23,14 @@ const ROLE_NAMES: Record<ModelRole, string> = {
   summarizer: 'Summariser',
 }
 
+// What switching each optional stage off does, for its switch's tooltip.
+const STAGE_TITLES: Record<'plotter' | 'summarizer', string> = {
+  plotter:
+    'When on, the Plotter runs before each reply: it keeps the records, recalls memories and steers the narrator. When off, the narrator writes from the history and the records as they stand, and only you change them.',
+  summarizer:
+    'When on, the summariser folds the older turns into the synopsis in the background once enough turns are live. When off, every turn stays live and each request keeps growing; compacting by hand in the State tab still works.',
+}
+
 interface SettingsPanelProps {
   model: string
   providerKeys: ProviderKeys
@@ -41,13 +49,19 @@ interface SettingsPanelProps {
   onDirtyChange: (dirty: boolean) => void
 }
 
-function ReasoningSelect({ label, value, onChange }: {
+function ReasoningSelect({ label, value, onChange, disabled }: {
   label: string
   value: ReasoningEffort
   onChange: (value: ReasoningEffort) => void
+  disabled?: boolean
 }) {
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as ReasoningEffort)}>
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value as ReasoningEffort)}
+      disabled={disabled}
+    >
       <option value="default">Provider default (omit setting)</option>
       <option value="none">Off</option>
       <option value="low">Low</option>
@@ -58,10 +72,12 @@ function ReasoningSelect({ label, value, onChange }: {
   )
 }
 
-// One row of the models grid: the role, a preset picker, the model id, and
-// whatever goes in the last column.
-function ModelRow({ name, value, onChange, choices, emptyChoice, placeholder, title, disabled, children }: {
+// One row of the models grid: the stage with its switch, a preset picker, the
+// model id, and whatever goes in the last column. A stage with no onToggle
+// always runs. A stage that is off has its model fields disabled.
+function ModelRow({ name, stage, value, onChange, choices, emptyChoice, placeholder, title, children }: {
   name: string
+  stage: { on: boolean; onToggle?: (on: boolean) => void; title: string }
   value: string
   onChange: (value: string) => void
   choices: readonly string[]
@@ -69,12 +85,22 @@ function ModelRow({ name, value, onChange, choices, emptyChoice, placeholder, ti
   emptyChoice: { label: string; clears: boolean }
   placeholder: string
   title?: string
-  disabled?: boolean
   children?: ReactNode
 }) {
+  const disabled = !stage.on
   return (
     <>
-      <span className="model-role">{name}</span>
+      <label className="model-role" title={stage.title}>
+        {/* A stage that always runs keeps its tick in colour, which a
+            disabled checkbox would grey out. */}
+        <input
+          type="checkbox"
+          checked={stage.on}
+          aria-disabled={!stage.onToggle}
+          onChange={(e) => stage.onToggle?.(e.target.checked)}
+        />
+        {name}
+      </label>
       <select
         aria-label={`${name} model preset`}
         title={title}
@@ -351,6 +377,7 @@ export function SettingsPanel({
             <span className="model-head" aria-hidden="true">Reasoning</span>
             <ModelRow
               name="Narrator"
+              stage={{ on: true, title: 'The narrator writes every reply, so it always runs.' }}
               value={draftModel}
               onChange={setDraftModel}
               choices={modelChoices}
@@ -367,10 +394,17 @@ export function SettingsPanel({
             {(['plotter', 'summarizer'] as const).map((role) => {
               const modelKey = `${role}Model` as const
               const reasoningKey = `${role}Reasoning` as const
+              const stageKey = role === 'plotter' ? 'usePlotter' : 'useSummarizer'
+              const on = draftContext[stageKey]
               return (
                 <ModelRow
                   key={role}
                   name={ROLE_NAMES[role]}
+                  stage={{
+                    on,
+                    onToggle: (value) => setContextField(stageKey, value),
+                    title: `${STAGE_TITLES[role]} Default ${DEFAULT_CONTEXT[stageKey] ? 'on' : 'off'}.`,
+                  }}
                   value={draftContext[modelKey]}
                   onChange={(value) => setContextField(modelKey, value)}
                   choices={modelChoices}
@@ -381,6 +415,7 @@ export function SettingsPanel({
                     label={`${ROLE_NAMES[role]} reasoning`}
                     value={draftContext[reasoningKey]}
                     onChange={(value) => setContextField(reasoningKey, value)}
+                    disabled={!on}
                   />
                 </ModelRow>
               )
@@ -388,30 +423,23 @@ export function SettingsPanel({
             {draftDevMode && (
               <ModelRow
                 name="Reviser"
+                stage={{
+                  on: draftContext.useReviser,
+                  onToggle: (value) => setContextField('useReviser', value),
+                  title: `When on, a reviser pass runs after the narrator: the reviser model takes the narrator's draft and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`,
+                }}
                 value={draftContext.reviserModel}
                 onChange={(value) => setContextField('reviserModel', value)}
                 choices={modelChoices}
                 emptyChoice={{ label: '— pick a preset —', clears: false }}
                 placeholder={DEFAULT_REVISER_MODEL}
                 title={`Model id used for the optional reviser pass. A small, fast instruction-following model is usually sufficient. Default: ${DEFAULT_REVISER_MODEL}.`}
-                disabled={!draftContext.useReviser}
-              >
-                <label
-                  className="flag-field"
-                  title={`When on, a reviser pass runs after the narrator: the reviser model takes the narrator's draft and polishes it into clean English. The revised text is shown to the player; the original draft is kept in the trace. Adds one extra request per turn. Default ${DEFAULT_CONTEXT.useReviser ? 'on' : 'off'}.`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={draftContext.useReviser}
-                    onChange={(e) => setContextField('useReviser', e.target.checked)}
-                  />
-                  <strong>Run after narrator</strong>
-                </label>
-              </ModelRow>
+              />
             )}
           </div>
           <p className="hint">
-            Leave a plotter or summariser model blank to use the narrator model. The xAI button
+            Untick a stage to skip it; the narrator always runs. Leave a plotter or summariser
+            model blank to use the narrator model. The xAI button
             above applies the Grok preset: narrator 4.3 off, plotter 4.3 low, summariser 4.3 low;
             Responses API, reviser off. Keeps your adventure and API key. For other providers,
             choose a supported reasoning level or Provider default. Grok 4.7 requires reasoning;

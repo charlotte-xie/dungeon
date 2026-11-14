@@ -88,6 +88,9 @@ export interface NarratorContext {
   stateCleanupThreshold: number
   includePriorPlayerTurns: boolean
   reminderAsSystem: boolean
+  // Whether the Plotter runs. Switched off, the narrator writes from the
+  // records as they stand, as it does after a Plotter that recorded nothing.
+  usePlotter: boolean
   flags: ContextFlags
   nsfw: boolean
 }
@@ -113,6 +116,9 @@ export interface NarratorResult {
   trace: TraceEvent[]
   reasoningTokens?: number
   plotting?: Plotting
+  // What the turn adds to the narrator's history, saved with the turn: the
+  // Plotter's, or with the Plotter off, the records the player changed.
+  storyUpdate?: StoryUpdate
 }
 
 // What the Plotter is doing, as its calls arrive: generic, so a status line
@@ -138,6 +144,12 @@ export function plotterStage(toolName: string): PlotterStage | undefined {
 }
 
 export const MAX_PLOTTER_ITERATIONS = 4
+
+// The Plotter's tools for the turn: none when it is switched off or every
+// record is, and then the Plotter doesn't run.
+function plotterTools(ctx: NarratorContext): ModelToolDefinition[] {
+  return ctx.usePlotter ? buildPlotterTools(ctx.flags) : []
+}
 
 // The Plotter's instruction for the turn: its steps, worded in
 // plotter-turn.md, for the records that are switched on only — a step for a
@@ -325,7 +337,7 @@ export function nextTurnRequests(
 ): PreviewRequest[] {
   const connections = roleConnections(ctx)
   const listen = (on: boolean) => (on ? () => {} : undefined)
-  const tools = buildPlotterTools(ctx.flags)
+  const tools = plotterTools(ctx)
   const plotter: PreviewRequest[] = tools.length
     ? [
         {
@@ -339,9 +351,7 @@ export function nextTurnRequests(
       ]
     : []
   const latest = ctx.history.length - 1
-  const storyUpdate = tools.length
-    ? buildStoryUpdate(ctx.history.slice(0, latest), [], ctx.initialData, ctx.flags)
-    : undefined
+  const storyUpdate = buildStoryUpdate(ctx.history.slice(0, latest), [], ctx.initialData, ctx.flags)
   const messages = narratorMessagesFor(ctx, ctx.initialData, [], storyUpdate)
   return [
     ...plotter,
@@ -431,7 +441,7 @@ export async function runNarrator(
   // never sinks the turn: what it recorded so far stands, and the narrator
   // writes from that.
   const briefing: BriefingCall[] = []
-  const tools = buildPlotterTools(ctx.flags)
+  const tools = plotterTools(ctx)
   let plotting: Plotting | undefined
   if (tools.length) {
     const enabledToolNames = new Set(tools.map((t) => t.name))
@@ -574,7 +584,11 @@ export async function runNarrator(
   // An empty reply gets one nudge: the turn reminder again.
   trace = narratorTrace
   const plotterReasoningTokens = reasoningTokens
-  const storyUpdate = plotting?.storyUpdate
+  // Without the Plotter, the records the player changed still reach the
+  // narrator, as they would after a Plotter that recorded nothing.
+  const storyUpdate = plotting
+    ? plotting.storyUpdate
+    : buildStoryUpdate(ctx.history.slice(0, latest), [], data, ctx.flags)
   const narratorMessages = narratorMessagesFor(ctx, data, briefing, storyUpdate)
   // The story update and the notes show in the narrator's trace, which is
   // never replayed into either role's context.
@@ -645,5 +659,6 @@ export async function runNarrator(
     trace: narratorTrace,
     reasoningTokens: reasoningTokens - plotterReasoningTokens || undefined,
     plotting,
+    storyUpdate,
   }
 }

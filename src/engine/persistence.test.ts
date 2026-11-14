@@ -207,6 +207,9 @@ describe('legacy data tolerance', () => {
     expect(ctx.plotterReasoning).toBe('default')
     expect(ctx.summarizerReasoning).toBe('default')
     expect(ctx.compactionFloor).toBe(DEFAULT_CONTEXT.compactionFloor)
+    // Settings saved before the stages could be switched off run every stage.
+    expect(ctx.usePlotter).toBe(true)
+    expect(ctx.useSummarizer).toBe(true)
     // …and removed fields are dropped rather than carried along.
     expect('includeToolCallHistory' in ctx).toBe(false)
     expect('compactionBatch' in ctx).toBe(false)
@@ -228,6 +231,7 @@ describe('role settings', () => {
       ...DEFAULT_CONTEXT,
       narratorReasoning: 'medium', plotterModel: 'grok-4.7', plotterReasoning: 'high',
       summarizerModel: 'custom-model', summarizerReasoning: 'default',
+      usePlotter: false, useSummarizer: false,
     }
     vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(saved) })
     expect(loadStoredContext()).toEqual(saved)

@@ -166,6 +166,9 @@ export function useGameController(settings: GameSettings) {
   const backgroundCompaction = useRef<AbortController | null>(null)
   const queuedCompaction = useRef<{ version: number; from: Chronicle; chronicle: Chronicle } | null>(null)
   const [compacting, setCompacting] = useState(false)
+  // Whether the summariser is on as the settings now stand, for a turn that
+  // finishes after they changed.
+  const summarizerOn = useRef(context.useSummarizer)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
     recoveryForLog(loadStoredRecovery(log), log),
   )
@@ -198,6 +201,15 @@ export function useGameController(settings: GameSettings) {
   useEffect(() => {
     persistRecovery(recovery)
   }, [recovery])
+
+  // Switching the summariser off stops a fold that is running and drops one
+  // waiting to go in.
+  useEffect(() => {
+    summarizerOn.current = context.useSummarizer
+    if (context.useSummarizer) return
+    backgroundCompaction.current?.abort()
+    queuedCompaction.current = null
+  }, [context.useSummarizer])
 
   useEffect(
     () => () => {
@@ -313,11 +325,12 @@ export function useGameController(settings: GameSettings) {
     persistChronicle(next)
   }
 
-  // Starts compacting in the background when the chronicle is due, unless a
-  // compaction is already running or waiting to go in. The latest turn stays
-  // live, so Undo and Retry never take back a turn the result points at.
+  // Starts compacting in the background when the chronicle is due, unless the
+  // summariser is off or a compaction is already running or waiting to go in.
+  // The latest turn stays live, so Undo and Retry never take back a turn the
+  // result points at.
   function startBackgroundCompaction(log: Turn[]) {
-    if (backgroundCompaction.current || queuedCompaction.current) return
+    if (!summarizerOn.current || backgroundCompaction.current || queuedCompaction.current) return
     const from = chronicleNow.current
     const settings = compactionSettings
     const folding = log.slice(0, -1)
@@ -463,6 +476,7 @@ export function useGameController(settings: GameSettings) {
       stateCleanupThreshold: context.stateCleanupChars,
       includePriorPlayerTurns: context.includePriorPlayerTurns,
       reminderAsSystem: context.reminderAsSystem,
+      usePlotter: context.usePlotter,
       flags: {
         includeWorldState: context.includeWorldState,
         includePlotOutline: context.includePlotOutline,
@@ -544,13 +558,14 @@ export function useGameController(settings: GameSettings) {
       setInput((box) => restoreIntoBox(box, restoreInputFor(pendingTurn)))
       dispatchRecovery({ type: 'abort', turnId: pendingTurn.id })
     }
-    // The Plotter plans the turn first, then the narrator writes it; with
-    // every record switched off there is nothing to plan.
+    // The Plotter plans the turn first, then the narrator writes it; with the
+    // Plotter or every record switched off there is nothing to plan.
     const plans =
-      context.includeWorldState ||
-      context.includePlotOutline ||
-      context.includeMemory ||
-      context.includeOoc
+      context.usePlotter &&
+      (context.includeWorldState ||
+        context.includePlotOutline ||
+        context.includeMemory ||
+        context.includeOoc)
     const firstStatus = plans ? 'DM is planning…' : 'DM is writing…'
     const operation = beginOperation(args.replaceExisting, firstStatus)
     if (!operation) {
@@ -655,7 +670,9 @@ export function useGameController(settings: GameSettings) {
       if (!operationCanCommit(operation)) return stopIfCancelled()
       const reply = await replyFor(result)
       if (!operationCanCommit(operation)) return stopIfCancelled()
-      updateTurn(reply)
+      // With the Plotter off, the story update is saved here, so the next
+      // turn's request still extends this one's.
+      updateTurn({ ...reply, storyUpdate: result.storyUpdate })
       commitState(result.data.state)
       commitEnginePlot(result.data.plot)
       commitMemory(result.data.memory)

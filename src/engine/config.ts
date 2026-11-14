@@ -90,6 +90,8 @@ export const DEFAULT_MEMORY: Memory = {}
 
 export const DEFAULT_CONTEXT: ContextConfig = {
   narratorReasoning: 'none',
+  usePlotter: true,
+  useSummarizer: true,
   plotterModel: 'grok-4.3',
   plotterReasoning: 'low',
   summarizerModel: 'grok-4.3',
@@ -167,14 +169,19 @@ export type ModelRole = 'narrator' | 'plotter' | 'summarizer'
 
 // Grok 4.7 cannot turn reasoning off. Returns the first role whose effective
 // model would be sent reasoning 'none', or null. As at request time, a blank
-// or whitespace-only role model follows the narrator model.
+// or whitespace-only role model follows the narrator model, and a role that
+// is switched off sends nothing.
 export function reasoningOffConflict(model: string, context: ContextConfig): ModelRole | null {
   const narrator = model.trim()
   const roles: [ModelRole, string, ContextConfig['narratorReasoning']][] = [
     ['narrator', narrator, context.narratorReasoning],
-    ['plotter', context.plotterModel.trim() || narrator, context.plotterReasoning],
-    ['summarizer', context.summarizerModel.trim() || narrator, context.summarizerReasoning],
   ]
+  if (context.usePlotter) {
+    roles.push(['plotter', context.plotterModel.trim() || narrator, context.plotterReasoning])
+  }
+  if (context.useSummarizer) {
+    roles.push(['summarizer', context.summarizerModel.trim() || narrator, context.summarizerReasoning])
+  }
   const conflict = roles.find(([, id, effort]) => /^grok-4\.7(?:-|$)/.test(id) && effort === 'none')
   return conflict ? conflict[0] : null
 }

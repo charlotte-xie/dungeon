@@ -133,6 +133,12 @@ export interface SlotDef {
 
 export interface ContextConfig {
   narratorReasoning: ReasoningEffort
+  // When false, the Plotter doesn't run: the narrator writes from the history
+  // and from the records as they stand, which only the player then changes.
+  usePlotter: boolean
+  // When false, older turns aren't folded into the chronicle after a reply,
+  // so every turn stays live. Compacting by hand still works.
+  useSummarizer: boolean
   // Empty model means use the narrator model (also preserves legacy settings).
   plotterModel: string
   plotterReasoning: ReasoningEffort

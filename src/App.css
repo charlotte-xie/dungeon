@@ -887,11 +887,24 @@ header h1 {
   text-transform: uppercase;
 }
 
-.model-role {
+/* The stage's switch and name. Outranks the column layout of .page-main label. */
+.page-main .model-role {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.85rem;
   color: #c9a959;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.model-role input[type='checkbox'] {
+  accent-color: #c9a959;
+  flex-shrink: 0;
+}
+
+.model-role input[aria-disabled='true'] {
+  cursor: not-allowed;
 }
 
 .model-last {

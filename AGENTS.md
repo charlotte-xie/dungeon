@@ -68,6 +68,7 @@ In **Settings**:
 - **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
 - **Summariser model / reasoning** — defaults to `grok-4.3` with low reasoning: it works out what matters in the turns before writing.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
+- Each stage has a switch beside its name; the narrator always runs. With the **Plotter** off, the narrator writes from the history and the records as they stand: the player's OOC list and arcs still reach it, but nothing updates them in play. With the **Summariser** off, older turns aren't folded into the synopsis, so every turn stays live and each request keeps growing; compacting by hand in the **State** tab still works. The reviser's switch shows in developer mode.
 - The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API keys.
 - The **xAI**, **Mistral**, and **LM Studio** buttons apply a whole provider setup, not just the base URL. xAI is the Grok preset. Mistral and LM Studio switch to Chat Completions, and the plotter and summariser follow the narrator model with provider-default reasoning.
 - **Default OOC instructions** — the standing instructions each new adventure starts with, one per line. They ship empty, and the player changes them in play like any OOC direction. British English and the usual reply length are set in the narrator's system prompt, so the Plotter never reads them.
@@ -76,7 +77,7 @@ In **Settings**:
 
 The scenario brief and style guide are the adventure's own, edited in the **Adventure** tab beside the synopsis, its OOC list and arcs.
 
-New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. The plotter runs first: it updates the records, recalls memories and steers the reply, and the narrator then writes from that briefing. The two send separate requests, and each reuses its own cached prefix from the previous turn, so the plotter model can differ from the narrator model without losing caching.
+New settings default to the Responses API. Grok 4.7 supports low, medium, high, and extra-high reasoning, but cannot turn reasoning off. Model IDs and effort levels are editable for each role; select levels supported by your endpoint. When it is on, the plotter runs first: it updates the records, recalls memories and steers the reply, and the narrator then writes from that briefing. The two send separate requests, and each reuses its own cached prefix from the previous turn, so the plotter model can differ from the narrator model without losing caching.
 
 ## Layout
 

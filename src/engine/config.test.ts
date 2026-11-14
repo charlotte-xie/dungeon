@@ -46,4 +46,17 @@ describe('Grok 4.7 reasoning check', () => {
     }
     expect(reasoningOffConflict(' grok-4.7 ', context)).toBe('plotter')
   })
+
+  it('passes over a stage that is switched off, since it sends nothing', () => {
+    const context = {
+      ...DEFAULT_CONTEXT,
+      narratorReasoning: 'low' as const,
+      plotterModel: 'grok-4.7',
+      plotterReasoning: 'none' as const,
+      summarizerModel: 'grok-4.7',
+      summarizerReasoning: 'none' as const,
+    }
+    expect(reasoningOffConflict('grok-4.7', { ...context, usePlotter: false })).toBe('summarizer')
+    expect(reasoningOffConflict('grok-4.7', { ...context, usePlotter: false, useSummarizer: false })).toBeNull()
+  })
 })

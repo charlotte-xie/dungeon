@@ -613,6 +613,10 @@ export function loadStoredContext(): ContextConfig {
     return {
       // Preserve legacy routing, including local and non-xAI installations.
       narratorReasoning: storedReasoning(parsed.narratorReasoning),
+      usePlotter:
+        typeof parsed.usePlotter === 'boolean' ? parsed.usePlotter : DEFAULT_CONTEXT.usePlotter,
+      useSummarizer:
+        typeof parsed.useSummarizer === 'boolean' ? parsed.useSummarizer : DEFAULT_CONTEXT.useSummarizer,
       plotterModel: typeof parsed.plotterModel === 'string' ? parsed.plotterModel.trim() : '',
       plotterReasoning: storedReasoning(parsed.plotterReasoning),
       summarizerModel: typeof parsed.summarizerModel === 'string' ? parsed.summarizerModel.trim() : '',

@@ -49,6 +49,7 @@ const CTX: NarratorContext = {
   stateCleanupThreshold: 4000,
   includePriorPlayerTurns: true,
   reminderAsSystem: true,
+  usePlotter: true,
   flags: {
     includeWorldState: true,
     includePlotOutline: true,
@@ -551,6 +552,41 @@ describe('runNarrator: the Plotter plans, then the narrator writes', () => {
     expect(result.plotting).toBeUndefined()
     expect(mockedModel).toHaveBeenCalledTimes(1)
   })
+
+  it('with the Plotter off, writes from the records as they stand, and the next turn extends the request', async () => {
+    const snapshots = recordRequests(() => completion({ text: 'Nobody answers.' }))
+    const ctx: NarratorContext = {
+      ...CTX,
+      usePlotter: false,
+      initialData: { ...CTX.initialData, ooc: ['Keep replies short.'], plot: ['The miller returns.'] },
+    }
+    const first = await runNarrator(ctx, new AbortController().signal)
+    expect(first.plotting).toBeUndefined()
+    expect(first.storyUpdate).toEqual({ arcs: ['The miller returns.'], ooc: ['Keep replies short.'] })
+
+    const done: Turn = {
+      ...ctx.history[0],
+      storyUpdate: first.storyUpdate,
+      reply: { ...ctx.history[0].reply, text: first.text },
+    }
+    const next: Turn = {
+      id: 't2',
+      kind: 'player',
+      input: 'I knock again.',
+      reply: { id: 't2-reply', model: 'test-model', text: '' },
+    }
+    const second = await runNarrator({ ...ctx, history: [done, next], initialData: first.data }, new AbortController().signal)
+
+    expect(requests().some(isPlotter)).toBe(false)
+    const [firstNarrator, secondNarrator] = snapshots
+    // Everything but the first request's turn reminder is reused.
+    expect(secondNarrator.slice(0, firstNarrator.length - 1)).toEqual(firstNarrator.slice(0, -1))
+    // The records were told once, and unchanged they aren't told again.
+    expect(second.storyUpdate).toBeUndefined()
+    const told = (name: string) => secondNarrator.filter((m) => m.toolCallId?.endsWith(name)).length
+    expect(told('-get-ooc-instructions')).toBe(1)
+    expect(told('-get-story-arcs')).toBe(1)
+  })
 })
 
 describe('nextTurnRequests', () => {
@@ -574,6 +610,21 @@ describe('nextTurnRequests', () => {
     expect(preview.map((p) => p.role)).toEqual(['plotter', 'narrator'])
     expect(preview.map((p) => asSent(p.request))).toEqual(sent.map(asSent))
     expect(preview.map((p) => p.connection)).toEqual(mockedModel.mock.calls.map(([, connection]) => connection))
+  })
+
+  it('previews the narrator alone with the Plotter off, as the turn sends it', async () => {
+    const ctx: NarratorContext = { ...CTX, usePlotter: false, initialData: { ...CTX.initialData, ooc: ['Be brief.'] } }
+    const sent: ModelCompletionRequest[] = []
+    mockedModel.mockImplementation(async (req) => {
+      sent.push({ ...req, messages: req.messages.map((m) => ({ ...m })) })
+      return completion({ text: 'The door opens.' })
+    })
+    await runNarrator(ctx, new AbortController().signal, { onNarration: () => {} })
+
+    const preview = nextTurnRequests(ctx, { plotter: true, narrator: true })
+    const asSent = ({ onStream, ...request }: ModelCompletionRequest) => ({ ...request, streams: !!onStream })
+    expect(preview.map((p) => p.role)).toEqual(['narrator'])
+    expect(preview.map((p) => asSent(p.request))).toEqual(sent.map(asSent))
   })
 })
 
