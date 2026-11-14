@@ -440,7 +440,7 @@ export function SettingsPanel({
           <p className="hint">
             Untick a stage to skip it; the narrator always runs. Leave a plotter or summariser
             model blank to use the narrator model. The xAI button
-            above applies the Grok preset: narrator 4.3 off, plotter 4.3 low, summariser 4.3 low;
+            above applies the Grok preset: narrator 4.3 off, plotter 4.3 low, summariser 4.3 high;
             Responses API, reviser off. Keeps your adventure and API key. For other providers,
             choose a supported reasoning level or Provider default. Grok 4.7 requires reasoning;
             choose Low or higher.

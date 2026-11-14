@@ -33,4 +33,10 @@ None yet: the story begins with these turns.
 Keep the story so far to about {{chars}} characters; the sections take the room they need.
 
 ## instruction
-Write the summary for the story as it now stands: the story so far, then the four sections.
+Write the new summary, answering each question afresh for the story as it now stands.
+
+- The story so far: what is this story about? Say what world it is set in, who the people in it are to one another, and what is at stake.
+- Key characters: who matters in the story now, what is each of them to you, and what do they want?
+- Story arcs: what is still unfolding, and where does each thing stand now?
+- Continuity facts: which details must stay exactly as they now are, such as names, places and who has what?
+- Recent developments: what happens in the new turns?

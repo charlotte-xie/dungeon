@@ -66,7 +66,7 @@ In **Settings**:
 - **Base URL** — an OpenAI-compatible API root such as `https://api.x.ai/v1`, `https://api.openai.com/v1`, or your local server.
 - **Narrator model / reasoning** — defaults to `grok-4.3` with reasoning off: the narrator writes from the plotter's briefing without thinking first.
 - **Plotter model / reasoning** — defaults to `grok-4.3` with low reasoning.
-- **Summariser model / reasoning** — defaults to `grok-4.3` with low reasoning: it works out what matters in the turns before writing.
+- **Summariser model / reasoning** — defaults to `grok-4.3` with high reasoning: it works out what matters in the turns before writing.
 - Leave a plotter or summariser model blank to use the narrator model. Reasoning remains independently configurable. Choose **Provider default** to omit the reasoning parameter for other providers.
 - Each stage has a switch beside its name; the narrator always runs. With the **Plotter** off, the narrator writes from the history and the records as they stand: the player's OOC list and arcs still reach it, but nothing updates them in play. With the **Summariser** off, older turns aren't folded into the summary, so every turn stays live and each request keeps growing; compacting by hand in the **State** tab still works. The reviser's switch shows in developer mode.
 - The **xAI** button applies these choices (the Grok preset), selects Responses, and disables the reviser. Click **Save** to apply it. Existing browser settings retain their previous routing until you change them; the preset preserves your adventure and API keys.

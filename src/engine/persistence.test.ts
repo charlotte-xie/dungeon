@@ -222,7 +222,7 @@ describe('role settings', () => {
     vi.stubGlobal('localStorage', { getItem: () => null })
     expect(loadStoredContext()).toMatchObject({
       narratorReasoning: 'none', plotterModel: 'grok-4.3', plotterReasoning: 'low',
-      summarizerModel: 'grok-4.3', summarizerReasoning: 'low', apiProtocol: 'responses', useReviser: false,
+      summarizerModel: 'grok-4.3', summarizerReasoning: 'high', apiProtocol: 'responses', useReviser: false,
     })
   })
 
