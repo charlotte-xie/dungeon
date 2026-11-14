@@ -230,6 +230,9 @@ export interface SavedGame {
   ooc: string[]
   chronicle: Chronicle
   turns: Turn[]
+  // The player's edits to the prompt files, by file name, when they had any
+  // at the time of saving. Loading such a save puts them in place.
+  promptOverrides?: Record<string, string>
 }
 
 // Pre-chronicle save shape (v2). Kept so existing saves migrate on load.

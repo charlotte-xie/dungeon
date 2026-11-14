@@ -16,7 +16,7 @@ The plotter keeps the story's arcs: what is ongoing in the story and where each 
 
 Under the latest reply, **Retry** writes it again from the same action, **Rewrite** writes it again following an instruction you type (your action stays the same, and the instruction applies to that reply only), **Edit** lets you correct its text yourself, and **Undo** takes the turn back. After an undo, **Redo** restores it. To steer the next reply, add an `(OOC: ...)` note to your action. Standing preferences live in the **Adventure** tab, where you can add, edit, or clear them; they apply from the next turn, belong to the current adventure, and are included in saves. The same tab holds the scenario brief and style guide, the synopsis of the older turns, which you can edit, and the story arcs, which stay hidden until you reveal them because they give away where the story is heading.
 
-**Developer mode** in Settings adds the State, Context and Prompts tabs, the trace beside each reply, and the technical settings. In Prompts you can edit any of the app's prompts and try the change in play straight away; your edits stay in your browser until you reset them. It is off by default and remembered in your browser.
+**Developer mode** in Settings adds the State, Context and Prompts tabs, the trace beside each reply, and the technical settings. In Prompts you can edit any of the app's prompts and try the change in play straight away; your edits stay in your browser until you reset them. A save made while you have edits keeps them, and loading it puts them back; loading a save without any leaves yours as they are. It is off by default and remembered in your browser.
 
 ## Develop locally
 

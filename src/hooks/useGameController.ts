@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { buildNewAdventureBootstrap, continueDirective, narratorSystemPrompt } from '../prompts'
+import { buildNewAdventureBootstrap, continueDirective, narratorSystemPrompt, promptOverrides } from '../prompts'
+import { applyPromptOverrides } from './usePromptOverrides'
 import {
   EmptyNarrativeError,
   nextTurnRequests,
@@ -887,10 +888,13 @@ export function useGameController(settings: GameSettings) {
 
   // Deep-copy the current adventure for a save slot. Live turns without a
   // reply are left out; folded turns all stay, since the chronicle points at
-  // them.
+  // them. The prompt edits go along when there are any; the key is always
+  // there, so overwriting a save never keeps its old edits.
   function captureGame(): GameData {
     const savedTurns = turns.filter((turn, i) => i < compactCutoff || !!turn.reply.text)
+    const edits = promptOverrides()
     return {
+      promptOverrides: Object.keys(edits).length ? edits : undefined,
       slots: { ...slots },
       state: structuredClone(state),
       plot: [...plot],
@@ -901,8 +905,11 @@ export function useGameController(settings: GameSettings) {
     }
   }
 
-  // Replace the current adventure with a saved one, cancelling any in-flight turn.
+  // Replace the current adventure with a saved one, cancelling any in-flight
+  // turn. A save carrying prompt edits puts them in place; one without leaves
+  // the player's own edits as they are.
   function restoreGame(save: SavedGame) {
+    if (save.promptOverrides && Object.keys(save.promptOverrides).length) applyPromptOverrides(save.promptOverrides)
     supersedeCurrentOperation()
     cancelBackgroundCompaction()
     dispatchRecovery({ type: 'reset' })

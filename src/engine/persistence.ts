@@ -255,16 +255,19 @@ export function loadStoredProviderKeys(): ProviderKeys {
 // prompts' own to decide.
 export function loadStoredPromptOverrides(): Record<string, string> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(LS_PROMPT_OVERRIDES) ?? 'null')
-    if (!isRecord(parsed)) return {}
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, string] => typeof entry[1] === 'string' && !UNSAFE_PATH_SEGMENTS.has(entry[0]),
-      ),
-    )
+    return parsePromptOverrides(JSON.parse(localStorage.getItem(LS_PROMPT_OVERRIDES) ?? 'null'))
   } catch {
     return {}
   }
+}
+
+function parsePromptOverrides(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string' && !UNSAFE_PATH_SEGMENTS.has(entry[0]),
+    ),
+  )
 }
 
 export function persistPromptOverrides(overrides: Readonly<Record<string, string>>) {
@@ -792,6 +795,9 @@ export function isSavedGameLike(
   const oocValid =
     s.ooc === undefined ||
     (Array.isArray(s.ooc) && s.ooc.every((entry) => typeof entry === 'string'))
+  const promptOverridesValid =
+    s.promptOverrides === undefined ||
+    (isRecord(s.promptOverrides) && Object.values(s.promptOverrides).every((text) => typeof text === 'string'))
   return (
     typeof s.id === 'string' &&
     typeof s.name === 'string' &&
@@ -804,7 +810,8 @@ export function isSavedGameLike(
     isWorldStateLike(s.state) &&
     plotValid &&
     memoryValid &&
-    oocValid
+    oocValid &&
+    promptOverridesValid
   )
 }
 
@@ -895,6 +902,7 @@ export function normalizeSavedGame(
   }
   const chronicle: Chronicle = indexChronicle(stored, turns, cutoff)
   const memory: Memory = isMemoryLike(legacy.memory) ? legacy.memory : {}
+  const promptOverrides = parsePromptOverrides((legacy as { promptOverrides?: unknown }).promptOverrides)
   return {
     id: legacy.id,
     name: legacy.name,
@@ -906,5 +914,6 @@ export function normalizeSavedGame(
     ooc,
     chronicle,
     turns,
+    ...(Object.keys(promptOverrides).length ? { promptOverrides } : {}),
   }
 }

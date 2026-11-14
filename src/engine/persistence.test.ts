@@ -68,6 +68,33 @@ describe('saved-game validation', () => {
     ])
     expect(normalized).not.toHaveProperty('compactCutoff')
   })
+
+  it('keeps the prompt edits a save carries, and adds none to a save without', () => {
+    const raw: unknown = { ...validSave(), promptOverrides: { 'dm-system.md': 'Edited brief.' } }
+    if (!isSavedGameLike(raw)) throw new Error('fixture unexpectedly invalid')
+    expect(normalizeSavedGame(raw).promptOverrides).toEqual({ 'dm-system.md': 'Edited brief.' })
+
+    const plain: unknown = validSave()
+    if (!isSavedGameLike(plain)) throw new Error('fixture unexpectedly invalid')
+    expect(normalizeSavedGame(plain)).not.toHaveProperty('promptOverrides')
+
+    const empty: unknown = { ...validSave(), promptOverrides: {} }
+    if (!isSavedGameLike(empty)) throw new Error('fixture unexpectedly invalid')
+    expect(normalizeSavedGame(empty)).not.toHaveProperty('promptOverrides')
+  })
+
+  it('rejects prompt edits that are not text by file name', () => {
+    expect(isSavedGameLike({ ...validSave(), promptOverrides: ['dm-system.md'] })).toBe(false)
+    expect(isSavedGameLike({ ...validSave(), promptOverrides: { 'dm-system.md': 7 } })).toBe(false)
+  })
+
+  it('drops a prompt edit under a name that is unsafe to look up', () => {
+    const raw: unknown = JSON.parse(
+      `{"save": ${JSON.stringify(validSave()).slice(0, -1)}, "promptOverrides": {"__proto__": "x", "nsfw.md": "Text."}}}`,
+    ).save
+    if (!isSavedGameLike(raw)) throw new Error('fixture unexpectedly invalid')
+    expect(normalizeSavedGame(raw).promptOverrides).toEqual({ 'nsfw.md': 'Text.' })
+  })
 })
 
 // Old persisted data must load without breaking — losing detail is fine,

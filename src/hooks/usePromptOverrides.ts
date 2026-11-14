@@ -2,17 +2,20 @@ import { useState } from 'react'
 import { persistPromptOverrides } from '../engine/persistence'
 import { promptOverrides, setPromptOverrides, type PromptFile } from '../prompts'
 
-// The player's edits to the prompt files: each applies from the next request
-// and is kept in this browser. Resetting a file drops its edit.
+// Puts these edits to the prompt files in place of any before, from the next
+// request, and keeps them in this browser. Returns the edits kept.
+export function applyPromptOverrides(next: Readonly<Record<string, string>>): Record<string, string> {
+  setPromptOverrides(next)
+  const kept = promptOverrides()
+  persistPromptOverrides(kept)
+  return kept
+}
+
+// The player's edits to the prompt files, for the Prompts tab. Resetting a
+// file drops its edit.
 export function usePromptOverrides() {
   const [edits, setEdits] = useState(promptOverrides)
-
-  function apply(next: Record<string, string>) {
-    setPromptOverrides(next)
-    const kept = promptOverrides()
-    persistPromptOverrides(kept)
-    setEdits(kept)
-  }
+  const apply = (next: Record<string, string>) => setEdits(applyPromptOverrides(next))
 
   return {
     edits,
