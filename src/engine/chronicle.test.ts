@@ -7,12 +7,12 @@ import {
   chronicleRanges,
   compactChronicle,
   entryTurnNumbers,
-  handFoldLeft,
   indexChronicle,
   nextFold,
   planCompaction,
   rebuildCallCount,
   rebuildChronicle,
+  rebuildStart,
   runHandFold,
   sameChronicle,
   stripTracesBefore,
@@ -395,19 +395,11 @@ describe('folding by hand', () => {
 
   it('carries on a compaction cut short from where the chronicle got to', async () => {
     const turns = completedTurns(12)
-    const fold = planCompaction(turns, [], 2)!
     const partway: Chronicle = [[entry('partway', 't0', 't3')]]
-    expect(handFoldLeft(fold, turns, partway)).toBe(true)
-    const chronicle = await run(fold, turns, partway)
+    const chronicle = await run(planCompaction(turns, partway, 2)!, turns, partway)
     expect(summariesSeen()[0]).toBe('partway')
     expect(turnNumbersRead(0)[0]).toBe(5)
     expect(turnRanges(chronicle, turns)).toEqual([[0, 10]])
-    // Once the chronicle reaches the turn, nothing is left, and no summary is
-    // written again.
-    mockedSummarizer.mockClear()
-    expect(handFoldLeft(fold, turns, chronicle)).toBe(false)
-    expect(await run(fold, turns, chronicle)).toBe(chronicle)
-    expect(mockedSummarizer).not.toHaveBeenCalled()
   })
 
   it('writes the summary again from itself when there are no turns to fold', async () => {
@@ -434,21 +426,27 @@ describe('folding by hand', () => {
   it('keeps a rebuild’s progress aside rather than putting it in place', async () => {
     const turns = completedTurns(10)
     const chronicle: Chronicle = [[entry('old', 't0', 't7')]]
-    const rebuilt: HandFold[] = []
+    const rebuilt: RebuildProgress[] = []
     const folded: Chronicle[] = []
     await run({ kind: 'rebuild' }, turns, chronicle, {
-      onRebuilt: (fold) => rebuilt.push(fold),
+      onRebuilt: (done) => rebuilt.push(done),
       onFolded: (next) => folded.push(next),
     })
     expect(folded).toEqual([])
-    expect(rebuilt.map((f) => f.kind === 'rebuild' && f.done?.lastTurnId)).toEqual(['t3', 't7'])
+    expect(rebuilt.map((done) => done.lastTurnId)).toEqual(['t3', 't7'])
   })
 
-  it('drops a compaction whose turn has gone from the log', () => {
-    const fold: HandFold = { kind: 'compact', throughTurnId: 'gone' }
-    expect(handFoldLeft(fold, TEN, [])).toBe(false)
-    expect(handFoldLeft({ kind: 'rebuild' }, TEN, [])).toBe(false)
-    expect(handFoldLeft({ kind: 'rewrite' }, TEN, [[entry('old', 't0', 't3')]])).toBe(true)
+  it('carries on a rebuild from where it got to', async () => {
+    const turns = completedTurns(10)
+    const chronicle: Chronicle = [[entry('old', 't0', 't7')]]
+    const done = { text: 'Halfway.', lastTurnId: 't3' }
+    expect(rebuildStart(turns, chronicle, done)).toBe(4)
+    expect(rebuildCallCount(turns, chronicle, SMALL, done)).toBe(1)
+    expect(rebuildCallCount(turns, chronicle, SMALL)).toBe(2)
+    await run({ kind: 'rebuild', done }, turns, chronicle)
+    expect(summariesSeen()).toEqual(['Halfway.'])
+    // Progress past where the summary now ends counts for nothing.
+    expect(rebuildStart(turns, [[entry('old', 't0', 't2')]], done)).toBe(0)
   })
 })
 

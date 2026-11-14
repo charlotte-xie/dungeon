@@ -7,14 +7,14 @@ import {
   loadStoredContext,
   loadStoredDevMode,
   loadStoredOocBaseline,
-  loadStoredPendingFold,
   loadStoredPlotBaseline,
   loadStoredPromptOverrides,
   loadStoredProviderKeys,
+  loadStoredRebuildProgress,
   loadStoredRecovery,
   normalizeSavedGame,
-  persistPendingFold,
   persistPromptOverrides,
+  persistRebuildProgress,
   persistProviderKeys,
 } from './persistence'
 import { keyFor } from './providerKeys'
@@ -291,7 +291,7 @@ describe('prompt edits', () => {
   })
 })
 
-describe('a fold that is running', () => {
+describe('a rebuild that stopped short', () => {
   function stubStorage(items: Record<string, string>) {
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => items[key] ?? null,
@@ -305,43 +305,21 @@ describe('a fold that is running', () => {
     return items
   }
 
-  it('comes back as it was stored, and is gone once it ends', () => {
+  it('keeps how far it got until it is cleared', () => {
     const items = stubStorage({})
-    const pending = { fold: { kind: 'rebuild' as const, done: { text: 'So far.', lastTurnId: 't3' } }, hidden: true }
-    persistPendingFold(pending)
-    expect(loadStoredPendingFold()).toEqual(pending)
-    persistPendingFold({ fold: { kind: 'compact', throughTurnId: 't9' }, hidden: false })
-    expect(loadStoredPendingFold()).toEqual({ fold: { kind: 'compact', throughTurnId: 't9' }, hidden: false })
-    persistPendingFold(null)
+    persistRebuildProgress({ text: 'So far.', lastTurnId: 't3' })
+    expect(loadStoredRebuildProgress()).toEqual({ text: 'So far.', lastTurnId: 't3' })
+    persistRebuildProgress(null)
     expect(items).toEqual({})
-    expect(loadStoredPendingFold()).toBeNull()
+    expect(loadStoredRebuildProgress()).toBeNull()
   })
 
-  it('keeps only the fold’s own fields', () => {
-    stubStorage({
-      'dm.pendingFold': JSON.stringify({
-        fold: { kind: 'rebuild', done: { text: 'So far.', lastTurnId: 't3', extra: 1 }, apiKey: 'k' },
-        hidden: true,
-      }),
-    })
-    expect(loadStoredPendingFold()).toEqual({
-      fold: { kind: 'rebuild', done: { text: 'So far.', lastTurnId: 't3' } },
-      hidden: true,
-    })
-  })
-
-  it('has none when what is stored is not a fold', () => {
-    const notFolds = [
-      '{not json',
-      '[]',
-      JSON.stringify({ fold: { kind: 'compact' }, hidden: true }),
-      JSON.stringify({ fold: { kind: 'rebuild', done: { text: 3, lastTurnId: 't3' } }, hidden: true }),
-      JSON.stringify({ fold: { kind: 'shred' }, hidden: true }),
-      JSON.stringify({ fold: { kind: 'rewrite' } }),
-    ]
-    for (const stored of notFolds) {
-      stubStorage({ 'dm.pendingFold': stored })
-      expect(loadStoredPendingFold()).toBeNull()
+  it('keeps only its own fields, and nothing that is not progress', () => {
+    stubStorage({ 'dm.rebuildProgress': JSON.stringify({ text: 'So far.', lastTurnId: 't3', apiKey: 'k' }) })
+    expect(loadStoredRebuildProgress()).toEqual({ text: 'So far.', lastTurnId: 't3' })
+    for (const stored of ['{not json', '[]', JSON.stringify({ text: 3, lastTurnId: 't3' }), '{"text": "x"}']) {
+      stubStorage({ 'dm.rebuildProgress': stored })
+      expect(loadStoredRebuildProgress()).toBeNull()
     }
   })
 })

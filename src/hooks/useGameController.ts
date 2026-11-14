@@ -20,10 +20,10 @@ import {
   chronicleNeedsCompaction,
   chronicleRanges,
   compactChronicle,
-  handFoldLeft,
   nextFold,
   planCompaction,
   rebuildCallCount,
+  rebuildStart,
   runHandFold,
   sameChronicle,
   stripTracesBefore,
@@ -31,6 +31,7 @@ import {
   type ChronicleAgentArgs,
   type HandFold,
   type NextFold,
+  type RebuildProgress,
 } from '../engine/chronicle'
 import { DEFAULT_STATE, defaultSlots } from '../engine/config'
 import { OperationCoordinator, type ActiveOperation } from '../engine/operation'
@@ -49,9 +50,9 @@ import {
   loadStoredMemory,
   loadStoredOoc,
   loadStoredOocBaseline,
-  loadStoredPendingFold,
   loadStoredPlot,
   loadStoredPlotBaseline,
+  loadStoredRebuildProgress,
   loadStoredRecovery,
   loadStoredSlots,
   loadStoredState,
@@ -60,13 +61,12 @@ import {
   persistMemory,
   persistOoc,
   persistOocBaseline,
-  persistPendingFold,
   persistPlot,
   persistPlotBaseline,
+  persistRebuildProgress,
   persistRecovery,
   persistSlots,
   persistState,
-  type PendingFold,
 } from '../engine/persistence'
 import { keepScreenAwake } from './keepScreenAwake'
 import {
@@ -139,17 +139,17 @@ const PLOTTER_STATUS: Record<PlotterStage, string> = {
   steer: 'DM is steering…',
 }
 
-// The status line while a fold the player asked for runs, and the start of
-// the message when one fails.
+// The status line while a fold the player asked for runs, and what the player
+// is told when one fails.
 const FOLD_LABELS: Record<HandFold['kind'], string> = {
   compact: 'Compacting chronicle…',
   rewrite: 'Rewriting the summary…',
   rebuild: 'Rebuilding chronicle…',
 }
 const FOLD_FAILURES: Record<HandFold['kind'], string> = {
-  compact: 'Compaction failed',
-  rewrite: 'Rewriting the summary failed',
-  rebuild: 'Rebuild failed',
+  compact: 'Compaction failed. The turns folded so far stay folded; press Compact to carry on.',
+  rewrite: 'Rewriting the summary failed.',
+  rebuild: 'Rebuild failed. What it has written so far is kept; press Rebuild to carry on.',
 }
 
 // The game controller: owns all adventure state (slots, world state, plot,
@@ -202,17 +202,9 @@ export function useGameController(settings: GameSettings) {
   // Whether the summariser is on as the settings now stand, for a turn that
   // finishes after they changed.
   const summarizerOn = useRef(context.useSummarizer)
-  // A fold the player started by hand, kept while it runs, so one the browser
-  // cut short in the background carries on when the page is back.
-  const [storedPendingFold] = useState(loadStoredPendingFold)
-  const pendingFold = useRef<PendingFold | null>(storedPendingFold)
-  // The hand fold running now, and whether the page has been hidden since it
-  // started.
-  const foldRun = useRef<ActiveOperation | null>(null)
-  const foldRunHidden = useRef(false)
-  // The latest render's handler for the page being shown or hidden, for the
-  // listener registered once.
-  const pageVisibilityChanged = useRef<() => void>(() => {})
+  // How far a rebuild that stopped short got, so the next one carries on.
+  const [storedRebuildProgress] = useState(loadStoredRebuildProgress)
+  const rebuildProgress = useRef<RebuildProgress | null>(storedRebuildProgress)
   const [recovery, dispatchRecovery] = useReducer(turnRecoveryReducer, initialTurns, (log) =>
     recoveryForLog(loadStoredRecovery(log), log),
   )
@@ -261,19 +253,6 @@ export function useGameController(settings: GameSettings) {
     },
     [operations],
   )
-
-  useEffect(() => {
-    pageVisibilityChanged.current = onPageVisibilityChange
-  })
-
-  // A hand fold the browser cut short in the background carries on when the
-  // page is back in front, or loads again.
-  useEffect(() => {
-    const changed = () => pageVisibilityChanged.current()
-    document.addEventListener('visibilitychange', changed)
-    changed()
-    return () => document.removeEventListener('visibilitychange', changed)
-  }, [])
 
   function isCurrentOperation(operation: ActiveOperation): boolean {
     return operations.isCurrent(operation)
@@ -447,12 +426,12 @@ export function useGameController(settings: GameSettings) {
   }
 
   // The player's own edit to the chronicle, or clearing it. Undo and Redo keep
-  // it, as they keep the player's edits to the OOC list and the arcs. A hand
-  // fold waiting to carry on would overwrite it, so it is dropped.
+  // it, as they keep the player's edits to the OOC list and the arcs. A
+  // rebuild that stopped short starts afresh after it.
   function editChronicle(next: Chronicle) {
     if (sameChronicle(chronicleNow.current, next)) return
     cancelBackgroundCompaction()
-    storePendingFold(null)
+    storeRebuildProgress(null)
     dispatchRecovery({
       type: 'rebase',
       from: chronicleNow.current,
@@ -889,48 +868,43 @@ export function useGameController(settings: GameSettings) {
     await runFold(fold)
   }
 
-  // Write the summary afresh from the turns it covers.
+  // Write the summary afresh from the turns it covers, carrying on from where
+  // a rebuild that stopped short got.
   async function rebuildChronicleNow() {
     if (operations.busy) return
     if (!totalChronicleEntries(chronicle)) return
-    const calls = rebuildCallCount(turns, chronicle, compactionSettings)
+    const from = rebuildProgress.current ?? undefined
+    const start = rebuildStart(turns, chronicle, from)
+    const calls = rebuildCallCount(turns, chronicle, compactionSettings, from)
+    const what = start
+      ? `Carry on rebuilding the chronicle? The last rebuild stopped after turn ${start}, and this carries on from there`
+      : 'Rebuild the chronicle? The summary is written afresh from the turns it covers'
     if (
       !confirm(
-        `Rebuild the chronicle? The summary is written afresh from the turns it covers, replacing its current text, including any edits you made. This runs up to ${calls} summariser model call${calls === 1 ? '' : 's'} now.`,
+        `${what}, replacing its current text, including any edits you made. This runs up to ${calls} summariser model call${calls === 1 ? '' : 's'} now.`,
       )
     ) {
       return
     }
-    await runFold({ kind: 'rebuild' })
+    await runFold({ kind: 'rebuild', done: start ? from : undefined })
   }
 
-  function storePendingFold(next: PendingFold | null) {
-    pendingFold.current = next
-    persistPendingFold(next)
+  function storeRebuildProgress(next: RebuildProgress | null) {
+    rebuildProgress.current = next
+    persistRebuildProgress(next)
   }
 
-  // Runs a fold asked for by hand as one operation, keeping it stored until it
-  // ends. A compaction puts each stretch in place as it is written; a rebuild
-  // keeps how far it has got with the stored fold, and goes in once it is
-  // done. A run that fails after the page has been in the background, where
-  // the browser may have cut it short, stays stored and carries on once the
-  // page is in front; any other failure is told and the fold dropped. Stop
-  // drops it too. A run replaced by a new adventure or a loaded save is
-  // dropped by whatever replaced it, and one cut off by the page closing stays
-  // for the next load.
-  async function runFold(fold: HandFold, resumed = false) {
+  // Runs a fold asked for by hand as one operation. A compaction puts each
+  // stretch in place as it is written, and a rebuild keeps how far it has got
+  // aside until it is done, so a run cut short loses only the call it was on:
+  // pressing the button again carries on.
+  async function runFold(fold: HandFold) {
     const operation = beginOperation(false, FOLD_LABELS[fold.kind])
     if (!operation) return
     cancelBackgroundCompaction()
     const { controller } = operation
-    foldRun.current = operation
-    foldRunHidden.current = document.hidden
-    // A resumed run was cut short in the background before, so a reload
-    // carries on with it too.
-    storePendingFold({ fold, hidden: resumed || document.hidden })
     const letGo = keepScreenAwake()
     let committed = chronicleNow.current
-    let carryOn = false
     try {
       const log = latestTurns.current
       const result = await runHandFold(
@@ -950,60 +924,23 @@ export function useGameController(settings: GameSettings) {
             commitFold(committed, next)
             committed = next
           },
-          onRebuilt: (next) => {
-            const pending = pendingFold.current
-            if (operationCanCommit(operation) && pending) storePendingFold({ ...pending, fold: next })
+          onRebuilt: (done) => {
+            if (operationCanCommit(operation)) storeRebuildProgress(done)
           },
         },
       )
-      if (operationCanCommit(operation)) {
-        setCompactionError(null)
-        if (!sameChronicle(committed, result)) commitFold(committed, result)
-      }
-      if (isCurrentOperation(operation)) storePendingFold(null)
+      if (!operationCanCommit(operation)) return
+      setCompactionError(null)
+      if (!sameChronicle(committed, result)) commitFold(committed, result)
+      if (fold.kind === 'rebuild') storeRebuildProgress(null)
     } catch (err) {
-      if (!isCurrentOperation(operation)) return
-      if (!controller.signal.aborted && (foldRunHidden.current || document.hidden)) {
-        // The page may already be back by the time the failure arrives.
-        carryOn = !document.hidden
-        return
-      }
-      storePendingFold(null)
-      if (!controller.signal.aborted) {
-        alert(`${FOLD_FAILURES[fold.kind]}: ${err instanceof Error ? err.message : String(err)}`)
+      if (!controller.signal.aborted && isCurrentOperation(operation)) {
+        alert(`${FOLD_FAILURES[fold.kind]}\n\n${err instanceof Error ? err.message : String(err)}`)
       }
     } finally {
       letGo()
-      if (foldRun.current === operation) foldRun.current = null
       finishOperation(operation)
-      // The latest render's, so the run picks up settings changed meanwhile.
-      if (carryOn) pageVisibilityChanged.current()
     }
-  }
-
-  // Carries on with a hand fold the browser cut short in the background, once
-  // the page is in front and nothing else is running. A run that was going
-  // while the page was in front when it last closed is dropped: the player may
-  // have reloaded to stop it.
-  function resumePendingFold() {
-    const pending = pendingFold.current
-    if (!pending || operations.busy || document.hidden) return
-    if (!pending.hidden || !handFoldLeft(pending.fold, latestTurns.current, chronicleNow.current)) {
-      storePendingFold(null)
-      return
-    }
-    void runFold(pending.fold, true)
-  }
-
-  function onPageVisibilityChange() {
-    if (!document.hidden) {
-      resumePendingFold()
-      return
-    }
-    if (!foldRun.current) return
-    foldRunHidden.current = true
-    const pending = pendingFold.current
-    if (pending && !pending.hidden) storePendingFold({ ...pending, hidden: true })
   }
 
   async function newAdventure(slotsOverride: AdventureSlots) {
@@ -1011,7 +948,7 @@ export function useGameController(settings: GameSettings) {
     nextSlots.scenario = nextSlots.scenario.trim()
     if (!nextSlots.scenario) return
     cancelBackgroundCompaction()
-    storePendingFold(null)
+    storeRebuildProgress(null)
     commitSlots(nextSlots)
     setInput('')
     const freshState = structuredClone(DEFAULT_STATE)
@@ -1058,7 +995,7 @@ export function useGameController(settings: GameSettings) {
     if (save.promptOverrides && Object.keys(save.promptOverrides).length) applyPromptOverrides(save.promptOverrides)
     supersedeCurrentOperation()
     cancelBackgroundCompaction()
-    storePendingFold(null)
+    storeRebuildProgress(null)
     dispatchRecovery({ type: 'reset' })
     setCompactionError(null)
     commitSlots({ ...defaultSlots(), ...save.slots })

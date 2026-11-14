@@ -4,8 +4,8 @@
 import {
   indexChronicle,
   totalChronicleEntries,
-  type HandFold,
   type LegacyChronicleEntry,
+  type RebuildProgress,
   type StoredChronicle,
 } from './chronicle'
 import { ADVENTURE_SLOTS, DEFAULT_BASE_URL, DEFAULT_CONTEXT, DEFAULT_MEMORY, DEFAULT_SAMPLING, DEFAULT_STATE, defaultSlots } from './config'
@@ -52,7 +52,7 @@ export const LS_RECOVERY = 'dm.recovery'
 export const LS_OOC_BASELINE = 'dm.oocBaseline'
 export const LS_PLOT_BASELINE = 'dm.plotBaseline'
 export const LS_PROMPT_OVERRIDES = 'dm.promptOverrides'
-export const LS_PENDING_FOLD = 'dm.pendingFold'
+export const LS_REBUILD_PROGRESS = 'dm.rebuildProgress'
 
 const LS_MESSAGES_V1 = 'dm.messages'
 // The trace toggle that developer mode replaced; every browser stored it.
@@ -288,47 +288,22 @@ export function persistPromptOverrides(overrides: Readonly<Record<string, string
   }
 }
 
-// A fold the player started by hand, kept while it runs. `hidden` says the
-// page was in the background at some point while it ran, where the browser
-// may have cut its requests short; such a run carries on when the page is
-// back, after a reload too. It holds no connection details and never goes in
-// a save file.
-export interface PendingFold {
-  fold: HandFold
-  hidden: boolean
-}
-
-export function loadStoredPendingFold(): PendingFold | null {
+// How far a rebuild that stopped short got, so the next one carries on from
+// there, after a reload too. It never goes in a save file.
+export function loadStoredRebuildProgress(): RebuildProgress | null {
   try {
-    return parsePendingFold(JSON.parse(localStorage.getItem(LS_PENDING_FOLD) ?? 'null'))
+    const value: unknown = JSON.parse(localStorage.getItem(LS_REBUILD_PROGRESS) ?? 'null')
+    if (!isRecord(value) || typeof value.text !== 'string' || typeof value.lastTurnId !== 'string') return null
+    return { text: value.text, lastTurnId: value.lastTurnId }
   } catch {
     return null
   }
 }
 
-function parsePendingFold(value: unknown): PendingFold | null {
-  if (!isRecord(value) || typeof value.hidden !== 'boolean') return null
-  const fold = parseHandFold(value.fold)
-  return fold && { fold, hidden: value.hidden }
-}
-
-function parseHandFold(value: unknown): HandFold | null {
-  if (!isRecord(value)) return null
-  if (value.kind === 'compact') {
-    return typeof value.throughTurnId === 'string' ? { kind: 'compact', throughTurnId: value.throughTurnId } : null
-  }
-  if (value.kind === 'rewrite') return { kind: 'rewrite' }
-  if (value.kind !== 'rebuild') return null
-  if (value.done === undefined) return { kind: 'rebuild' }
-  const { done } = value
-  if (!isRecord(done) || typeof done.text !== 'string' || typeof done.lastTurnId !== 'string') return null
-  return { kind: 'rebuild', done: { text: done.text, lastTurnId: done.lastTurnId } }
-}
-
-export function persistPendingFold(pending: PendingFold | null) {
+export function persistRebuildProgress(progress: RebuildProgress | null) {
   try {
-    if (pending) localStorage.setItem(LS_PENDING_FOLD, JSON.stringify(pending))
-    else localStorage.removeItem(LS_PENDING_FOLD)
+    if (progress) localStorage.setItem(LS_REBUILD_PROGRESS, JSON.stringify(progress))
+    else localStorage.removeItem(LS_REBUILD_PROGRESS)
   } catch {
     // ignore quota / disabled storage
   }

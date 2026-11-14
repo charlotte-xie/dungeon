@@ -350,16 +350,16 @@ export async function compactChronicle(
 }
 
 // How far a rebuild has got: the summary it has written of the turns from the
-// first through `lastTurnId`.
+// first through `lastTurnId`. A rebuild that stops short keeps it, so the next
+// one carries on from there.
 export interface RebuildProgress {
   text: string
   lastTurnId: string
 }
 
-// A fold the player asks for by hand, whether or not one is due, as it stands
-// while it runs: fold the live turns through a given turn, write the summary
-// again from itself, or write it afresh from the first turn, with how far that
-// has got.
+// A fold the player asks for by hand, whether or not one is due: fold the live
+// turns through a given turn, write the summary again from itself, or write it
+// afresh from the first turn, carrying on from where an earlier rebuild got.
 export type HandFold =
   | { kind: 'compact'; throughTurnId: string }
   | { kind: 'rewrite' }
@@ -381,23 +381,15 @@ export function canCompact(turns: Turn[], chronicle: Chronicle): boolean {
   return planCompaction(turns, chronicle, 1) !== null
 }
 
-// Whether a fold asked for earlier still has something to do with the log and
-// the chronicle as they now stand.
-export function handFoldLeft(fold: HandFold, turns: Turn[], chronicle: Chronicle): boolean {
-  const cutoff = chronicleCutoff(chronicle, turns)
-  if (fold.kind !== 'compact') return cutoff > 0
-  return turns.findIndex((t) => t.id === fold.throughTurnId) + 1 > cutoff
-}
-
 export interface HandFoldEvents {
   // A model call is starting: the `step`th of `total`.
   onStep?: (step: number, total: number) => void
   // A stretch of a compaction is written: the chronicle to put in place now,
   // so a run cut short keeps what it has done.
   onFolded?: (chronicle: Chronicle) => void
-  // A stretch of a rebuild is written: the fold as it now stands, to keep
-  // aside until the rebuild is done.
-  onRebuilt?: (fold: HandFold) => void
+  // A stretch of a rebuild is written: how far it has got, to keep aside until
+  // the rebuild is done.
+  onRebuilt?: (done: RebuildProgress) => void
 }
 
 // Runs a fold asked for by hand, returning the chronicle it leaves.
@@ -423,7 +415,7 @@ export async function runHandFold(
       return rebuildChronicle(turns, chronicle, settings, agent, signal, {
         from: fold.done,
         onStep,
-        onProgress: (done) => onRebuilt?.({ kind: 'rebuild', done }),
+        onProgress: onRebuilt,
       })
   }
 }
@@ -468,8 +460,7 @@ export async function rebuildChronicle(
   { from, onStep, onProgress }: RebuildOptions = {},
 ): Promise<Chronicle> {
   const cutoff = chronicleCutoff(chronicle, turns)
-  const reached = from ? turns.findIndex((t) => t.id === from.lastTurnId) + 1 : 0
-  const start = from && reached > 0 && reached <= cutoff ? reached : 0
+  const start = rebuildStart(turns, chronicle, from)
   const base = start && from ? summaryReaching(turns, start, from.text) : []
   const before = Math.ceil(start / stretchLength(settings))
   const rebuilt = await foldTurns(turns, base, start, cutoff, settings, agent, signal, {
@@ -483,9 +474,23 @@ export async function rebuildChronicle(
   return rebuilt.length ? rebuilt : chronicle
 }
 
-// How many model calls a rebuild makes, at most.
-export function rebuildCallCount(turns: Turn[], chronicle: Chronicle, settings: ChronicleSettings): number {
-  return Math.ceil(chronicleCutoff(chronicle, turns) / stretchLength(settings))
+// Where a rebuild starts: after the turns an earlier one got through, if
+// those are still turns the summary covers, or at the first turn.
+export function rebuildStart(turns: Turn[], chronicle: Chronicle, from?: RebuildProgress): number {
+  if (!from) return 0
+  const reached = turns.findIndex((t) => t.id === from.lastTurnId) + 1
+  return reached <= chronicleCutoff(chronicle, turns) ? reached : 0
+}
+
+// How many model calls a rebuild makes, at most, carrying on from `from`.
+export function rebuildCallCount(
+  turns: Turn[],
+  chronicle: Chronicle,
+  settings: ChronicleSettings,
+  from?: RebuildProgress,
+): number {
+  const start = rebuildStart(turns, chronicle, from)
+  return Math.ceil((chronicleCutoff(chronicle, turns) - start) / stretchLength(settings))
 }
 
 export function chronicleNeedsCompaction(
